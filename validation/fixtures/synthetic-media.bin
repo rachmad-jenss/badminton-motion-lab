@@ -1,0 +1,3 @@
+# Placeholder local media for agent smoke tests (not a real video container).
+# Quality gate uses metadata width/height/fps from register path size-agnostic defaults in agent.
+BML-FIXTURE

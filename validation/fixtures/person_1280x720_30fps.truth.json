@@ -1,0 +1,14 @@
+{
+  "id": "person_1280x720_30fps",
+  "width": 1280,
+  "height": 720,
+  "fps": 30,
+  "contactFrameTruth": null,
+  "courtCorners": [
+    { "x": 100, "y": 200 },
+    { "x": 1180, "y": 200 },
+    { "x": 1200, "y": 700 },
+    { "x": 80, "y": 700 }
+  ],
+  "notes": "Walking person fixture for pipeline smoke; not badminton stroke truth."
+}

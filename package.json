@@ -1,0 +1,25 @@
+{
+  "name": "badminton-motion-lab",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Badminton Motion and Performance Intelligence Platform — local-first web + Local Agent",
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @bml/contracts && npm run build -w @bml/web",
+    "dev:web": "npm run dev -w @bml/web",
+    "lint": "npm run lint -w @bml/web",
+    "typecheck": "npm run build -w @bml/contracts && npm run test -w @bml/contracts && npm run test -w @bml/web",
+    "test": "npm run typecheck",
+    "test:agent": "cd apps/agent && python -m pytest test_security.py -q && python smoke_test.py",
+    "verify": "npm run typecheck && npm run build -w @bml/web && npm run test:agent && node scripts/check-no-synthetic-reports.mjs",
+    "contracts:build": "npm run build -w @bml/contracts",
+    "readiness:check": "node scripts/check-public-readiness.mjs",
+    "benchmark:fixtures": "node scripts/run-fixture-benchmarks.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
