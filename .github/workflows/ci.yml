@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ffmpeg
+        run: choco install ffmpeg -y
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Install agent deps + pose model
+        working-directory: apps/agent
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements.txt
+          New-Item -ItemType Directory -Force -Path models | Out-Null
+          $model = "models/pose_landmarker_full.task"
+          if (-not (Test-Path $model)) {
+            Invoke-WebRequest -Uri "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task" -OutFile $model
+          }
+
+      - name: Typecheck + web build + agent smoke + no-synthetic
+        run: npm run verify
+
+      - name: Start agent
+        working-directory: apps/agent
+        shell: pwsh
+        run: |
+          Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory (Get-Location) -WindowStyle Hidden
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try {
+              $r = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
+              if ($r.ok) { $ok = $true; break }
+            } catch {}
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ok) { throw "Agent failed to become healthy" }
+
+      - name: Real fixture benchmarks
+        run: npm run benchmark:fixtures
+        env:
+          BML_BENCH_MAX_FRAMES: "60"
+          BML_BENCH_STRIDE: "3"
