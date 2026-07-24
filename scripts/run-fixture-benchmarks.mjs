@@ -155,12 +155,14 @@ async function main() {
     body: { path: FIXTURE_VIDEO, title: "fixture-person" },
   });
 
+  const analyzedModules = ["technique:clear", "footwork:layer:clear", "footwork:pure"];
+
   const analyze = await agentJson("/analyze", {
     method: "POST",
     token,
     body: {
       capture_id: reg.captureId,
-      modules: ["technique:clear", "footwork:layer:clear", "footwork:pure"],
+      modules: analyzedModules,
       stroke_hint: "clear",
       court_corners: truth.courtCorners,
       max_frames: Number(process.env.BML_BENCH_MAX_FRAMES || 90),
@@ -179,7 +181,7 @@ async function main() {
 
   const measured = {
     generatedAt: new Date().toISOString(),
-    pipelineVersion: summary.pose?.adapter ? health.pipelineVersion || "0.2.1" : "0.2.1",
+    pipelineVersion: summary.pose?.adapter ? health.pipelineVersion || "0.2.2" : "0.2.2",
     fixtureVideo: FIXTURE_VIDEO,
     analysisRunId: analyze.analysisRunId,
     contactMaeFrames: contactMae,
@@ -201,9 +203,30 @@ async function main() {
 
   const modules = {};
   let allPassed = true;
+  const analyzedSet = new Set(analyzedModules);
 
   for (const moduleId of allModuleIds()) {
     const kind = moduleKind(moduleId);
+    const safeName = moduleId.replaceAll(":", "__");
+    if (!analyzedSet.has(moduleId)) {
+      const locked = {
+        moduleId,
+        generatedAt: measured.generatedAt,
+        pipelineVersion: measured.pipelineVersion,
+        fixturePassRate: 0,
+        passed: false,
+        notes: [
+          `No dedicated fixture run for ${moduleId}`,
+          `Only analyzed: ${analyzedModules.join(", ")}`,
+        ],
+        gate: GATE,
+      };
+      writeFileSync(join(reportsDir, `${safeName}.json`), JSON.stringify(locked, null, 2));
+      modules[moduleId] = "locked";
+      allPassed = false;
+      console.log(`LOCK ${moduleId} (no dedicated run)`);
+      continue;
+    }
     const raw = {
       moduleId,
       ...measured,
@@ -216,7 +239,6 @@ async function main() {
     };
     const report = evaluate(kind, raw);
     if (!report.passed) allPassed = false;
-    const safeName = moduleId.replaceAll(":", "__");
     writeFileSync(join(reportsDir, `${safeName}.json`), JSON.stringify(report, null, 2));
     modules[moduleId] = report.passed ? "on" : "locked";
     console.log(`${report.passed ? "ON " : "LOCK"} ${moduleId}`);

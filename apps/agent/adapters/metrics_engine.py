@@ -44,6 +44,7 @@ def compute_metrics(
     by_idx = index_frames_by_frame_index(frames)
     contact = next((e for e in events.get("events", []) if e["type"] == "contact"), None)
     split = next((e for e in events.get("events", []) if e["type"] == "split_step"), None)
+    first_step = next((e for e in events.get("events", []) if e["type"] == "first_step"), None)
     base = next((e for e in events.get("events", []) if e["type"] == "base_return"), None)
 
     out: list[dict[str, Any]] = []
@@ -172,10 +173,10 @@ def compute_metrics(
                 "frames",
                 0.8,
             )
-            # first-step latency: contact-relative split timing in seconds
+        if first_step and split:
             add(
                 "first_step_latency",
-                abs(float(contact["frameIndex"] - split["frameIndex"])) / max(fps, 1e-6),
+                abs(float(first_step["frameIndex"] - split["frameIndex"])) / max(fps, 1e-6),
                 "seconds",
                 0.75,
             )
@@ -186,7 +187,7 @@ def compute_metrics(
                 "seconds",
                 0.0,
                 withheld=True,
-                limitation="No split_step event",
+                limitation="No first_step event — latency withheld",
             )
 
         if la and ra:
