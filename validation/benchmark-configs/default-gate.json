@@ -1,0 +1,8 @@
+{
+  "contactFrameTolerance": 3,
+  "minProposalConfidence": 0.55,
+  "requiresCourtForFootwork": true,
+  "requiresRacket": true,
+  "requiresShuttle": true,
+  "fixturePassRate": 1
+}

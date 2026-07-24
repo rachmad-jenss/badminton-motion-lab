@@ -1,0 +1,24 @@
+{
+  "gate": {
+    "contactFrameTolerance": 3,
+    "minProposalConfidence": 0.55,
+    "requiresCourtForFootwork": true,
+    "requiresRacket": true,
+    "requiresShuttle": true,
+    "fixturePassRate": 1.0
+  },
+  "modules": {
+    "technique:*": {
+      "requiredArtifacts": ["pose", "racket", "shuttle", "events", "metrics"],
+      "benchmark": "validation/reports/technique__{stroke}.json"
+    },
+    "footwork:pure": {
+      "requiredArtifacts": ["pose", "events", "metrics"],
+      "requiresCourt": true
+    },
+    "footwork:layer:*": {
+      "requiredArtifacts": ["pose", "events", "metrics"],
+      "requiresCourt": true
+    }
+  }
+}
