@@ -33,9 +33,11 @@ from storage.db import get_db_path, init_db
 HOST = os.getenv("BML_AGENT_HOST", "127.0.0.1")
 PORT = int(os.getenv("BML_AGENT_PORT", "8787"))
 DATA_DIR = Path(os.getenv("BML_AGENT_DATA_DIR", str(Path(__file__).resolve().parent / "data")))
-PIPELINE_VERSION = "0.2.1"
-AGENT_VERSION = "0.2.1"
-DEFAULT_MAX_FRAMES = int(os.getenv("BML_MAX_FRAMES", "300"))
+PIPELINE_VERSION = "0.2.2"
+AGENT_VERSION = "0.2.2"
+# None = analyze full video. Set BML_MAX_FRAMES to cap (e.g. interactive UI).
+_DEFAULT_MAX_RAW = os.getenv("BML_MAX_FRAMES")
+DEFAULT_MAX_FRAMES = int(_DEFAULT_MAX_RAW) if _DEFAULT_MAX_RAW not in (None, "") else None
 DEFAULT_STRIDE = int(os.getenv("BML_FRAME_STRIDE", "1"))
 PUBLIC_PATHS = {"/health", "/pair", "/docs", "/openapi.json", "/redoc"}
 
@@ -204,12 +206,13 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
     meta = json.loads(metadata_json)
     width, height, fps = int(meta["width"]), int(meta["height"]), float(meta["fps"])
     frame_count = int(meta.get("frameCount") or max(1, int(meta["durationMs"] / 1000 * fps)))
-    max_frames = body.max_frames or DEFAULT_MAX_FRAMES
+    max_frames = body.max_frames if body.max_frames is not None else DEFAULT_MAX_FRAMES
     stride = body.frame_stride or DEFAULT_STRIDE
 
     frames = decode_frames(video_path, max_frames=max_frames, stride=stride)
     if not frames:
         raise MediaError("No frames decoded from video")
+    truncated = bool(max_frames is not None and len(frames) >= max_frames)
 
     stats = sample_frame_stats_from_frames(frames)
     pose = estimate_pose(
@@ -318,6 +321,12 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         "racketCoverage": racket.get("coverage"),
         "shuttleCoverage": shuttle.get("coverage"),
         "strokeHint": body.stroke_hint or "clear",
+        "frameWindow": {
+            "decodedFrames": len(frames),
+            "maxFramesCap": max_frames,
+            "stride": stride,
+            "truncated": truncated,
+        },
     }
     return {
         "run_id": run_id,
