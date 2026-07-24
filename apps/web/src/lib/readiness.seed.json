@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-07-24T03:29:23.964Z",
+  "pipelineVersion": "0.2.1",
+  "complete": false,
+  "modules": {
+    "technique:serve": "locked",
+    "technique:forehand": "locked",
+    "technique:backhand": "locked",
+    "technique:smash": "locked",
+    "technique:clear": "locked",
+    "technique:drop": "locked",
+    "technique:drive": "locked",
+    "technique:net_shot": "locked",
+    "technique:lift": "locked",
+    "technique:block": "locked",
+    "technique:defensive_return": "locked",
+    "technique:jump_smash": "locked",
+    "footwork:pure": "on",
+    "footwork:layer:serve": "on",
+    "footwork:layer:forehand": "on",
+    "footwork:layer:backhand": "on",
+    "footwork:layer:smash": "on",
+    "footwork:layer:clear": "on",
+    "footwork:layer:drop": "on",
+    "footwork:layer:drive": "on",
+    "footwork:layer:net_shot": "on",
+    "footwork:layer:lift": "on",
+    "footwork:layer:block": "on",
+    "footwork:layer:defensive_return": "on",
+    "footwork:layer:jump_smash": "on"
+  },
+  "source": "agent-fixture-benchmark"
+}
