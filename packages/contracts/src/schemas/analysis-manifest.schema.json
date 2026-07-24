@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://badminton-motion-lab.local/schemas/analysis-manifest.json",
+  "title": "AnalysisManifest",
+  "type": "object",
+  "required": [
+    "packageVersion",
+    "pipelineVersion",
+    "analysisRunId",
+    "captureId",
+    "modulesRequested",
+    "artifacts",
+    "qualityGate"
+  ],
+  "properties": {
+    "packageVersion": { "type": "string" },
+    "pipelineVersion": { "type": "string" },
+    "analysisRunId": { "type": "string" },
+    "captureId": { "type": "string" },
+    "modulesRequested": { "type": "array", "items": { "type": "string" } },
+    "artifacts": { "type": "object" },
+    "qualityGate": { "type": "object" },
+    "court": { "type": ["object", "null"] }
+  }
+}
