@@ -173,10 +173,10 @@ def compute_metrics(
                 "frames",
                 0.8,
             )
-        if first_step and split:
+        if first_step and split and int(first_step["frameIndex"]) >= int(split["frameIndex"]):
             add(
                 "first_step_latency",
-                abs(float(first_step["frameIndex"] - split["frameIndex"])) / max(fps, 1e-6),
+                float(first_step["frameIndex"] - split["frameIndex"]) / max(fps, 1e-6),
                 "seconds",
                 0.75,
             )
@@ -187,7 +187,11 @@ def compute_metrics(
                 "seconds",
                 0.0,
                 withheld=True,
-                limitation="No first_step event — latency withheld",
+                limitation=(
+                    "Invalid first_step before split_step"
+                    if first_step and split
+                    else "No first_step event — latency withheld"
+                ),
             )
 
         if la and ra:
