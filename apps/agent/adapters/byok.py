@@ -95,15 +95,15 @@ class ByokStore:
     def set_key(self, *, provider: str, api_key: str, model: str) -> None:
         self.ensure()
         payload = json.dumps({"provider": provider, "api_key": api_key, "model": model}).encode("utf-8")
+        key_path = self.root / ".byok_key"
         if os.name == "nt":
             self.enc_path.write_bytes(b"BML-DPAPI\x00" + _dpapi_protect(payload))
+            if key_path.exists():
+                key_path.unlink()
         else:
             self.enc_path.write_bytes(_fernet_for(self.root).encrypt(payload))
         if self.path.exists():
             self.path.unlink()
-        key_path = self.root / ".byok_key"
-        if key_path.exists():
-            key_path.unlink()
 
     def clear(self) -> None:
         for p in (self.path, self.enc_path):

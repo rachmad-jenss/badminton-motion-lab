@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,7 @@ const AGENT = process.env.BML_AGENT_URL || "http://127.0.0.1:8787";
 const FIXTURE_VIDEO =
   process.env.BML_FIXTURE_VIDEO ||
   join(root, "validation", "fixtures", "person_1280x720_30fps.mp4");
+const CONTRACT_PATH = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
 
 const TECHNIQUE_STROKES = [
   "serve",
@@ -51,17 +52,21 @@ const GATE = JSON.parse(
 );
 
 function evaluate(kind, report) {
+  const gate =
+    kind === "technique_stroke"
+      ? GATE
+      : { ...GATE, requiresRacket: false, requiresShuttle: false };
   const notes = [...(report.notes || [])];
-  let passed = report.fixturePassRate >= GATE.fixturePassRate;
+  let passed = report.fixturePassRate >= gate.fixturePassRate;
 
   if (kind === "technique_stroke" || kind === "footwork_layer") {
-    if (report.contactMaeFrames == null || report.contactMaeFrames > GATE.contactFrameTolerance) {
+    if (report.contactMaeFrames == null || report.contactMaeFrames > gate.contactFrameTolerance) {
       passed = false;
       notes.push("Contact MAE exceeds tolerance or missing");
     }
     if (
       report.proposalConfidenceMean == null ||
-      report.proposalConfidenceMean < GATE.minProposalConfidence
+      report.proposalConfidenceMean < gate.minProposalConfidence
     ) {
       passed = false;
       notes.push("Proposal confidence below gate");
@@ -91,7 +96,7 @@ function evaluate(kind, report) {
     notes.push("Synthetic baseline notes are forbidden");
   }
 
-  return { ...report, notes, passed, gate: GATE };
+  return { ...report, notes, passed, gate };
 }
 
 async function agentJson(path, { method = "GET", body, token } = {}) {
@@ -132,6 +137,13 @@ async function main() {
     console.error("Agent did not expose a live pairing code; refresh/restart the Local Agent.");
     process.exit(1);
   }
+  const contractText = readFileSync(CONTRACT_PATH, "utf8");
+  const contractVersion = contractText.match(/PIPELINE_VERSION\s*=\s*"([^"]+)"/)?.[1];
+  if (!contractVersion || health.pipelineVersion !== contractVersion) {
+    console.error(`Pipeline version provenance mismatch: health=${health.pipelineVersion} contract=${contractVersion}`);
+    process.exit(1);
+  }
+  const fixtureSha256 = createHash("sha256").update(readFileSync(FIXTURE_VIDEO)).digest("hex").toUpperCase();
 
   const pair = await agentJson("/pair", {
     method: "POST",
@@ -151,9 +163,13 @@ async function main() {
           { x: 1180, y: 200 },
           { x: 1200, y: 700 },
           { x: 80, y: 700 },
-      ],
+        ],
       };
 
+  if (!truth.sha256 || truth.sha256.toUpperCase() !== fixtureSha256) {
+    console.error("Fixture truth hash does not match the media file.");
+    process.exit(1);
+  }
   const domainFixture = truth.fixtureKind === "badminton_stroke";
   if (!domainFixture) {
     console.warn(
@@ -191,9 +207,10 @@ async function main() {
 
   const measured = {
     generatedAt: new Date().toISOString(),
-    pipelineVersion: summary.pose?.adapter ? health.pipelineVersion || "0.2.2" : "0.2.2",
-    fixtureVideo: FIXTURE_VIDEO,
+    pipelineVersion: health.pipelineVersion,
+    fixtureVideo: relative(root, FIXTURE_VIDEO).replaceAll("\\", "/"),
     fixtureKind: truth.fixtureKind || "unknown",
+    fixtureSha256,
     analysisRunId: analyze.analysisRunId,
     contactMaeFrames: contactMae,
     proposalConfidenceMean: confidenceMean,
@@ -224,6 +241,9 @@ async function main() {
         moduleId,
         generatedAt: measured.generatedAt,
         pipelineVersion: measured.pipelineVersion,
+        fixtureVideo: measured.fixtureVideo,
+        fixtureKind: measured.fixtureKind,
+        fixtureSha256: measured.fixtureSha256,
         fixturePassRate: 0,
         passed: false,
         notes: [

@@ -177,9 +177,13 @@ async def health() -> dict[str, Any]:
 @app.post("/pair")
 async def pair(body: PairRequest) -> dict[str, Any]:
     now = now_epoch()
-    if not PAIRING_CODE or now >= PAIRING_EXPIRES_AT or body.pairing_code.strip() == "":
+    submitted_code = body.pairing_code.strip()
+    submitted_hash = hash_secret(submitted_code)
+    challenge_code = PAIRING_CODE
+    challenge_hash = hash_secret(challenge_code) if challenge_code else ""
+    if not challenge_code or now >= PAIRING_EXPIRES_AT or not submitted_code:
         raise HTTPException(401, "Pairing code is missing or expired — refresh agent health")
-    if not secrets.compare_digest(hash_secret(body.pairing_code.strip()), hash_secret(PAIRING_CODE)):
+    if not secrets.compare_digest(submitted_hash, challenge_hash):
         raise HTTPException(401, "Invalid pairing code")
     device_id = str(uuid.uuid4())
     token = new_secret()
@@ -189,7 +193,7 @@ async def pair(body: PairRequest) -> dict[str, Any]:
         cur = await db.execute(
             """UPDATE pairing_challenges SET used_at = ?
                WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?""",
-            (now, hash_secret(PAIRING_CODE), now),
+            (now, submitted_hash, now),
         )
         if cur.rowcount != 1:
             raise HTTPException(401, "Pairing code is already used or expired")
@@ -243,15 +247,15 @@ async def media_stream(
     db_path = get_db_path(DATA_DIR)
     async with aiosqlite.connect(db_path) as db:
         cur = await db.execute(
-            """UPDATE media_tickets SET used_at = ?
-               WHERE token_hash = ? AND capture_id = ? AND used_at IS NULL AND expires_at > ?""",
-            (now, hash_secret(ticket), capture_id, now),
+            """SELECT expires_at FROM media_tickets
+               WHERE token_hash = ? AND capture_id = ?""",
+            (hash_secret(ticket), capture_id),
         )
-        if cur.rowcount != 1:
+        ticket_row = await cur.fetchone()
+        if not ticket_row or int(ticket_row[0]) <= now:
             raise HTTPException(401, "Invalid or expired media ticket")
         cur = await db.execute("SELECT path FROM captures WHERE id = ?", (capture_id,))
         row = await cur.fetchone()
-        await db.commit()
     if not row:
         raise HTTPException(404, "Capture not found")
     path = Path(row[0])
