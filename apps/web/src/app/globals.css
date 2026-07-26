@@ -33,6 +33,16 @@ a {
   text-decoration: none;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+video:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
 main {
   width: min(1100px, calc(100% - 2rem));
   margin: 0 auto;
@@ -140,6 +150,11 @@ h3 {
   background: rgba(61, 220, 151, 0.22);
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .btn.secondary {
   border-color: var(--line);
   background: transparent;
@@ -169,6 +184,11 @@ textarea {
   font: inherit;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  max-width: none;
+}
+
 label {
   display: grid;
   gap: 0.35rem;
@@ -196,6 +216,10 @@ table {
   font-size: 0.9rem;
 }
 
+.table-wrap {
+  overflow-x: auto;
+}
+
 th,
 td {
   text-align: left;
@@ -217,6 +241,106 @@ nav.app-nav {
   background: rgba(230, 184, 77, 0.08);
   color: var(--muted);
   margin: 1rem 0;
+}
+
+.error-notice {
+  border-left-color: var(--danger);
+  background: rgba(232, 106, 91, 0.1);
+}
+
+.status {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.status.success {
+  color: var(--accent);
+}
+
+.check-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  background: rgba(20, 32, 26, 0.45);
+}
+
+.check-ok {
+  color: var(--accent);
+}
+
+.check-fail {
+  color: var(--warn);
+}
+
+.metric-name {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.metric-name small {
+  color: var(--muted);
+}
+
+.evidence-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.evidence-item {
+  border: 1px solid var(--line);
+  padding: 0.8rem;
+  background: rgba(20, 32, 26, 0.35);
+}
+
+.evidence-item p {
+  margin: 0.35rem 0;
+}
+
+.trend-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.trend-chart {
+  min-width: 28rem;
+}
+
+.phase {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  main {
+    width: min(100% - 1rem, 1100px);
+    padding-top: 1rem;
+  }
+
+  .hero {
+    padding-top: 1.5rem;
+  }
+
+  nav.app-nav {
+    gap: 0.65rem;
+    font-size: 0.88rem;
+  }
 }
 
 .ok-notice {
