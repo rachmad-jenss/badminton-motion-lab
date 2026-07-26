@@ -22,23 +22,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Runner preflight
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "ffprobe is required on the self-hosted runner" }
           if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "ffmpeg is required on the self-hosted runner" }
+          $pythonVersion = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+          if ([version]$pythonVersion -lt [version]'3.11') { throw "Python 3.11+ is required; found $pythonVersion" }
+          $nodeVersion = (& node --version).TrimStart('v')
+          if ([version]$nodeVersion -lt [version]'20.0') { throw "Node 20+ is required; found $nodeVersion" }
           python --version
           node --version
+          npm --version
           ffprobe -version | Select-Object -First 1
 
       - name: npm ci
