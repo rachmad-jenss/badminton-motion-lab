@@ -19,13 +19,19 @@ export default function AgentPage() {
     localStorage.setItem("bml.agentUrl", url);
     void agentHealth().then((h) => {
       setOnline(h.online);
+      const pairingCode = h.payload?.pairingCode;
+      if (typeof pairingCode === "string") setCode((current) => current || pairingCode);
       setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
     });
   }, [url]);
 
   async function pair() {
+    if (!code) {
+      setStatus("Refresh health to obtain a live, one-time pairing code.");
+      return;
+    }
     const res = await agentPost<{ deviceId: string; token: string; agentUrl: string }>("/pair", {
-      pairing_code: code || `BML-${Date.now()}`,
+      pairing_code: code,
       device_name: "Windows Local Agent",
     });
     setAgentToken(res.token);
@@ -81,10 +87,10 @@ python main.py`}</pre>
         </label>
         <label>
           Pairing code
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="optional" />
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="refresh health" />
         </label>
         <div className="row">
-          <button className="btn" onClick={() => void pair()} disabled={!online}>
+          <button className="btn" onClick={() => void pair()} disabled={!online || !code}>
             Pair browser ↔ agent
           </button>
           <button

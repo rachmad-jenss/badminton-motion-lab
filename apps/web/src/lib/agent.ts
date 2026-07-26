@@ -15,12 +15,7 @@ export function setAgentToken(token: string): void {
 }
 
 export function mediaUrlWithToken(pathOrUrl: string): string {
-  const token = agentToken();
-  if (!token) return pathOrUrl;
-  const base = pathOrUrl.startsWith("http") ? pathOrUrl : `${agentBaseUrl()}${pathOrUrl}`;
-  const url = new URL(base);
-  url.searchParams.set("access_token", token);
-  return url.toString();
+  return pathOrUrl.startsWith("http") ? pathOrUrl : `${agentBaseUrl()}${pathOrUrl}`;
 }
 
 function authHeaders(extra?: HeadersInit): HeadersInit {
