@@ -43,6 +43,9 @@ jobs:
       - name: npm ci
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
       - name: Install agent deps + pose model
         working-directory: apps/agent
         shell: powershell
