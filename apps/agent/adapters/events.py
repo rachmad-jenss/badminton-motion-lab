@@ -91,8 +91,6 @@ def propose_events(
     if contact_conf < MIN_PROPOSAL_CONFIDENCE:
         mode = "manual_required"
         if manual_events:
-            for ev in manual_events:
-                proposed.append({**ev, "source": "manual"})
             mode = "manual"
         else:
             return {
@@ -105,10 +103,13 @@ def propose_events(
             }
 
     if manual_events:
-        for ev in manual_events:
-            proposed.append({**ev, "source": "corrected"})
+        proposed = _merge_manual_events(proposed, manual_events)
 
-    reps = [{"repIndex": 0, "startFrame": rep_start, "contactFrame": best_i, "endFrame": rep_end}]
+    contact = next((event for event in reversed(proposed) if event["type"] == "contact"), None)
+    contact_frame = int(contact["frameIndex"]) if contact else best_i
+    start_frame = _event_frame(proposed, "rep_start", rep_start)
+    end_frame = _event_frame(proposed, "rep_end", rep_end)
+    reps = [{"repIndex": 0, "startFrame": start_frame, "contactFrame": contact_frame, "endFrame": end_frame}]
     return {
         "mode": mode,
         "strokeHint": stroke_hint,
@@ -116,3 +117,33 @@ def propose_events(
         "events": proposed,
         "reps": reps,
     }
+
+
+def _merge_manual_events(
+    proposed: list[dict[str, Any]], manual_events: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Replace the model event for a corrected type/rep instead of appending a conflict."""
+    merged = list(proposed)
+    for raw in manual_events:
+        event = {**raw, "source": "corrected"}
+        event_type = event.get("type")
+        rep_index = event.get("repIndex", 0)
+        replacement = next(
+            (
+                index
+                for index in range(len(merged) - 1, -1, -1)
+                if merged[index].get("type") == event_type
+                and merged[index].get("repIndex", 0) == rep_index
+            ),
+            None,
+        )
+        if replacement is None:
+            merged.append(event)
+        else:
+            merged[replacement] = event
+    return merged
+
+
+def _event_frame(events: list[dict[str, Any]], event_type: str, fallback: int) -> int:
+    event = next((item for item in reversed(events) if item.get("type") == event_type), None)
+    return int(event["frameIndex"]) if event and "frameIndex" in event else fallback

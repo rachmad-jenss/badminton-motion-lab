@@ -13,10 +13,11 @@
     "lint": "npm run lint -w @bml/web",
     "typecheck": "npm run build -w @bml/contracts && npm run test -w @bml/contracts && npm run test -w @bml/web",
     "test": "npm run typecheck",
-    "test:agent": "cd apps/agent && python -m pytest test_security.py -q && python smoke_test.py",
+    "test:agent": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-agent-tests.ps1",
     "verify": "npm run typecheck && npm run build -w @bml/web && npm run test:agent && node scripts/check-no-synthetic-reports.mjs",
     "contracts:build": "npm run build -w @bml/contracts",
     "readiness:check": "node scripts/check-public-readiness.mjs",
+    "readiness:integrity": "node scripts/check-readiness-integrity.mjs",
     "benchmark:fixtures": "node scripts/run-fixture-benchmarks.mjs"
   },
   "engines": {

@@ -12,6 +12,8 @@ venv/
 .env.*.local
 *.egg-info/
 .pytest_cache/
+.pytest-temp/
+apps/agent/test-tmp/
 .mypy_cache/
 .ruff_cache/
 apps/agent/data/

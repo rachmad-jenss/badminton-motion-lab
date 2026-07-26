@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-24T03:29:23.964Z",
-  "pipelineVersion": "0.2.1",
+  "generatedAt": "2026-07-26T10:52:26.592Z",
+  "pipelineVersion": "0.2.2",
   "complete": false,
   "modules": {
     "technique:serve": "locked",
@@ -15,19 +15,19 @@
     "technique:block": "locked",
     "technique:defensive_return": "locked",
     "technique:jump_smash": "locked",
-    "footwork:pure": "on",
-    "footwork:layer:serve": "on",
-    "footwork:layer:forehand": "on",
-    "footwork:layer:backhand": "on",
-    "footwork:layer:smash": "on",
-    "footwork:layer:clear": "on",
-    "footwork:layer:drop": "on",
-    "footwork:layer:drive": "on",
-    "footwork:layer:net_shot": "on",
-    "footwork:layer:lift": "on",
-    "footwork:layer:block": "on",
-    "footwork:layer:defensive_return": "on",
-    "footwork:layer:jump_smash": "on"
+    "footwork:pure": "locked",
+    "footwork:layer:serve": "locked",
+    "footwork:layer:forehand": "locked",
+    "footwork:layer:backhand": "locked",
+    "footwork:layer:smash": "locked",
+    "footwork:layer:clear": "locked",
+    "footwork:layer:drop": "locked",
+    "footwork:layer:drive": "locked",
+    "footwork:layer:net_shot": "locked",
+    "footwork:layer:lift": "locked",
+    "footwork:layer:block": "locked",
+    "footwork:layer:defensive_return": "locked",
+    "footwork:layer:jump_smash": "locked"
   },
   "source": "agent-fixture-benchmark"
 }
