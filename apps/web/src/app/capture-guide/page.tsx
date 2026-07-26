@@ -1,13 +1,9 @@
-import Link from "next/link";
+import { AppNav } from "@/components/AppNav";
 
 export default function CaptureGuidePage() {
   return (
     <main>
-      <nav className="app-nav">
-        <Link href="/">Labs</Link>
-        <Link href="/analyze">Analyze</Link>
-        <Link href="/capture-guide">Capture guide</Link>
-      </nav>
+      <AppNav />
 
       <header className="hero">
         <h1 className="brand">Capture guide</h1>
@@ -41,6 +37,17 @@ export default function CaptureGuidePage() {
           Public launch is <strong>Windows-only</strong>. macOS Local Agent follows as v1.1. Original
           video is not uploaded; the agent streams to the browser on localhost.
         </p>
+      </section>
+
+      <section className="panel">
+        <h2>Next step</h2>
+        <p className="muted">
+          When the capture meets these requirements, pair the Local Agent and run the analysis.
+        </p>
+        <div className="row">
+          <a className="btn" href="/agent">Pair Local Agent</a>
+          <a className="btn secondary" href="/analyze">Go to Analyze</a>
+        </div>
       </section>
     </main>
   );

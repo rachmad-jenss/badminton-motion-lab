@@ -43,6 +43,9 @@ jobs:
       - name: npm ci
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
       - name: Install agent deps + pose model
         working-directory: apps/agent
         shell: powershell
@@ -52,6 +55,22 @@ jobs:
           $model = "models/pose_landmarker_full.task"
           if (-not (Test-Path $model)) {
             Invoke-WebRequest -Uri "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task" -OutFile $model
+          }
+
+      - name: Clean web test port
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $listeners = @(Get-NetTCPConnection -LocalPort 3101 -State Listen -ErrorAction SilentlyContinue)
+          foreach ($listener in $listeners) {
+            $process = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
+            if ($process) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+          Start-Sleep -Seconds 1
+          if (Get-NetTCPConnection -LocalPort 3101 -State Listen -ErrorAction SilentlyContinue) {
+            throw "Port 3101 is still occupied before the web test gate"
           }
 
       - name: Typecheck + web build + agent smoke + no-synthetic
