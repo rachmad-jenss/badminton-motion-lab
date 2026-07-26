@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { METRIC_CATALOGUE } from "@bml/contracts";
 import {
@@ -30,7 +31,7 @@ function metricLabel(id: string): string {
 }
 
 function formatValue(point: SessionMetricPoint | null): string {
-  return point ? `${point.value} ${point.unit}` : "-";
+  return point ? `${point.value} ${point.unit} · ${point.sessionTitle}` : "-";
 }
 
 export default function ComparePage() {
@@ -111,7 +112,7 @@ export default function ComparePage() {
         </div>
       </header>
 
-      {error ? <div className="notice" role="status">{error} <a href="/agent">Open setup →</a></div> : null}
+      {error ? <div className="notice" role="status">{error} <Link href="/agent">Open setup →</Link></div> : null}
       {loading ? <p className="muted" role="status">Loading session series…</p> : null}
       {Object.keys(seriesErrors).length > 0 ? (
         <div className="notice" role="alert">
@@ -167,7 +168,7 @@ export default function ComparePage() {
         </section>
       ) : null}
 
-      {!loading && readiness === "ready" && hasAnyData ? (
+      {!loading && readiness !== "offline" && paired && hasAnyData ? (
         <section className="panel">
           <h2>Trend</h2>
           {METRICS.map((id) => {
