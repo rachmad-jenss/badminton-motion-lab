@@ -1,5 +1,6 @@
 {
   "id": "person_1280x720_30fps",
+  "fixtureKind": "non_domain_smoke",
   "width": 1280,
   "height": 720,
   "fps": 30,
