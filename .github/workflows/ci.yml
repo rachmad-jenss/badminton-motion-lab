@@ -4,10 +4,21 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bml-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
-    runs-on: windows-latest
+    # Never execute untrusted fork code on the persistent self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64, bml-windows]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +31,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install ffmpeg
-        run: choco install ffmpeg -y
+      - name: Runner preflight
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "ffprobe is required on the self-hosted runner" }
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "ffmpeg is required on the self-hosted runner" }
+          python --version
+          node --version
+          ffprobe -version | Select-Object -First 1
 
       - name: npm ci
         run: npm ci
@@ -60,3 +78,6 @@ jobs:
         env:
           BML_BENCH_MAX_FRAMES: "60"
           BML_BENCH_STRIDE: "3"
+
+      - name: Validate readiness provenance
+        run: npm run readiness:integrity

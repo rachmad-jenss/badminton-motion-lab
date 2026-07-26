@@ -128,10 +128,14 @@ async function main() {
     console.error(`Agent not reachable at ${AGENT}. Start Local Agent, then re-run.`);
     process.exit(1);
   }
+  if (typeof health.pairingCode !== "string" || !health.pairingCode) {
+    console.error("Agent did not expose a live pairing code; refresh/restart the Local Agent.");
+    process.exit(1);
+  }
 
   const pair = await agentJson("/pair", {
     method: "POST",
-    body: { pairing_code: `bench-${Date.now()}`, device_name: "fixture-benchmark" },
+    body: { pairing_code: health.pairingCode, device_name: "fixture-benchmark" },
   });
   const token = pair.token;
 
@@ -140,14 +144,22 @@ async function main() {
   const truth = existsSync(truthPath)
     ? JSON.parse(readFileSync(truthPath, "utf8"))
     : {
+        fixtureKind: "unknown",
         contactFrameTruth: null,
         courtCorners: [
           { x: 100, y: 200 },
           { x: 1180, y: 200 },
           { x: 1200, y: 700 },
           { x: 80, y: 700 },
-        ],
+      ],
       };
+
+  const domainFixture = truth.fixtureKind === "badminton_stroke";
+  if (!domainFixture) {
+    console.warn(
+      `Fixture ${FIXTURE_VIDEO} is smoke-only (${truth.fixtureKind || "unknown"}); it cannot unlock public badminton modules.`,
+    );
+  }
 
   const reg = await agentJson("/captures/register", {
     method: "POST",
@@ -175,18 +187,17 @@ async function main() {
   const contactMae =
     truth.contactFrameTruth != null && proposedContact != null
       ? Math.abs(proposedContact - truth.contactFrameTruth)
-      : proposedContact == null
-        ? null
-        : 0;
+      : null;
 
   const measured = {
     generatedAt: new Date().toISOString(),
     pipelineVersion: summary.pose?.adapter ? health.pipelineVersion || "0.2.2" : "0.2.2",
     fixtureVideo: FIXTURE_VIDEO,
+    fixtureKind: truth.fixtureKind || "unknown",
     analysisRunId: analyze.analysisRunId,
     contactMaeFrames: contactMae,
     proposalConfidenceMean: confidenceMean,
-    fixturePassRate: 1,
+    fixturePassRate: 0,
     racketTrackCoverage: summary.racketCoverage ?? 0,
     shuttleTrackCoverage: summary.shuttleCoverage ?? 0,
     courtValidRate: summary.court?.valid ? 1 : 0,
@@ -202,7 +213,7 @@ async function main() {
   mkdirSync(reportsDir, { recursive: true });
 
   const modules = {};
-  let allPassed = true;
+  let allPassed = domainFixture;
   const analyzedSet = new Set(analyzedModules);
 
   for (const moduleId of allModuleIds()) {
@@ -230,6 +241,14 @@ async function main() {
     const raw = {
       moduleId,
       ...measured,
+      fixturePassRate:
+        domainFixture &&
+        (kind === "footwork_pure"
+          ? measured.courtValidRate === 1
+          : measured.contactMaeFrames != null &&
+            measured.contactMaeFrames <= GATE.contactFrameTolerance)
+          ? 1
+          : 0,
       contactMaeFrames: kind === "footwork_pure" ? null : measured.contactMaeFrames,
       proposalConfidenceMean: kind === "footwork_pure" ? null : measured.proposalConfidenceMean,
       racketTrackCoverage: kind === "technique_stroke" ? measured.racketTrackCoverage : null,
@@ -276,7 +295,8 @@ async function main() {
 
   const digest = createHash("sha256").update(JSON.stringify(modules)).digest("hex").slice(0, 12);
   console.log(`\nReal benchmarks written. complete=${allPassed} digest=${digest}`);
-  // Exit 0 even if modules locked — honesty over theater. Public gate is readiness:check.
+  // Exit 0 for an honest incomplete readiness state; readiness:check remains
+  // the strict release gate and integrity prevents false completeness claims.
   process.exitCode = 0;
 }
 
