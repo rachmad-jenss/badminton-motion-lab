@@ -30,13 +30,17 @@ export default function ComparePage() {
       return;
     }
     try {
-      const next: Record<string, SessionMetricPoint[]> = {};
-      for (const id of METRICS) {
-        const res = await agentGet<{ points: SessionMetricPoint[] }>(
-          `/metrics/series?metric_id=${encodeURIComponent(id)}`,
-        );
-        next[id] = res.points;
-      }
+      const responses = await Promise.all(
+        METRICS.map(async (id) => ({
+          id,
+          response: await agentGet<{ points: SessionMetricPoint[] }>(
+            `/metrics/series?metric_id=${encodeURIComponent(id)}&limit=200`,
+          ),
+        })),
+      );
+      const next: Record<string, SessionMetricPoint[]> = Object.fromEntries(
+        responses.map(({ id, response }) => [id, response.points]),
+      );
       setSeries(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load metrics");

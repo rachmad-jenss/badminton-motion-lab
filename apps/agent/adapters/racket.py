@@ -5,12 +5,22 @@ from __future__ import annotations
 from typing import Any
 
 
-def track_racket(*, pose_frames: list[dict[str, Any]], fps: float) -> dict[str, Any]:
+def track_racket(
+    *, pose_frames: list[dict[str, Any]], fps: float, dominant_hand: str = "unknown"
+) -> dict[str, Any]:
     points: list[dict[str, Any]] = []
     for fr in pose_frames:
         by_name = {lm["name"]: lm for lm in fr.get("landmarks", [])}
-        wrist = by_name.get("right_wrist") or by_name.get("left_wrist")
-        elbow = by_name.get("right_elbow") if by_name.get("right_wrist") else by_name.get("left_elbow")
+        candidates = [
+            (dominant_hand, by_name.get(f"{dominant_hand}_wrist"), by_name.get(f"{dominant_hand}_elbow"))
+        ] if dominant_hand in {"left", "right"} else [
+            (side, by_name.get(f"{side}_wrist"), by_name.get(f"{side}_elbow"))
+            for side in ("left", "right")
+        ]
+        available = [(side, wrist, elbow) for side, wrist, elbow in candidates if wrist]
+        if not available:
+            continue
+        _, wrist, elbow = max(available, key=lambda item: float(item[1].get("confidence") or 0.0))
         if not wrist:
             continue
         # Extrapolate tip beyond wrist along elbow→wrist direction

@@ -149,7 +149,7 @@ def decode_frames(
     max_frames: int | None = None,
     stride: int = 1,
 ) -> list[tuple[int, float, np.ndarray]]:
-    """Decode video once into memory for shared pose/shuttle/court consumers."""
+    """Decode a bounded video window for shared pose/shuttle/court consumers."""
     return list(iter_frames(path, max_frames=max_frames, stride=stride))
 
 

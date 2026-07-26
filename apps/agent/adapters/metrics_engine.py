@@ -42,10 +42,10 @@ def compute_metrics(
 ) -> list[dict[str, Any]]:
     frames = pose.get("frames", [])
     by_idx = index_frames_by_frame_index(frames)
-    contact = next((e for e in events.get("events", []) if e["type"] == "contact"), None)
-    split = next((e for e in events.get("events", []) if e["type"] == "split_step"), None)
-    first_step = next((e for e in events.get("events", []) if e["type"] == "first_step"), None)
-    base = next((e for e in events.get("events", []) if e["type"] == "base_return"), None)
+    contact = _preferred_event(events, "contact")
+    split = _preferred_event(events, "split_step")
+    first_step = _preferred_event(events, "first_step")
+    base = _preferred_event(events, "base_return")
 
     out: list[dict[str, Any]] = []
     if not contact or not by_idx:
@@ -322,7 +322,7 @@ def findings_from_metrics(
                 "limitation": m.get("limitation"),
             }
         )
-    contact = next((e for e in events.get("events", []) if e["type"] == "contact"), None)
+    contact = _preferred_event(events, "contact")
     if contact:
         findings.insert(
             0,
@@ -337,3 +337,11 @@ def findings_from_metrics(
             },
         )
     return findings
+
+
+def _preferred_event(events: dict[str, Any], event_type: str) -> dict[str, Any] | None:
+    candidates = [e for e in events.get("events", []) if e.get("type") == event_type]
+    if not candidates:
+        return None
+    priority = {"model": 0, "manual": 1, "corrected": 2}
+    return max(enumerate(candidates), key=lambda item: (priority.get(item[1].get("source"), 0), item[0]))[1]
