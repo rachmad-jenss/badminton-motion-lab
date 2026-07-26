@@ -37,13 +37,13 @@ Plan 009 already owns.
 
 | Order | Plan | Status | Depends on |
 |------:|------|--------|------------|
-| 10 | [010-offline-agent-onboarding](010-offline-agent-onboarding.md) | TODO | 009 health contract may evolve; reconcile if it does |
-| 11 | [011-pairing-error-recovery](011-pairing-error-recovery.md) | TODO | 010 |
-| 12 | [012-analyze-preflight-progress](012-analyze-preflight-progress.md) | TODO | 010; Plan 009 Slice 5 for handedness semantics |
-| 13 | [013-evidence-review-surface](013-evidence-review-surface.md) | TODO | 012 |
-| 14 | [014-compare-interpretability](014-compare-interpretability.md) | TODO | 010; Plan 009 Slice 6 endpoint work |
-| 15 | [015-accessible-shell](015-accessible-shell.md) | TODO | none |
-| 16 | [016-web-behavioral-coverage](016-web-behavioral-coverage.md) | TODO | 010-015 |
+| 10 | [010-offline-agent-onboarding](010-offline-agent-onboarding.md) | DONE | 009 health contract may evolve; reconcile if it does |
+| 11 | [011-pairing-error-recovery](011-pairing-error-recovery.md) | DONE | 010 |
+| 12 | [012-analyze-preflight-progress](012-analyze-preflight-progress.md) | DONE | 010; Plan 009 Slice 5 for handedness semantics |
+| 13 | [013-evidence-review-surface](013-evidence-review-surface.md) | DONE | 012 |
+| 14 | [014-compare-interpretability](014-compare-interpretability.md) | DONE | 010; Plan 009 Slice 6 endpoint work |
+| 15 | [015-accessible-shell](015-accessible-shell.md) | DONE | none |
+| 16 | [016-web-behavioral-coverage](016-web-behavioral-coverage.md) | DONE | 010-015 |
 
 Recommended implementation order is 010, 011, 012, 013, 014, 015, and 016.
 Each implementation slice gets one atomic commit and its own verification
