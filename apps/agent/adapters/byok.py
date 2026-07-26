@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import ctypes
 import hashlib
 import json
 import os
@@ -39,6 +40,46 @@ def _fernet_for(root: Path) -> Fernet:
         return Fernet(base64.urlsafe_b64encode(digest))
 
 
+def _dpapi_protect(payload: bytes) -> bytes:
+    if os.name != "nt":
+        raise RuntimeError("Windows DPAPI is unavailable on this platform")
+
+    class Blob(ctypes.Structure):
+        _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+    source = (ctypes.c_ubyte * len(payload)).from_buffer_copy(payload)
+    blob_in = Blob(len(payload), source)
+    blob_out = Blob()
+    if not crypt32.CryptProtectData(ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)):
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        kernel32.LocalFree(blob_out.pbData)
+
+
+def _dpapi_unprotect(payload: bytes) -> bytes:
+    if os.name != "nt":
+        raise RuntimeError("Windows DPAPI is unavailable on this platform")
+
+    class Blob(ctypes.Structure):
+        _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
+
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+    source = (ctypes.c_ubyte * len(payload)).from_buffer_copy(payload)
+    blob_in = Blob(len(payload), source)
+    blob_out = Blob()
+    if not crypt32.CryptUnprotectData(ctypes.byref(blob_in), None, None, None, None, 0, ctypes.byref(blob_out)):
+        raise ctypes.WinError()
+    try:
+        return ctypes.string_at(blob_out.pbData, blob_out.cbData)
+    finally:
+        kernel32.LocalFree(blob_out.pbData)
+
+
 class ByokStore:
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -54,8 +95,13 @@ class ByokStore:
     def set_key(self, *, provider: str, api_key: str, model: str) -> None:
         self.ensure()
         payload = json.dumps({"provider": provider, "api_key": api_key, "model": model}).encode("utf-8")
-        token = _fernet_for(self.root).encrypt(payload)
-        self.enc_path.write_bytes(token)
+        key_path = self.root / ".byok_key"
+        if os.name == "nt":
+            self.enc_path.write_bytes(b"BML-DPAPI\x00" + _dpapi_protect(payload))
+            if key_path.exists():
+                key_path.unlink()
+        else:
+            self.enc_path.write_bytes(_fernet_for(self.root).encrypt(payload))
         if self.path.exists():
             self.path.unlink()
 
@@ -63,13 +109,20 @@ class ByokStore:
         for p in (self.path, self.enc_path):
             if p.exists():
                 p.unlink()
+        key_path = self.root / ".byok_key"
+        if key_path.exists():
+            key_path.unlink()
 
     def load(self) -> dict[str, str] | None:
         if self.enc_path.exists():
             try:
-                plain = _fernet_for(self.root).decrypt(self.enc_path.read_bytes())
+                raw = self.enc_path.read_bytes()
+                if raw.startswith(b"BML-DPAPI\x00"):
+                    plain = _dpapi_unprotect(raw[len(b"BML-DPAPI\x00") :])
+                else:
+                    plain = _fernet_for(self.root).decrypt(raw)
                 return json.loads(plain.decode("utf-8"))
-            except (InvalidToken, json.JSONDecodeError, OSError):
+            except (InvalidToken, json.JSONDecodeError, OSError, RuntimeError):
                 return None
         # Migrate legacy plaintext once
         if self.path.exists():

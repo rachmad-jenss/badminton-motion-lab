@@ -10,6 +10,13 @@ export default function AgentPage() {
   const [status, setStatus] = useState<string>("");
   const [online, setOnline] = useState(false);
 
+  function applyHealth(h: Awaited<ReturnType<typeof agentHealth>>) {
+    setOnline(h.online);
+    const pairingCode = h.payload?.pairingCode;
+    setCode(typeof pairingCode === "string" ? pairingCode : "");
+    setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
+  }
+
   useEffect(() => {
     const saved = localStorage.getItem("bml.agentUrl");
     if (saved) setUrl(saved);
@@ -17,15 +24,16 @@ export default function AgentPage() {
 
   useEffect(() => {
     localStorage.setItem("bml.agentUrl", url);
-    void agentHealth().then((h) => {
-      setOnline(h.online);
-      setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
-    });
+    void agentHealth().then(applyHealth);
   }, [url]);
 
   async function pair() {
+    if (!code) {
+      setStatus("Refresh health to obtain a live, one-time pairing code.");
+      return;
+    }
     const res = await agentPost<{ deviceId: string; token: string; agentUrl: string }>("/pair", {
-      pairing_code: code || `BML-${Date.now()}`,
+      pairing_code: code,
       device_name: "Windows Local Agent",
     });
     setAgentToken(res.token);
@@ -81,20 +89,15 @@ python main.py`}</pre>
         </label>
         <label>
           Pairing code
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="optional" />
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="refresh health" />
         </label>
         <div className="row">
-          <button className="btn" onClick={() => void pair()} disabled={!online}>
+          <button className="btn" onClick={() => void pair()} disabled={!online || !code}>
             Pair browser ↔ agent
           </button>
           <button
             className="btn secondary"
-            onClick={() =>
-              void agentHealth().then((h) => {
-                setOnline(h.online);
-                setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
-              })
-            }
+            onClick={() => void agentHealth().then(applyHealth)}
           >
             Refresh health
           </button>

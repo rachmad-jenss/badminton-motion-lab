@@ -1,28 +1,31 @@
 {
   "moduleId": "footwork:layer:clear",
-  "generatedAt": "2026-07-24T03:29:23.937Z",
-  "pipelineVersion": "0.2.1",
-  "fixtureVideo": "C:\\Users\\Legion\\.gemini\\antigravity\\scratch\\badminton-motion-lab\\validation\\fixtures\\person_1280x720_30fps.mp4",
-  "analysisRunId": "be000ba4-3d19-4dbb-8595-996f7fd9b8af",
-  "contactMaeFrames": 0,
+  "generatedAt": "2026-07-26T10:52:26.575Z",
+  "pipelineVersion": "0.2.2",
+  "fixtureVideo": "validation/fixtures/person_1280x720_30fps.mp4",
+  "fixtureKind": "non_domain_smoke",
+  "fixtureSha256": "13617AE03CC7764174D01330AF2CE078542FD74F284E36852645A51A2DB32670",
+  "analysisRunId": "4ac8b21f-074a-41dd-9f9e-457992cfd2ee",
+  "contactMaeFrames": null,
   "proposalConfidenceMean": 0.8200000000000001,
-  "fixturePassRate": 1,
+  "fixturePassRate": 0,
   "racketTrackCoverage": null,
   "shuttleTrackCoverage": null,
   "courtValidRate": 1,
   "poseDetectionCoverage": 1,
   "notes": [
-    "Real agent run be000ba4-3d19-4dbb-8595-996f7fd9b8af",
+    "Real agent run 4ac8b21f-074a-41dd-9f9e-457992cfd2ee",
     "Pose adapter mediapipe-pose-landmarker",
-    "Quality passed"
+    "Quality passed",
+    "Contact MAE exceeds tolerance or missing"
   ],
-  "passed": true,
+  "passed": false,
   "gate": {
     "contactFrameTolerance": 3,
     "minProposalConfidence": 0.55,
     "requiresCourtForFootwork": true,
-    "requiresRacket": true,
-    "requiresShuttle": true,
+    "requiresRacket": false,
+    "requiresShuttle": false,
     "fixturePassRate": 1
   }
 }

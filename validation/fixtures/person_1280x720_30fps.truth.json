@@ -1,5 +1,7 @@
 {
   "id": "person_1280x720_30fps",
+  "fixtureKind": "non_domain_smoke",
+  "sha256": "13617AE03CC7764174D01330AF2CE078542FD74F284E36852645A51A2DB32670",
   "width": 1280,
   "height": 720,
   "fps": 30,

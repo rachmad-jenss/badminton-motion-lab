@@ -4,31 +4,48 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bml-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
-    runs-on: windows-latest
+    # Never execute untrusted fork code on the persistent self-hosted runner.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, X64, bml-windows]
+    timeout-minutes: 30
+    env:
+      BML_AGENT_PORT: "8788"
+      BML_AGENT_URL: "http://127.0.0.1:8788"
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install ffmpeg
-        run: choco install ffmpeg -y
+      - name: Runner preflight
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "ffprobe is required on the self-hosted runner" }
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "ffmpeg is required on the self-hosted runner" }
+          $pythonVersion = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+          if ([version]$pythonVersion -lt [version]'3.11') { throw "Python 3.11+ is required; found $pythonVersion" }
+          $nodeVersion = (& node --version).TrimStart('v')
+          if ([version]$nodeVersion -lt [version]'20.0') { throw "Node 20+ is required; found $nodeVersion" }
+          python --version
+          node --version
+          npm --version
+          ffprobe -version | Select-Object -First 1
 
       - name: npm ci
         run: npm ci
 
       - name: Install agent deps + pose model
         working-directory: apps/agent
-        shell: pwsh
+        shell: powershell
         run: |
           python -m pip install -r requirements.txt
           New-Item -ItemType Directory -Force -Path models | Out-Null
@@ -42,13 +59,15 @@ jobs:
 
       - name: Start agent
         working-directory: apps/agent
-        shell: pwsh
+        shell: powershell
         run: |
+          $env:BML_AGENT_DATA_DIR = Join-Path $env:RUNNER_TEMP "bml-agent-data"
+          New-Item -ItemType Directory -Force -Path $env:BML_AGENT_DATA_DIR | Out-Null
           Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory (Get-Location) -WindowStyle Hidden
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
             try {
-              $r = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
+              $r = Invoke-RestMethod -Uri "$env:BML_AGENT_URL/health" -TimeoutSec 2
               if ($r.ok) { $ok = $true; break }
             } catch {}
             Start-Sleep -Seconds 2
@@ -60,3 +79,6 @@ jobs:
         env:
           BML_BENCH_MAX_FRAMES: "60"
           BML_BENCH_STRIDE: "3"
+
+      - name: Validate readiness provenance
+        run: npm run readiness:integrity
