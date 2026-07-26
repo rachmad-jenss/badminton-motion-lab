@@ -2,49 +2,87 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { TECHNIQUE_STROKES, STROKE_LABELS } from "@bml/contracts";
-import { agentBaseUrl, agentHealth, agentPost, agentPut, mediaUrlWithToken } from "@/lib/agent";
+import { METRIC_CATALOGUE, STROKE_LABELS, TECHNIQUE_STROKES } from "@bml/contracts";
+import {
+  agentBaseUrl,
+  agentErrorMessage,
+  agentHealth,
+  agentPost,
+  agentPut,
+  agentReadiness,
+  agentReadinessLabel,
+  mediaUrlWithToken,
+  type AgentHealthResult,
+} from "@/lib/agent";
+import { AppNav } from "@/components/AppNav";
+
+type AnalyzeMetric = {
+  metricId: string;
+  value: number | null;
+  unit: string;
+  withheld: boolean;
+  confidence: number;
+  limitation?: string;
+  evidenceFrameIndex?: number;
+};
+
+type AnalyzeFinding = {
+  id: string;
+  title: string;
+  observation: string;
+  confidence: number;
+  limitation?: string;
+  evidenceFrameIndices?: number[];
+};
 
 type AnalyzeResult = {
   analysisRunId: string;
   agentMediaUrl: string;
   summary: {
-    metrics: Array<{
-      metricId: string;
-      value: number | null;
-      unit: string;
-      withheld: boolean;
-      confidence: number;
-      evidenceFrameIndex?: number;
-    }>;
-    findings: Array<{ id: string; title: string; observation: string; confidence: number }>;
-    events: { mode: string; events: Array<{ type: string; frameIndex: number; confidence: number }> };
+    metrics: AnalyzeMetric[];
+    findings: AnalyzeFinding[];
+    events: {
+      mode: string;
+      events: Array<{ type: string; frameIndex: number; confidence: number; source?: string }>;
+    };
     court: { valid: boolean; method: string };
     quality: { passed: boolean };
-    pose?: {
-      adapter: string;
-      detectedFrames?: number;
-      totalFrames?: number;
-    };
+    pose?: { adapter: string; detectedFrames?: number; totalFrames?: number };
     racketCoverage?: number;
     shuttleCoverage?: number;
   };
 };
 
+type AnalysisPhase = "idle" | "registering" | "analyzing" | "ready" | "failed";
+
+function confidenceLabel(confidence: number): string {
+  if (confidence >= 0.8) return "High confidence";
+  if (confidence >= 0.6) return "Medium confidence";
+  return "Low confidence";
+}
+
+function metricLabel(metricId: string): string {
+  return METRIC_CATALOGUE.find((metric) => metric.id === metricId)?.name ?? metricId;
+}
+
 export default function AnalyzePage() {
   const [path, setPath] = useState("");
   const [stroke, setStroke] = useState<(typeof TECHNIQUE_STROKES)[number]>("clear");
+  const [dominantHand, setDominantHand] = useState<"left" | "right" | "unknown">("unknown");
   const [includePureFootwork, setIncludePureFootwork] = useState(false);
-  const [online, setOnline] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
   const [insight, setInsight] = useState<string | null>(null);
+  const [insightStatus, setInsightStatus] = useState<string | null>(null);
   const [byokKey, setByokKey] = useState("");
   const [byokProvider, setByokProvider] = useState("openai");
 
   useEffect(() => {
-    void agentHealth().then((h) => setOnline(h.online));
+    void agentHealth().then(setHealth);
   }, []);
 
   const modules = useMemo(() => {
@@ -53,72 +91,104 @@ export default function AnalyzePage() {
     return list;
   }, [stroke, includePureFootwork]);
 
+  const readiness = agentReadiness(health);
+  const busy = phase === "registering" || phase === "analyzing";
+
   async function runAnalyze() {
-    setBusy(true);
+    const localPath = path.trim();
+    if (!localPath) {
+      setError("Enter the absolute path to a local video first.");
+      return;
+    }
+
+    setPhase("registering");
     setError(null);
+    setMediaError(null);
     setInsight(null);
+    setInsightStatus(null);
+    setResult(null);
     try {
-      const reg = await agentPost<{ captureId: string }>("/captures/register", { path });
+      const reg = await agentPost<{ captureId: string }>("/captures/register", { path: localPath });
+      setPhase("analyzing");
       const out = await agentPost<AnalyzeResult>("/analyze", {
         capture_id: reg.captureId,
         modules,
         stroke_hint: stroke,
+        dominant_hand: dominantHand,
       });
       setResult(out);
+      setPhase("ready");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Analyze failed");
-    } finally {
-      setBusy(false);
+      setPhase("failed");
+      setError(agentErrorMessage(e, "Analysis failed. Check the Local Agent and capture guide."));
     }
   }
 
   async function saveByok() {
-    await agentPut("/byok", {
-      provider: byokProvider,
-      api_key: byokKey,
-      model: "gpt-4o-mini",
-    });
-    setByokKey("");
-    alert("BYOK stored only on Local Agent (never cloud).");
+    setInsightStatus(null);
+    try {
+      await agentPut("/byok", {
+        provider: byokProvider,
+        api_key: byokKey,
+        model: "gpt-4o-mini",
+      });
+      setByokKey("");
+      setInsightStatus("BYOK stored only on the Local Agent.");
+    } catch (e) {
+      setInsightStatus(agentErrorMessage(e, "Could not store the BYOK key on the Local Agent."));
+    }
   }
 
   async function loadInsight() {
     if (!result) return;
-    const res = await agentPost<{ prose: string; byokUsed?: boolean }>("/insight", {
-      analysis_run_id: result.analysisRunId,
-      locale: "en",
-    });
-    setInsight(
-      res.prose +
-        (res.byokUsed
-          ? "\n\n(BYOK LLM used)"
-          : "\n\n(No API key — showing deterministic explanation of computed findings only)"),
-    );
+    setInsightStatus(null);
+    try {
+      const res = await agentPost<{ prose: string; byokUsed?: boolean }>("/insight", {
+        analysis_run_id: result.analysisRunId,
+        locale: "en",
+      });
+      setInsight(
+        res.prose +
+          (res.byokUsed
+            ? "\n\n(BYOK LLM used)"
+            : "\n\n(No API key - showing deterministic explanation of computed findings only)"),
+      );
+    } catch (e) {
+      setInsightStatus(agentErrorMessage(e, "Could not generate an insight from this analysis."));
+    }
   }
+
+  const phaseLabel = {
+    idle: "Ready to analyze",
+    registering: "Registering local capture...",
+    analyzing: "Running quality gate and perception...",
+    ready: "Analysis ready for review",
+    failed: "Analysis needs attention",
+  }[phase];
 
   return (
     <main>
-      <nav className="app-nav">
-        <Link href="/">Labs</Link>
-        <Link href="/analyze">Analyze</Link>
-        <Link href="/compare">Compare</Link>
-        <Link href="/agent">Local Agent</Link>
-      </nav>
+      <AppNav />
 
       <header className="hero">
         <h1 className="brand">Analyze</h1>
         <p className="tag">
           Register a local video path with the agent. Quality gate runs first. Review uses
-          localhost media stream — originals are not uploaded.
+          localhost media stream - originals are not uploaded.
         </p>
-        <span className={`badge ${online ? "on" : "locked"}`}>
-          Agent {online ? "online" : "offline"} · {agentBaseUrl()}
+        <span className={`badge ${readiness === "ready" ? "on" : "locked"}`}>
+          {agentReadinessLabel(readiness)} · {agentBaseUrl()}
         </span>
       </header>
 
-      {!online ? (
-        <div className="notice">
-          Start the Local Agent before analyzing. <Link href="/agent">Setup →</Link>
+      {readiness !== "ready" ? (
+        <div className="notice" role={readiness === "offline" ? "status" : "alert"}>
+          {readiness === "checking"
+            ? "Checking the Local Agent before analysis..."
+            : readiness === "not_ready"
+              ? "The Local Agent is missing a prerequisite."
+              : "Start and pair the Local Agent before analyzing."}{" "}
+          <Link href={readiness === "not_ready" ? "/agent" : "/agent"}>Open setup →</Link>
         </div>
       ) : null}
 
@@ -130,7 +200,12 @@ export default function AnalyzePage() {
             value={path}
             onChange={(e) => setPath(e.target.value)}
             placeholder="C:\\Videos\\clear-drill.mp4"
+            aria-describedby="path-help"
           />
+          <span id="path-help" className="muted">
+            The path is read by the Windows Local Agent on this machine; it is not uploaded to the
+            cloud.
+          </span>
         </label>
         <label>
           Stroke module
@@ -146,6 +221,15 @@ export default function AnalyzePage() {
           </select>
         </label>
         <label>
+          Dominant hand
+          <select value={dominantHand} onChange={(e) => setDominantHand(e.target.value as typeof dominantHand)}>
+            <option value="unknown">Unknown - let the agent infer per frame</option>
+            <option value="right">Right-handed</option>
+            <option value="left">Left-handed</option>
+          </select>
+          <span className="muted">Choose a hand when known so racket tracking stays consistent.</span>
+        </label>
+        <label>
           <span>
             <input
               type="checkbox"
@@ -156,70 +240,134 @@ export default function AnalyzePage() {
           </span>
         </label>
         <div className="row">
-          <button className="btn" disabled={!online || busy || !path} onClick={() => void runAnalyze()}>
+          <button className="btn" disabled={readiness !== "ready" || busy || !path.trim()} onClick={() => void runAnalyze()}>
             {busy ? "Running…" : "Run analysis"}
           </button>
+          <Link className="btn secondary" href="/capture-guide">Review capture requirements</Link>
         </div>
-        {error ? <p className="muted" style={{ color: "var(--danger)" }}>{error}</p> : null}
+        <p className="status" role="status"><span className="phase">{phaseLabel}</span></p>
+        {error ? <p className="status error" role="alert">{error}</p> : null}
       </section>
 
       {result ? (
         <>
           <section className="panel">
             <h2>Local review stream</h2>
-            <p className="muted">Served by agent at {result.agentMediaUrl}</p>
+            <p className="muted">Served by the Local Agent. Original video remains local.</p>
             <video
               key={result.agentMediaUrl}
               controls
+              aria-label="Analyzed local video"
               src={mediaUrlWithToken(result.agentMediaUrl)}
+              onError={() => setMediaError("The local media ticket expired or the file is unavailable. Run the analysis again.")}
               style={{ width: "100%", maxHeight: 420, background: "#000" }}
             />
+            {mediaError ? <p className="status error" role="alert">{mediaError}</p> : null}
+            {selectedFrame != null ? (
+              <p className="status" role="status">Selected evidence frame f{selectedFrame}. Use the video controls to locate it.</p>
+            ) : null}
           </section>
 
           <section className="panel">
             <h2>Perception</h2>
             <p className="muted">
-              Pose: {result.summary.pose?.adapter} · detected{" "}
-              {result.summary.pose?.detectedFrames}/{result.summary.pose?.totalFrames} · racket
+              Pose: {result.summary.pose?.adapter ?? "unknown"} · detected{" "}
+              {result.summary.pose?.detectedFrames ?? "-"}/{result.summary.pose?.totalFrames ?? "-"} · racket
               coverage {Number(result.summary.racketCoverage ?? 0).toFixed(2)} · shuttle coverage{" "}
               {Number(result.summary.shuttleCoverage ?? 0).toFixed(2)}
             </p>
             <p className="muted">
-              Court:{" "}
-              {result.summary.court.valid
-                ? `valid (${result.summary.court.method})`
-                : "invalid — footwork withheld"}{" "}
-              · Events mode: {result.summary.events.mode}
+              Court: {result.summary.court.valid ? `valid (${result.summary.court.method})` : "invalid - footwork withheld"} · Events mode: {result.summary.events.mode}
             </p>
           </section>
 
           <section className="panel">
-            <h2>Metrics</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th>Value</th>
-                  <th>Conf</th>
-                  <th>Evidence</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.summary.metrics.map((m) => (
-                  <tr key={m.metricId}>
-                    <td>{m.metricId}</td>
-                    <td>{m.withheld ? "withheld" : `${m.value} ${m.unit}`}</td>
-                    <td>{m.confidence.toFixed(2)}</td>
-                    <td>f{m.evidenceFrameIndex ?? "—"}</td>
-                  </tr>
+            <h2>Findings and evidence</h2>
+            {result.summary.findings.length === 0 ? (
+              <p className="muted">No deterministic findings were produced for this run.</p>
+            ) : (
+              <ul className="evidence-list">
+                {result.summary.findings.map((finding) => (
+                  <li key={finding.id} className="evidence-item">
+                    <strong>{finding.title}</strong>
+                    <p>{finding.observation}</p>
+                    <span className="muted">{confidenceLabel(finding.confidence)}</span>
+                    {finding.limitation ? <p className="muted">Limitation: {finding.limitation}</p> : null}
+                    {(finding.evidenceFrameIndices ?? []).map((frame) => (
+                      <button key={frame} className="btn secondary" type="button" onClick={() => setSelectedFrame(frame)}>
+                        Review evidence frame f{frame}
+                      </button>
+                    ))}
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            )}
+          </section>
+
+          <section className="panel">
+            <h2>Metrics</h2>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                    <th>Confidence</th>
+                    <th>Evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.summary.metrics.map((metric) => (
+                    <tr key={metric.metricId}>
+                      <td className="metric-name">
+                        <span>{metricLabel(metric.metricId)}</span>
+                        <small>{metric.metricId}</small>
+                      </td>
+                      <td>
+                        {metric.withheld
+                          ? `Withheld${metric.limitation ? ` - ${metric.limitation}` : ""}`
+                          : `${metric.value} ${metric.unit}`}
+                      </td>
+                      <td>{confidenceLabel(metric.confidence)}</td>
+                      <td>
+                        {metric.evidenceFrameIndex == null ? (
+                          "-"
+                        ) : (
+                          <button className="btn secondary" type="button" onClick={() => setSelectedFrame(metric.evidenceFrameIndex ?? null)}>
+                            f{metric.evidenceFrameIndex}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Detected events</h2>
+            <p className="muted">Mode: {result.summary.events.mode}. Event proposals are evidence, not certainty.</p>
+            {result.summary.events.events.length === 0 ? (
+              <p className="muted">No events were detected.</p>
+            ) : (
+              <ul className="evidence-list">
+                {result.summary.events.events.map((event, index) => (
+                  <li key={`${event.type}-${event.frameIndex}-${index}`} className="evidence-item">
+                    <strong>{event.type.replaceAll("_", " ")}</strong>
+                    <p className="muted">Frame f{event.frameIndex} · {confidenceLabel(event.confidence)}{event.source ? ` · ${event.source}` : ""}</p>
+                    <button className="btn secondary" type="button" onClick={() => setSelectedFrame(event.frameIndex)}>
+                      Review event frame
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="panel">
             <h2>AI insight (BYOK optional)</h2>
-            <p className="muted">Explains computed findings only — never invents scores.</p>
+            <p className="muted">Explains computed findings only - never invents scores.</p>
             <label>
               Provider
               <select value={byokProvider} onChange={(e) => setByokProvider(e.target.value)}>
@@ -244,6 +392,7 @@ export default function AnalyzePage() {
                 Generate insight
               </button>
             </div>
+            {insightStatus ? <p className="status" role="status">{insightStatus}</p> : null}
             {insight ? <pre style={{ whiteSpace: "pre-wrap" }}>{insight}</pre> : null}
           </section>
         </>
