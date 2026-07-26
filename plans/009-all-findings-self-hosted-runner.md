@@ -226,7 +226,8 @@ bounded request and history remains responsive with seeded run records.
 
 1. Update the installer to check/install or clearly require FFmpeg, create the
    model directory, obtain the pinned pose model through a checksum-verified
-   download, and fail with actionable diagnostics.
+   download (`5134A3AAD27A58B93DA0088D431F366DA362B44E3CCFBE3462B3827A839011B1`),
+   and fail with actionable diagnostics.
 2. Replace the packaging placeholder with a reproducible package path or
    explicitly make the installer the supported distributable and test it from a
    clean Windows environment.

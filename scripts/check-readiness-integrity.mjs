@@ -6,6 +6,7 @@
  * incomplete product should make CI visible without being converted into a
  * false green public release claim.
  */
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +15,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = join(root, "apps", "web", "src", "lib", "readiness.seed.json");
 const reportsDir = join(root, "validation", "reports");
 const truthPath = join(root, "validation", "fixtures", "person_1280x720_30fps.truth.json");
+const fixturePath = join(root, "validation", "fixtures", "person_1280x720_30fps.mp4");
+const contractPath = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
 
 const expectedModules = [
   ...[
@@ -43,6 +46,15 @@ if (!existsSync(reportsDir)) fail("missing validation/reports");
 
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const truth = existsSync(truthPath) ? JSON.parse(readFileSync(truthPath, "utf8")) : null;
+const contractText = readFileSync(contractPath, "utf8");
+const contractVersion = contractText.match(/PIPELINE_VERSION\s*=\s*"([^"]+)"/)?.[1];
+if (!contractVersion) fail("cannot determine contract pipeline version");
+if (seed.pipelineVersion !== contractVersion) {
+  fail(`seed pipelineVersion=${seed.pipelineVersion} contract=${contractVersion}`);
+}
+if (!truth?.sha256 || !existsSync(fixturePath)) fail("fixture hash provenance is missing");
+const fixtureSha256 = createHash("sha256").update(readFileSync(fixturePath)).digest("hex").toUpperCase();
+if (truth.sha256.toUpperCase() !== fixtureSha256) fail("fixture truth hash does not match the media file");
 const seedIds = Object.keys(seed.modules || {}).sort();
 const expectedIds = [...expectedModules].sort();
 if (JSON.stringify(seedIds) !== JSON.stringify(expectedIds)) {
@@ -54,7 +66,18 @@ for (const name of readdirSync(reportsDir)) {
   if (!name.endsWith(".json")) continue;
   const report = JSON.parse(readFileSync(join(reportsDir, name), "utf8"));
   if (!report.moduleId) fail(`${name} has no moduleId`);
+  if (!expectedModules.includes(report.moduleId)) fail(`${report.moduleId} is not in the module inventory`);
+  if (reports.has(report.moduleId)) fail(`duplicate report for ${report.moduleId}`);
   reports.set(report.moduleId, report);
+  if (report.pipelineVersion !== contractVersion) {
+    fail(`${report.moduleId} pipelineVersion=${report.pipelineVersion} contract=${contractVersion}`);
+  }
+  if (report.fixtureSha256?.toUpperCase() !== fixtureSha256) {
+    fail(`${report.moduleId} fixture hash provenance is missing or stale`);
+  }
+  if (report.passed && report.fixtureKind !== "badminton_stroke") {
+    fail(`${report.moduleId} passed without fixtureKind=badminton_stroke`);
+  }
   const notes = (report.notes || []).join(" ");
   if (/synthetic|walking person fixture/i.test(notes)) {
     if (report.passed) fail(`${report.moduleId} passed using a non-domain/synthetic fixture`);
@@ -75,7 +98,7 @@ if (Boolean(seed.complete) !== allOn) {
   fail(`seed.complete=${Boolean(seed.complete)} does not match module statuses`);
 }
 
-const domainFixture = truth?.fixtureKind === "badminton_stroke";
+const domainFixture = truth.fixtureKind === "badminton_stroke";
 if (Boolean(seed.complete) && !domainFixture) {
   fail("public completeness is claimed without a badminton_stroke fixture");
 }

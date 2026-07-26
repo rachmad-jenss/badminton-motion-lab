@@ -91,8 +91,6 @@ def propose_events(
     if contact_conf < MIN_PROPOSAL_CONFIDENCE:
         mode = "manual_required"
         if manual_events:
-            for ev in manual_events:
-                proposed.append({**ev, "source": "manual"})
             mode = "manual"
         else:
             return {
@@ -109,7 +107,9 @@ def propose_events(
 
     contact = next((event for event in reversed(proposed) if event["type"] == "contact"), None)
     contact_frame = int(contact["frameIndex"]) if contact else best_i
-    reps = [{"repIndex": 0, "startFrame": rep_start, "contactFrame": contact_frame, "endFrame": rep_end}]
+    start_frame = _event_frame(proposed, "rep_start", rep_start)
+    end_frame = _event_frame(proposed, "rep_end", rep_end)
+    reps = [{"repIndex": 0, "startFrame": start_frame, "contactFrame": contact_frame, "endFrame": end_frame}]
     return {
         "mode": mode,
         "strokeHint": stroke_hint,
@@ -142,3 +142,8 @@ def _merge_manual_events(
         else:
             merged[replacement] = event
     return merged
+
+
+def _event_frame(events: list[dict[str, Any]], event_type: str, fallback: int) -> int:
+    event = next((item for item in reversed(events) if item.get("type") == event_type), None)
+    return int(event["frameIndex"]) if event and "frameIndex" in event else fallback

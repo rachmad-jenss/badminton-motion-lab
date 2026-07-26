@@ -3,12 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 
 class AnalysisPackageWriter:
+    _retention_lock = threading.Lock()
+
     def __init__(self, root: Path) -> None:
         self.root = root
         self.root.mkdir(parents=True, exist_ok=True)
@@ -98,6 +101,10 @@ class AnalysisPackageWriter:
             "court": court,
         }
         man_art = self._write_json("manifest.json", manifest)
+        marker_tmp = self.root / ".complete.tmp"
+        marker = self.root / ".complete"
+        marker_tmp.write_text(man_art["sha256"], encoding="utf-8")
+        marker_tmp.replace(marker)
         # Package hash over manifest
         return {
             "path": str(self.root),
@@ -110,10 +117,21 @@ class AnalysisPackageWriter:
         """Bound generated package storage while preserving the newest runs."""
         if keep < 1:
             raise ValueError("package retention must keep at least one package")
-        packages = sorted(
-            (path for path in parent.iterdir() if path.is_dir()),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        )
-        for stale in packages[keep:]:
-            shutil.rmtree(stale)
+        with AnalysisPackageWriter._retention_lock:
+            try:
+                packages = sorted(
+                    (
+                        path
+                        for path in parent.iterdir()
+                        if path.is_dir() and (path / ".complete").is_file()
+                    ),
+                    key=lambda path: path.stat().st_mtime,
+                    reverse=True,
+                )
+            except FileNotFoundError:
+                return
+            for stale in packages[keep:]:
+                try:
+                    shutil.rmtree(stale)
+                except FileNotFoundError:
+                    continue

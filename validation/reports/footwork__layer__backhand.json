@@ -1,7 +1,10 @@
 {
   "moduleId": "footwork:layer:backhand",
-  "generatedAt": "2026-07-26T10:17:41.882Z",
+  "generatedAt": "2026-07-26T10:52:26.575Z",
   "pipelineVersion": "0.2.2",
+  "fixtureVideo": "validation/fixtures/person_1280x720_30fps.mp4",
+  "fixtureKind": "non_domain_smoke",
+  "fixtureSha256": "13617AE03CC7764174D01330AF2CE078542FD74F284E36852645A51A2DB32670",
   "fixturePassRate": 0,
   "passed": false,
   "notes": [

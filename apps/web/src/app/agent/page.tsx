@@ -10,6 +10,13 @@ export default function AgentPage() {
   const [status, setStatus] = useState<string>("");
   const [online, setOnline] = useState(false);
 
+  function applyHealth(h: Awaited<ReturnType<typeof agentHealth>>) {
+    setOnline(h.online);
+    const pairingCode = h.payload?.pairingCode;
+    setCode(typeof pairingCode === "string" ? pairingCode : "");
+    setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
+  }
+
   useEffect(() => {
     const saved = localStorage.getItem("bml.agentUrl");
     if (saved) setUrl(saved);
@@ -17,12 +24,7 @@ export default function AgentPage() {
 
   useEffect(() => {
     localStorage.setItem("bml.agentUrl", url);
-    void agentHealth().then((h) => {
-      setOnline(h.online);
-      const pairingCode = h.payload?.pairingCode;
-      if (typeof pairingCode === "string") setCode((current) => current || pairingCode);
-      setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
-    });
+    void agentHealth().then(applyHealth);
   }, [url]);
 
   async function pair() {
@@ -95,12 +97,7 @@ python main.py`}</pre>
           </button>
           <button
             className="btn secondary"
-            onClick={() =>
-              void agentHealth().then((h) => {
-                setOnline(h.online);
-                setStatus(h.online ? JSON.stringify(h.payload, null, 2) : h.error || "offline");
-              })
-            }
+            onClick={() => void agentHealth().then(applyHealth)}
           >
             Refresh health
           </button>
