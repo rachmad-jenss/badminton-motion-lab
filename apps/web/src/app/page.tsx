@@ -1,17 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getModules, publicCompletenessFromSeed } from "@/lib/modules";
-import { agentHealth } from "@/lib/agent";
+import {
+  agentHealth,
+  agentReadiness,
+  agentReadinessLabel,
+  type AgentHealthResult,
+} from "@/lib/agent";
+import { AppNav } from "@/components/AppNav";
+import Link from "next/link";
 
 export default function HomePage() {
   const modules = getModules();
   const completeness = publicCompletenessFromSeed();
-  const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
+  const [health, setHealth] = useState<AgentHealthResult | null>(null);
 
   useEffect(() => {
-    void agentHealth().then((h) => setAgentOnline(h.online));
+    void agentHealth().then(setHealth);
   }, []);
 
   const technique = modules.filter((m) => m.kind === "technique_stroke");
@@ -19,13 +25,7 @@ export default function HomePage() {
 
   return (
     <main>
-      <nav className="app-nav">
-        <Link href="/">Labs</Link>
-        <Link href="/analyze">Analyze</Link>
-        <Link href="/compare">Compare</Link>
-        <Link href="/agent">Local Agent</Link>
-        <Link href="/capture-guide">Capture guide</Link>
-      </nav>
+      <AppNav />
 
       <header className="hero">
         <p className="badge">Windows-only at launch · macOS later</p>
@@ -39,17 +39,23 @@ export default function HomePage() {
           <span className={`badge ${completeness.complete ? "on" : "locked"}`}>
             Public completeness: {completeness.complete ? "READY (0 locked)" : `${completeness.locked.length} locked`}
           </span>
-          <span className={`badge ${agentOnline ? "on" : "locked"}`}>
-            Local Agent: {agentOnline == null ? "checking…" : agentOnline ? "online" : "offline — Start Agent"}
+          <span className={`badge ${agentReadiness(health) === "ready" ? "on" : "locked"}`}>
+            {agentReadinessLabel(agentReadiness(health))}
           </span>
         </div>
       </header>
 
-      {!agentOnline && agentOnline !== null ? (
-        <div className="notice">
-          Agent offline: you can still browse module catalogue and session metric summaries.
-          Video scrub / skeleton requires the Local Agent streaming on localhost.{" "}
-          <Link href="/agent">Pair & start agent →</Link>
+      {agentReadiness(health) === "offline" ? (
+        <div className="notice" role="status">
+          Agent offline: module catalogue remains available, but local session summaries and video
+          review need the Local Agent. <Link href="/agent">Pair & start agent →</Link>
+        </div>
+      ) : null}
+
+      {agentReadiness(health) === "not_ready" ? (
+        <div className="notice" role="alert">
+          Agent is running but a required prerequisite is missing. Open Local Agent to see the
+          exact setup action before analyzing. <Link href="/agent">Check prerequisites →</Link>
         </div>
       ) : null}
 
