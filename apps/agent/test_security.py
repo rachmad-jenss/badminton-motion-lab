@@ -93,6 +93,42 @@ def test_analyze_requires_bearer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         assert r.status_code == 404
         assert client.post("/auth/revoke", headers={"Authorization": f"Bearer {token}"}).status_code == 200
         assert client.get("/runs", headers={"Authorization": f"Bearer {token}"}).status_code == 401
+        monkeypatch.setattr(agent_main, "PAIRING_EXPIRES_AT", 0)
+        renewed = client.get("/health").json()
+        assert renewed["pairingCode"]
+        assert renewed["pairingCode"] != health["pairingCode"]
+
+
+def test_default_analysis_window_covers_full_video():
+    assert agent_main.resolve_frame_window(1800, None, None) == (300, 6, False)
+    assert agent_main.resolve_frame_window(1800, 300, 1) == (300, 1, True)
+
+
+def test_media_ticket_supports_repeated_playback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    data = tmp_path / "agent-data"
+    capture_dir = data / "captures"
+    capture_dir.mkdir(parents=True)
+    media = capture_dir / "clip.mp4"
+    media.write_bytes(b"test media")
+    monkeypatch.setattr(agent_main, "DATA_DIR", data)
+    monkeypatch.setattr(agent_main, "byok", ByokStore(data / "secrets"))
+
+    with TestClient(agent_main.app) as client:
+        health = client.get("/health").json()
+        pair = client.post("/pair", json={"pairing_code": health["pairingCode"]})
+        token = pair.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        with sqlite3.connect(data / "agent.sqlite3") as db:
+            db.execute(
+                "INSERT INTO captures (id, path, fingerprint, metadata_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                ("capture-1", str(media), "a" * 64, "{}", "now"),
+            )
+            db.commit()
+        ticket = client.post(
+            "/media-tickets", json={"capture_id": "capture-1"}, headers=headers
+        ).json()["url"]
+        assert client.get(ticket).status_code == 200
+        assert client.get(ticket).status_code == 200
 
 
 def test_manual_contact_replaces_model_event_and_reaches_racket_metric():

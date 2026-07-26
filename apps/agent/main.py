@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import secrets
 import uuid
@@ -65,10 +66,27 @@ app.add_middleware(
 byok = ByokStore(DATA_DIR / "secrets")
 PAIRING_CODE = ""
 PAIRING_EXPIRES_AT = 0
+PAIRING_LOCK = asyncio.Lock()
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def resolve_frame_window(
+    frame_count: int,
+    requested_max_frames: int | None,
+    requested_stride: int | None,
+) -> tuple[int, int, bool]:
+    max_frames = min(
+        requested_max_frames if requested_max_frames is not None else DEFAULT_MAX_FRAMES,
+        MAX_ANALYSIS_FRAMES,
+    )
+    stride = requested_stride or DEFAULT_STRIDE
+    if requested_max_frames is None and requested_stride is None and frame_count > max_frames:
+        stride = max(stride, math.ceil(frame_count / max_frames))
+    truncated = frame_count > max_frames * stride
+    return max_frames, stride, truncated
 
 
 class PairRequest(BaseModel):
@@ -145,6 +163,19 @@ async def startup() -> None:
 
 
 async def rotate_pairing_challenge() -> None:
+    async with PAIRING_LOCK:
+        await _rotate_pairing_challenge()
+
+
+async def ensure_pairing_challenge() -> None:
+    if now_epoch() < PAIRING_EXPIRES_AT:
+        return
+    async with PAIRING_LOCK:
+        if now_epoch() >= PAIRING_EXPIRES_AT:
+            await _rotate_pairing_challenge()
+
+
+async def _rotate_pairing_challenge() -> None:
     global PAIRING_CODE, PAIRING_EXPIRES_AT
     PAIRING_CODE = new_secret()[:10]
     PAIRING_EXPIRES_AT = now_epoch() + PAIRING_TTL_SECONDS
@@ -159,6 +190,7 @@ async def rotate_pairing_challenge() -> None:
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
+    await ensure_pairing_challenge()
     model = Path(__file__).resolve().parent / "models" / "pose_landmarker_full.task"
     return {
         "ok": True,
@@ -311,15 +343,15 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
     meta = json.loads(metadata_json)
     width, height, fps = int(meta["width"]), int(meta["height"]), float(meta["fps"])
     frame_count = int(meta.get("frameCount") or max(1, int(meta["durationMs"] / 1000 * fps)))
-    requested_max_frames = body.max_frames if body.max_frames is not None else DEFAULT_MAX_FRAMES
-    max_frames = min(requested_max_frames, MAX_ANALYSIS_FRAMES)
-    stride = body.frame_stride or DEFAULT_STRIDE
+    max_frames, stride, truncated = resolve_frame_window(
+        frame_count,
+        body.max_frames,
+        body.frame_stride,
+    )
 
     frames = decode_frames(video_path, max_frames=max_frames, stride=stride)
     if not frames:
         raise MediaError("No frames decoded from video")
-    truncated = bool(max_frames is not None and len(frames) >= max_frames)
-
     stats = sample_frame_stats_from_frames(frames)
     pose = estimate_pose(
         frames=frames,
