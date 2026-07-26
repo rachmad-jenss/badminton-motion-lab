@@ -11,6 +11,7 @@ import {
   agentPut,
   agentReadiness,
   agentReadinessLabel,
+  agentToken,
   mediaUrlWithToken,
   type AgentHealthResult,
 } from "@/lib/agent";
@@ -71,6 +72,7 @@ export default function AnalyzePage() {
   const [dominantHand, setDominantHand] = useState<"left" | "right" | "unknown">("unknown");
   const [includePureFootwork, setIncludePureFootwork] = useState(false);
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [paired, setPaired] = useState(false);
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export default function AnalyzePage() {
   const [byokProvider, setByokProvider] = useState("openai");
 
   useEffect(() => {
+    setPaired(Boolean(agentToken()));
     void agentHealth().then(setHealth);
   }, []);
 
@@ -93,6 +96,7 @@ export default function AnalyzePage() {
 
   const readiness = agentReadiness(health);
   const busy = phase === "registering" || phase === "analyzing";
+  const canAnalyze = readiness === "ready" && paired;
 
   async function runAnalyze() {
     const localPath = path.trim();
@@ -181,13 +185,15 @@ export default function AnalyzePage() {
         </span>
       </header>
 
-      {readiness !== "ready" ? (
+      {readiness !== "ready" || !paired ? (
         <div className="notice" role={readiness === "offline" ? "status" : "alert"}>
           {readiness === "checking"
             ? "Checking the Local Agent before analysis..."
             : readiness === "not_ready"
               ? "The Local Agent is missing a prerequisite."
-              : "Start and pair the Local Agent before analyzing."}{" "}
+              : !paired
+                ? "Pair this browser with the Local Agent before analyzing."
+                : "Start and pair the Local Agent before analyzing."}{" "}
           <Link href={readiness === "not_ready" ? "/agent" : "/agent"}>Open setup →</Link>
         </div>
       ) : null}
@@ -240,7 +246,7 @@ export default function AnalyzePage() {
           </span>
         </label>
         <div className="row">
-          <button className="btn" disabled={readiness !== "ready" || busy || !path.trim()} onClick={() => void runAnalyze()}>
+          <button className="btn" disabled={!canAnalyze || busy || !path.trim()} onClick={() => void runAnalyze()}>
             {busy ? "Running…" : "Run analysis"}
           </button>
           <Link className="btn secondary" href="/capture-guide">Review capture requirements</Link>
