@@ -62,13 +62,13 @@ function authHeaders(extra?: HeadersInit): HeadersInit {
   return headers;
 }
 
-export async function agentHealth(): Promise<{
+export async function agentHealth(baseUrl = agentBaseUrl()): Promise<{
   online: boolean;
   payload?: AgentHealthPayload;
   error?: string;
 }> {
   try {
-    const res = await fetch(`${agentBaseUrl()}/health`, { cache: "no-store" });
+    const res = await fetch(`${baseUrl}/health`, { cache: "no-store" });
     if (!res.ok) return { online: false, error: `HTTP ${res.status}` };
     return { online: true, payload: (await res.json()) as AgentHealthPayload };
   } catch (e) {
@@ -115,7 +115,7 @@ export function agentErrorMessage(error: unknown, fallback: string): string {
     if (error.status === 401) return "Pair the browser first, or refresh the pairing code.";
     if (error.status === 410) return "The local media is no longer available. Re-link the file and try again.";
     if (error.status === 422) return "The capture did not pass the quality gate. Open Capture guide and update the video.";
-    return error.detail || fallback;
+    return fallback;
   }
   if (error instanceof Error && error.message) return error.message;
   return fallback;

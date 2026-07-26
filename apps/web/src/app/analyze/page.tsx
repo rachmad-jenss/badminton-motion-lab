@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { METRIC_CATALOGUE, STROKE_LABELS, TECHNIQUE_STROKES } from "@bml/contracts";
 import {
   agentBaseUrl,
@@ -82,11 +82,21 @@ export default function AnalyzePage() {
   const [insightStatus, setInsightStatus] = useState<string | null>(null);
   const [byokKey, setByokKey] = useState("");
   const [byokProvider, setByokProvider] = useState("openai");
+  const [checking, setChecking] = useState(true);
+
+  const refreshHealth = useCallback(async () => {
+    setChecking(true);
+    setPaired(Boolean(agentToken()));
+    try {
+      setHealth(await agentHealth());
+    } finally {
+      setChecking(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setPaired(Boolean(agentToken()));
-    void agentHealth().then(setHealth);
-  }, []);
+    void refreshHealth();
+  }, [refreshHealth]);
 
   const modules = useMemo(() => {
     const list = [`technique:${stroke}`, `footwork:layer:${stroke}`];
@@ -182,13 +192,18 @@ export default function AnalyzePage() {
           Register a local video path with the agent. Quality gate runs first. Review uses
           localhost media stream - originals are not uploaded.
         </p>
-        <span className={`badge ${readiness === "ready" ? "on" : "locked"}`}>
-          {agentReadinessLabel(readiness)} · {agentBaseUrl()}
-        </span>
+        <div className="row">
+          <span className={`badge ${readiness === "ready" ? "on" : "locked"}`}>
+            {agentReadinessLabel(readiness)} · {agentBaseUrl()}
+          </span>
+          <button className="btn secondary" onClick={() => void refreshHealth()} disabled={checking}>
+            {checking ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </header>
 
       {readiness !== "ready" || !paired ? (
-        <div className="notice" role={readiness === "offline" ? "status" : "alert"}>
+        <div className="notice" role={readiness === "checking" ? "status" : "alert"}>
           {readiness === "checking"
             ? "Checking the Local Agent before analysis..."
             : !poseReady
@@ -198,7 +213,7 @@ export default function AnalyzePage() {
                 : !paired
                   ? "Pair this browser with the Local Agent before analyzing."
                   : "Start and pair the Local Agent before analyzing."}{" "}
-          <Link href={readiness === "not_ready" ? "/agent" : "/agent"}>Open setup →</Link>
+          <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
 
@@ -336,7 +351,9 @@ export default function AnalyzePage() {
                       <td>
                         {metric.withheld
                           ? `Withheld${metric.limitation ? ` - ${metric.limitation}` : ""}`
-                          : `${metric.value} ${metric.unit}`}
+                          : metric.value == null
+                            ? "-"
+                            : `${metric.value} ${metric.unit}`}
                       </td>
                       <td>{confidenceLabel(metric.confidence)}</td>
                       <td>

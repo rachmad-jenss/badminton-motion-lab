@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   agentBaseUrl,
   agentErrorMessage,
@@ -8,6 +8,7 @@ import {
   agentPost,
   agentReadiness,
   setAgentToken,
+  AgentRequestError,
   type AgentHealthResult,
 } from "@/lib/agent";
 import { AppNav } from "@/components/AppNav";
@@ -21,6 +22,8 @@ export default function AgentPage() {
   const [checking, setChecking] = useState(false);
   const [pairing, setPairing] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
+  const urlRef = useRef(url);
+  const healthRequestRef = useRef(0);
 
   function applyHealth(h: AgentHealthResult) {
     setHealth(h);
@@ -31,7 +34,10 @@ export default function AgentPage() {
 
   useEffect(() => {
     const saved = localStorage.getItem("bml.agentUrl");
-    if (saved) setUrl(saved);
+    if (saved) {
+      urlRef.current = saved;
+      setUrl(saved);
+    }
     setUrlReady(true);
   }, []);
 
@@ -40,13 +46,24 @@ export default function AgentPage() {
   }, [url, urlReady]);
 
   const refreshHealth = useCallback(async () => {
+    const requestId = ++healthRequestRef.current;
+    const requestedUrl = urlRef.current.trim();
     setChecking(true);
     setError(null);
     setStatus("");
-    try {
-      applyHealth(await agentHealth());
-    } finally {
+    if (!requestedUrl) {
+      setHealth(null);
+      setCode("");
+      setError("Enter the Local Agent URL before refreshing health.");
       setChecking(false);
+      return;
+    }
+    try {
+      const nextHealth = await agentHealth(requestedUrl);
+      if (requestId !== healthRequestRef.current || urlRef.current.trim() !== requestedUrl) return;
+      applyHealth(nextHealth);
+    } finally {
+      if (requestId === healthRequestRef.current) setChecking(false);
     }
   }, []);
 
@@ -68,10 +85,14 @@ export default function AgentPage() {
         device_name: "Windows Local Agent",
       });
       setAgentToken(res.token);
-      setStatus("Paired locally. Keep the agent running while reviewing video.");
       await refreshHealth();
+      setStatus("Paired locally. Keep the agent running while reviewing video.");
     } catch (e) {
-      setError(agentErrorMessage(e, "Pairing failed. Refresh the code and try again."));
+      setError(
+        e instanceof AgentRequestError && e.status === 401
+          ? "Invalid pairing code. Refresh the code and try again."
+          : agentErrorMessage(e, "Pairing failed. Refresh the code and try again."),
+      );
     } finally {
       setPairing(false);
     }
@@ -147,7 +168,21 @@ python main.py`}</pre>
         <h2>Pair</h2>
         <label>
           Agent URL
-          <input value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input
+            value={url}
+            onChange={(e) => {
+              const nextUrl = e.target.value;
+              urlRef.current = nextUrl;
+              healthRequestRef.current += 1;
+              setUrl(nextUrl);
+              setHealth(null);
+              setCode("");
+              setChecking(false);
+              setError(null);
+              setStatus("");
+              localStorage.setItem("bml.agentUrl", nextUrl);
+            }}
+          />
         </label>
         <label>
           Pairing code
