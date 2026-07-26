@@ -28,6 +28,28 @@
 Plan 009 is intentionally delivered as separate atomic commits and is not
 complete until the PR, post-merge `main` run, and branch cleanup are verified.
 
+## UI/UX completion plans (2026-07-26)
+
+The following plans address the UI/UX audit findings from commit `6730f6e`.
+They are scoped as UI companions to Plan 009; they do not duplicate the
+backend security, readiness, handedness, resource, or browser-test work that
+Plan 009 already owns.
+
+| Order | Plan | Status | Depends on |
+|------:|------|--------|------------|
+| 10 | [010-offline-agent-onboarding](010-offline-agent-onboarding.md) | TODO | 009 health contract may evolve; reconcile if it does |
+| 11 | [011-pairing-error-recovery](011-pairing-error-recovery.md) | TODO | 010 |
+| 12 | [012-analyze-preflight-progress](012-analyze-preflight-progress.md) | TODO | 010; Plan 009 Slice 5 for handedness semantics |
+| 13 | [013-evidence-review-surface](013-evidence-review-surface.md) | TODO | 012 |
+| 14 | [014-compare-interpretability](014-compare-interpretability.md) | TODO | 010; Plan 009 Slice 6 endpoint work |
+| 15 | [015-accessible-shell](015-accessible-shell.md) | TODO | none |
+| 16 | [016-web-behavioral-coverage](016-web-behavioral-coverage.md) | TODO | 010-015 |
+
+Recommended implementation order is 010, 011, 012, 013, 014, 015, and 016.
+Each implementation slice gets one atomic commit and its own verification
+before the next slice starts. The final release gate remains `npm run verify`
+plus the browser smoke flow described in Plan 016.
+
 ## Verification
 
 ```bash
