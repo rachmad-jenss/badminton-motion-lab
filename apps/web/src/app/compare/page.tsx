@@ -8,6 +8,7 @@ import {
   agentHealth,
   agentReadiness,
   agentReadinessLabel,
+  agentToken,
   type AgentHealthResult,
 } from "@/lib/agent";
 import { compareLatest, type SessionMetricPoint } from "@/lib/compare";
@@ -38,6 +39,7 @@ export default function ComparePage() {
   const [seriesErrors, setSeriesErrors] = useState<Record<string, string>>({});
   const [series, setSeries] = useState<Record<string, SessionMetricPoint[]>>({});
   const [loading, setLoading] = useState(true);
+  const [paired, setPaired] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,8 +47,16 @@ export default function ComparePage() {
     setSeriesErrors({});
     const nextHealth = await agentHealth();
     setHealth(nextHealth);
+    const hasToken = Boolean(agentToken());
+    setPaired(hasToken);
     if (!nextHealth.online) {
       setError("Local Agent offline - start it to load real session metrics.");
+      setSeries({});
+      setLoading(false);
+      return;
+    }
+    if (!hasToken) {
+      setError("Pair this browser with the Local Agent to load session metrics.");
       setSeries({});
       setLoading(false);
       return;
@@ -109,7 +119,7 @@ export default function ComparePage() {
         </div>
       ) : null}
 
-      {!loading && readiness !== "offline" ? (
+      {!loading && readiness !== "offline" && paired ? (
         <section className="panel">
           <h2>Latest vs previous</h2>
           {!hasAnyData && Object.keys(seriesErrors).length === 0 ? (

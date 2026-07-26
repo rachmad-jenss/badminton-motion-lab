@@ -80,6 +80,7 @@ export function agentReadiness(health: AgentHealthResult | null): AgentReadiness
   if (!health) return "checking";
   if (!health.online) return "offline";
   if (health.payload?.poseModelPresent === false) return "not_ready";
+  if (typeof health.payload?.pairingCode !== "string") return "not_ready";
   return "ready";
 }
 

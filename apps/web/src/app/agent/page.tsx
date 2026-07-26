@@ -78,6 +78,8 @@ export default function AgentPage() {
   }
 
   const readiness = agentReadiness(health);
+  const poseReady = health?.payload?.poseModelPresent !== false;
+  const pairingReady = typeof health?.payload?.pairingCode === "string";
   const checks = [
     { label: "Agent process", ok: health?.online === true },
     { label: "Pose model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
@@ -114,9 +116,11 @@ export default function AgentPage() {
         <p className="muted">
           {readiness === "offline"
             ? "Start the Windows Local Agent, then refresh health."
-            : readiness === "not_ready"
+            : !poseReady
               ? "Install the missing pose model before analyzing."
-              : "The browser can use local media only when these checks are ready."}
+              : !pairingReady
+                ? "Refresh health to obtain a live pairing code, then pair this browser."
+                : "The browser can use local media only when these checks are ready."}
         </p>
       </section>
 
