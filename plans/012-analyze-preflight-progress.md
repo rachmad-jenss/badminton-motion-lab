@@ -38,8 +38,9 @@ an explicit analysis setting.
 ## Scope
 
 **In scope**: dominant-hand selection and request payload, capture guidance and
-validation copy, analysis phases (`registering`, `analyzing`, `review-ready`,
-`failed`), retry behavior, and a clear link to Capture guide.
+validation copy, prerequisite-specific setup copy, analysis phases
+(`registering`, `analyzing`, `review-ready`, `failed`), retry behavior, and a
+clear link to Capture guide.
 
 **Out of scope**: real-time backend progress, cancellation protocol, file
 picker implementation, CV quality thresholds, and result evidence rendering.

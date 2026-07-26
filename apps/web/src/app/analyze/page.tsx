@@ -97,6 +97,8 @@ export default function AnalyzePage() {
   const readiness = agentReadiness(health);
   const busy = phase === "registering" || phase === "analyzing";
   const canAnalyze = readiness === "ready" && paired;
+  const poseReady = health?.payload?.poseModelPresent !== false;
+  const pairingChallengeReady = typeof health?.payload?.pairingCode === "string";
 
   async function runAnalyze() {
     const localPath = path.trim();
@@ -189,11 +191,13 @@ export default function AnalyzePage() {
         <div className="notice" role={readiness === "offline" ? "status" : "alert"}>
           {readiness === "checking"
             ? "Checking the Local Agent before analysis..."
-            : readiness === "not_ready"
-              ? "The Local Agent is missing a prerequisite."
-              : !paired
-                ? "Pair this browser with the Local Agent before analyzing."
-                : "Start and pair the Local Agent before analyzing."}{" "}
+            : !poseReady
+              ? "The Local Agent is missing its pose model."
+              : !pairingChallengeReady
+                ? "Refresh Local Agent health to obtain a live pairing code."
+                : !paired
+                  ? "Pair this browser with the Local Agent before analyzing."
+                  : "Start and pair the Local Agent before analyzing."}{" "}
           <Link href={readiness === "not_ready" ? "/agent" : "/agent"}>Open setup →</Link>
         </div>
       ) : null}
