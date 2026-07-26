@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Runner preflight
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "ffprobe is required on the self-hosted runner" }
@@ -42,7 +42,7 @@ jobs:
 
       - name: Install agent deps + pose model
         working-directory: apps/agent
-        shell: pwsh
+        shell: powershell
         run: |
           python -m pip install -r requirements.txt
           New-Item -ItemType Directory -Force -Path models | Out-Null
@@ -56,7 +56,7 @@ jobs:
 
       - name: Start agent
         working-directory: apps/agent
-        shell: pwsh
+        shell: powershell
         run: |
           Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory (Get-Location) -WindowStyle Hidden
           $ok = $false
