@@ -19,6 +19,10 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, bml-windows]
     timeout-minutes: 30
+    env:
+      BML_AGENT_PORT: "8788"
+      BML_AGENT_URL: "http://127.0.0.1:8788"
+      BML_AGENT_DATA_DIR: "${{ runner.temp }}\\bml-agent-data"
     steps:
       - uses: actions/checkout@v4
 
@@ -58,11 +62,12 @@ jobs:
         working-directory: apps/agent
         shell: powershell
         run: |
+          New-Item -ItemType Directory -Force -Path $env:BML_AGENT_DATA_DIR | Out-Null
           Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory (Get-Location) -WindowStyle Hidden
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
             try {
-              $r = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
+              $r = Invoke-RestMethod -Uri "$env:BML_AGENT_URL/health" -TimeoutSec 2
               if ($r.ok) { $ok = $true; break }
             } catch {}
             Start-Sleep -Seconds 2
