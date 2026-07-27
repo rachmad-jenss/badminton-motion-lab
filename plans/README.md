@@ -50,6 +50,20 @@ Each implementation slice gets one atomic commit and its own verification
 before the next slice starts. The final release gate remains `npm run verify`
 plus the browser smoke flow described in Plan 016.
 
+## UI/UX visual polish (2026-07-27)
+
+Non-hero visual alignment to the home-hero design language. Does **not**
+redesign `.home-hero`. Builds on completed plans 010–016 and shell polish
+`5768334`.
+
+| Order | Plan | Status | Depends on |
+|------:|------|--------|------------|
+| 17 | [017-visual-polish-non-hero](017-visual-polish-non-hero.md) | IN PROGRESS | 010–016 DONE |
+
+Findings covered by 017: locked badge CSS, brand keyboard focus, tool-page
+contrast, tool headers + CTAs, Capture Guide / Agent Install density, home
+notices + Labs restyle, panel rhythm. Deferred: Analyze side-by-side workspace.
+
 ## Verification
 
 ```bash
