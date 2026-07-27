@@ -2,6 +2,7 @@ node_modules/
 dist/
 .next/
 .next-dev/
+.next-test/
 .turbo/
 *.tsbuildinfo
 *.pyc
