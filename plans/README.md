@@ -58,7 +58,7 @@ redesign `.home-hero`. Builds on completed plans 010–016 and shell polish
 
 | Order | Plan | Status | Depends on |
 |------:|------|--------|------------|
-| 17 | [017-visual-polish-non-hero](017-visual-polish-non-hero.md) | IN PROGRESS | 010–016 DONE |
+| 17 | [017-visual-polish-non-hero](017-visual-polish-non-hero.md) | DONE | 010–016 DONE |
 
 Findings covered by 017: locked badge CSS, brand keyboard focus, tool-page
 contrast, tool headers + CTAs, Capture Guide / Agent Install density, home

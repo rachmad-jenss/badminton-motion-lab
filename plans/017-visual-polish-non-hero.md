@@ -17,7 +17,7 @@
 - **Priority**: P1
 - **Effort**: L (one branch, six atomic commits)
 - **Risk**: MED
-- **Depends on**: none (plans 010–016 DONE; visual shell already at `5768334`)
+- **Depends on**: 010–016 DONE (visual shell already at `5768334`)
 - **Category**: direction | tech-debt | dx
 - **Planned at**: commit `b3be545`, 2026-07-27
 
@@ -71,9 +71,9 @@ Repo conventions:
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
 | Install | `npm install` (from repo root; worktree needs this) | exit 0 |
-| Typecheck / lint web | `npm run lint -w @bml/web` | exit 0 |
+| Lint web | `npm run lint -w @bml/web` | exit 0 |
 | Browser UI tests | `npm run test:web -w @bml/web` | all Playwright tests pass |
-| Root typecheck (if agent deps allow) | `npm run typecheck` | exit 0 |
+| Root typecheck | `npm run typecheck` | exit 0 |
 
 ## Scope
 
@@ -193,6 +193,7 @@ Match the home CTA language without using home-hero poster scale for single-word
 - [ ] Labs no longer default to heavy glass card mosaic
 - [ ] `npm run lint -w @bml/web` exits 0
 - [ ] `npm run test:web -w @bml/web` exits 0
+- [ ] `npm run typecheck` exits 0
 - [ ] No files outside the in-scope list modified
 
 ## STOP conditions
