@@ -103,18 +103,22 @@ test("background theme changes the visual shell and persists", async ({ page }) 
 
   const theme = page.locator('summary[aria-label="Background theme"]');
   const shell = page.locator(".visual-shell");
+  const backgroundOptions = page.locator(".background-menu button");
 
   await expect(shell).toHaveAttribute("data-content-side", "left");
 
   await theme.click();
-  await page.getByRole("menuitemradio", { name: "Pair in motion" }).click();
+  await backgroundOptions.nth(2).click();
 
   await expect(shell).toHaveAttribute("data-content-side", "right");
+  await expect(page.evaluate(() => localStorage.getItem("bml.backgroundPreset"))).resolves.toBe(
+    "pair-in-motion",
+  );
 
   await page.reload();
 
   await page.locator('summary[aria-label="Background theme"]').click();
-  await expect(page.getByRole("menuitemradio", { name: "Pair in motion" })).toHaveAttribute("aria-checked", "true");
+  await expect(backgroundOptions.nth(2)).toHaveAttribute("aria-checked", "true");
   await expect(page.locator(".visual-shell")).toHaveAttribute("data-content-side", "right");
 });
 
