@@ -119,7 +119,7 @@ export default function AgentPage() {
             {checking ? "Checking Agent…" : readiness === "ready" ? "Agent ready" : "Agent needs attention"}
           </span>
           <a className="d-btn d-btn-primary" href="#pair">
-            Pair browser
+            Go to pairing
           </a>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             Refresh health

@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const AGENT_URL = "http://127.0.0.1:8787";
 
 async function mockHealth(page: Page, overrides: Record<string, unknown> = {}) {
-  await page.route(`${AGENT_URL}/health`, async (route) => {
+  await page.route(/http:\/\/127\.0\.0\.1:8787\/health\/?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -43,11 +43,13 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
   });
 
   await page.goto("/agent");
-  await expect(page.getByRole("button", { name: "Pair browser" })).toBeEnabled();
-  await page.getByRole("button", { name: "Pair browser" }).click();
+  await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
+  const pairButton = page.getByRole("button", { name: "Pair browser ↔ agent" });
+  await expect(pairButton).toBeEnabled();
+  await pairButton.click();
 
   await expect(page.locator("p[role='alert']")).toContainText("Invalid pairing code");
-  await expect(page.getByRole("button", { name: "Pair browser" })).toBeEnabled();
+  await expect(pairButton).toBeEnabled();
 });
 
 test("Analyze requires pairing and exposes dominant-hand input", async ({ page }) => {
@@ -145,14 +147,23 @@ test("color theme follows system and supports explicit light/dark overrides", as
 
 test("changing the Agent URL clears stale pairing readiness", async ({ page }) => {
   await mockHealth(page);
+  await page.addInitScript(() => {
+    localStorage.removeItem("bml.agentUrl");
+    localStorage.removeItem("bml.agentToken");
+  });
 
+  const healthResponse = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
   await page.goto("/agent");
+  await healthResponse;
+
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
 
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
 
   await expect(page.getByLabel("Pairing code")).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Pair browser" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
 });
 
 test("analysis success exposes findings, evidence, and withheld metrics", async ({ page }) => {
