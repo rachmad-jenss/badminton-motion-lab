@@ -590,9 +590,9 @@ h3 {
 }
 
 .panel {
-  padding: var(--space-5) 0;
+  padding: calc(var(--space-5) + 0.35rem) 0;
   margin: 0;
-  border-top: 1px solid var(--token-border);
+  border-top: 1px solid color-mix(in srgb, var(--token-border) 70%, transparent);
 }
 
 .panel h2 {
@@ -600,14 +600,65 @@ h3 {
   font-size: 1.45rem;
 }
 
+.panel + .panel {
+  border-top-color: var(--token-border);
+}
+
+.page-tool .panel + .panel {
+  margin-top: 0.35rem;
+}
+
 .panel:first-of-type {
-  border-top-color: var(--token-border-strong);
+  border-top-color: transparent;
+  padding-top: calc(var(--space-5) + 0.15rem);
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 0.8rem;
+}
+
+.lab-list {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+}
+
+.labs-note {
+  max-width: 42rem;
+  margin: 0 0 0.35rem;
+}
+
+.lab-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.15rem;
+  border-bottom: 1px solid var(--token-border);
+}
+
+.lab-row:last-child {
+  border-bottom: 0;
+}
+
+.lab-row-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.lab-row h3 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+
+.lab-row p {
+  margin: 0;
+  color: var(--token-ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .module {
