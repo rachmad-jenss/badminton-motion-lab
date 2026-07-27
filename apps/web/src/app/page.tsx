@@ -5,10 +5,8 @@ import { getModules, publicCompletenessFromSeed } from "@/lib/modules";
 import {
   agentHealth,
   agentReadiness,
-  agentReadinessLabel,
   type AgentHealthResult,
 } from "@/lib/agent";
-import { AppNav } from "@/components/AppNav";
 import Link from "next/link";
 
 export default function HomePage() {
@@ -24,24 +22,16 @@ export default function HomePage() {
   const footwork = modules.filter((m) => m.kind !== "technique_stroke");
 
   return (
-    <main>
-      <AppNav />
-
-      <header className="hero">
-        <p className="badge">Windows-only at launch · macOS later</p>
-        <h1 className="brand">Badminton Motion Lab</h1>
+    <main className="page-home">
+      <header className="hero home-hero">
+        <h1 className="brand">Read your game in motion.</h1>
         <p className="tag">
-          Technique Lab (all strokes) and Footwork Lab with evidence-backed metrics.
-          Original video stays on your PC. Analysis runs on the Local Agent; the web app
-          is the control plane.
+          Evidence-backed technique and footwork analysis, with the original video staying on your
+          PC.
         </p>
-        <div className="badge-row">
-          <span className={`badge ${completeness.complete ? "on" : "locked"}`}>
-            Public completeness: {completeness.complete ? "READY (0 locked)" : `${completeness.locked.length} locked`}
-          </span>
-          <span className={`badge ${agentReadiness(health) === "ready" ? "on" : "locked"}`}>
-            {agentReadinessLabel(agentReadiness(health))}
-          </span>
+        <div className="row hero-actions">
+          <Link className="d-btn d-btn-primary" href="/analyze">Start an analysis</Link>
+          <Link className="d-btn d-btn-ghost" href="/capture-guide">View capture guide</Link>
         </div>
       </header>
 
@@ -77,7 +67,7 @@ export default function HomePage() {
           {technique.map((m) => (
             <article key={m.moduleId} className="module">
               <div className="row">
-                <span className={`badge ${m.status}`}>{m.status}</span>
+                <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
               </div>
               <h3>{m.label}</h3>
               <p>Body + racket + shuttle · event detector · own benchmark</p>
@@ -92,7 +82,7 @@ export default function HomePage() {
           {footwork.map((m) => (
             <article key={m.moduleId} className="module">
               <div className="row">
-                <span className={`badge ${m.status}`}>{m.status}</span>
+                <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
               </div>
               <h3>{m.label}</h3>
               <p>

@@ -11,7 +11,6 @@ import {
   AgentRequestError,
   type AgentHealthResult,
 } from "@/lib/agent";
-import { AppNav } from "@/components/AppNav";
 
 export default function AgentPage() {
   const [url, setUrl] = useState("http://127.0.0.1:8787");
@@ -109,15 +108,13 @@ export default function AgentPage() {
 
   return (
     <main>
-      <AppNav />
-
       <header className="hero">
         <h1 className="brand">Local Agent</h1>
         <p className="tag">
           Download/install the Windows agent, start it, then pair this browser. The agent streams
           media on localhost and keeps BYOK keys off the cloud.
         </p>
-        <span className={`badge ${readiness === "ready" ? "on" : "locked"}`}>
+        <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
           {checking ? "Checking Agent…" : readiness === "ready" ? "Agent ready" : "Agent needs attention"}
         </span>
       </header>
@@ -169,6 +166,7 @@ python main.py`}</pre>
         <label>
           Agent URL
           <input
+            className="d-input"
             value={url}
             onChange={(e) => {
               const nextUrl = e.target.value;
@@ -186,14 +184,14 @@ python main.py`}</pre>
         </label>
         <label>
           Pairing code
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="refresh health" />
+          <input className="d-input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="refresh health" />
         </label>
         <div className="row">
-          <button className="btn" onClick={() => void pair()} disabled={readiness !== "ready" || !code || pairing}>
+          <button className="d-btn d-btn-primary" onClick={() => void pair()} disabled={readiness !== "ready" || !code || pairing}>
             {pairing ? "Pairing…" : "Pair browser ↔ agent"}
           </button>
           <button
-            className="btn secondary"
+            className="d-btn d-btn-ghost"
             onClick={() => void refreshHealth()}
             disabled={checking}
           >

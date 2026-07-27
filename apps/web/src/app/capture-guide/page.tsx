@@ -1,10 +1,6 @@
-import { AppNav } from "@/components/AppNav";
-
 export default function CaptureGuidePage() {
   return (
     <main>
-      <AppNav />
-
       <header className="hero">
         <h1 className="brand">Capture guide</h1>
         <p className="tag">
@@ -45,8 +41,8 @@ export default function CaptureGuidePage() {
           When the capture meets these requirements, pair the Local Agent and run the analysis.
         </p>
         <div className="row">
-          <a className="btn" href="/agent">Pair Local Agent</a>
-          <a className="btn secondary" href="/analyze">Go to Analyze</a>
+          <a className="d-btn d-btn-primary" href="/agent">Pair Local Agent</a>
+          <a className="d-btn d-btn-ghost" href="/analyze">Go to Analyze</a>
         </div>
       </section>
     </main>

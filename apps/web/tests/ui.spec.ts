@@ -97,6 +97,45 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
   expect(consoleErrors).toEqual([]);
 });
 
+test("background theme changes the visual shell and persists", async ({ page }) => {
+  await page.goto("/");
+
+  const theme = page.locator('summary[aria-label="Background theme"]');
+  const shell = page.locator(".visual-shell");
+
+  await expect(shell).toHaveAttribute("data-content-side", "left");
+
+  await theme.click();
+  await page.getByRole("menuitemradio", { name: "Pair in motion" }).click();
+
+  await expect(shell).toHaveAttribute("data-content-side", "right");
+
+  await page.reload();
+
+  await page.locator('summary[aria-label="Background theme"]').click();
+  await expect(page.getByRole("menuitemradio", { name: "Pair in motion" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator(".visual-shell")).toHaveAttribute("data-content-side", "right");
+});
+
+test("color theme follows system and supports explicit light/dark overrides", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+
+  const theme = page.locator('summary[aria-label="Color theme"]');
+  await theme.click();
+  await expect(page.getByRole("menuitemradio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-dark");
+
+  await page.getByRole("menuitemradio", { name: "Light" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-light");
+
+  await page.reload();
+
+  await page.locator('summary[aria-label="Color theme"]').click();
+  await expect(page.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-light");
+});
+
 test("changing the Agent URL clears stale pairing readiness", async ({ page }) => {
   await mockHealth(page);
 

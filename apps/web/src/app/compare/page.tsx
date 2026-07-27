@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { METRIC_CATALOGUE } from "@bml/contracts";
 import {
   agentErrorMessage,
@@ -13,7 +13,6 @@ import {
   type AgentHealthResult,
 } from "@/lib/agent";
 import { compareLatest, type SessionMetricPoint } from "@/lib/compare";
-import { AppNav } from "@/components/AppNav";
 
 const METRICS = [
   "elbow_angle_contact",
@@ -94,8 +93,6 @@ export default function ComparePage() {
 
   return (
     <main>
-      <AppNav />
-
       <header className="hero">
         <h1 className="brand">Session compare</h1>
         <p className="tag">
@@ -103,10 +100,10 @@ export default function ComparePage() {
           shown neutrally unless the metric definition establishes a better direction.
         </p>
         <div className="row">
-          <span className={`badge ${readiness === "ready" ? "on" : "locked"}`}>
+          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
             {agentReadinessLabel(readiness)}
           </span>
-          <button className="btn secondary" onClick={() => void load()} disabled={loading}>
+          <button className="d-btn d-btn-ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </button>
         </div>
@@ -176,26 +173,24 @@ export default function ComparePage() {
             if (points.length === 0) return null;
             const max = Math.max(...points.map((point) => Math.abs(point.value)), 1);
             return (
-              <div key={id} style={{ marginBottom: "1.25rem" }}>
+              <div key={id} className="trend-group">
                 <p className="metric-name">
                   <strong>{metricLabel(id)}</strong>
                   <small>{metricDefinition(id)?.description ?? id}</small>
                 </p>
                 <div className="trend-scroll">
-                  <div className="row trend-chart" style={{ alignItems: "end", height: 150, gap: "0.5rem" }}>
+                  <div className="row trend-chart">
                     {points.map((point) => (
-                      <div key={`${point.sessionId}-${id}`} style={{ textAlign: "center" }}>
+                      <div key={`${point.sessionId}-${id}`} className="trend-point">
                         <div
+                          className="trend-bar"
                           aria-label={`${point.sessionTitle}: ${point.value} ${point.unit}`}
                           title={`${point.sessionTitle}: ${point.value} ${point.unit}`}
                           style={{
-                            width: 48,
-                            height: `${Math.max(4, (Math.abs(point.value) / max) * 100)}px`,
-                            background: "rgba(61,220,151,0.55)",
-                            margin: "0 auto",
-                          }}
+                            "--bar-height": `${Math.max(4, (Math.abs(point.value) / max) * 100)}px`,
+                          } as CSSProperties & Record<"--bar-height", string>}
                         />
-                        <div className="muted" style={{ fontSize: "0.75rem" }}>
+                        <div className="muted trend-label">
                           {point.sessionTitle.slice(0, 10)}
                         </div>
                       </div>

@@ -15,7 +15,6 @@ import {
   mediaUrlWithToken,
   type AgentHealthResult,
 } from "@/lib/agent";
-import { AppNav } from "@/components/AppNav";
 
 type AnalyzeMetric = {
   metricId: string;
@@ -184,8 +183,6 @@ export default function AnalyzePage() {
 
   return (
     <main>
-      <AppNav />
-
       <header className="hero">
         <h1 className="brand">Analyze</h1>
         <p className="tag">
@@ -193,10 +190,10 @@ export default function AnalyzePage() {
           localhost media stream - originals are not uploaded.
         </p>
         <div className="row">
-          <span className={`badge ${readiness === "ready" ? "on" : "locked"}`}>
+          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
             {agentReadinessLabel(readiness)} · {agentBaseUrl()}
           </span>
-          <button className="btn secondary" onClick={() => void refreshHealth()} disabled={checking}>
+          <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             {checking ? "Refreshing…" : "Refresh"}
           </button>
         </div>
@@ -222,6 +219,7 @@ export default function AnalyzePage() {
         <label>
           Absolute local video path
           <input
+            className="d-input"
             value={path}
             onChange={(e) => setPath(e.target.value)}
             placeholder="C:\\Videos\\clear-drill.mp4"
@@ -235,6 +233,7 @@ export default function AnalyzePage() {
         <label>
           Stroke module
           <select
+            className="d-select"
             value={stroke}
             onChange={(e) => setStroke(e.target.value as (typeof TECHNIQUE_STROKES)[number])}
           >
@@ -247,7 +246,7 @@ export default function AnalyzePage() {
         </label>
         <label>
           Dominant hand
-          <select value={dominantHand} onChange={(e) => setDominantHand(e.target.value as typeof dominantHand)}>
+          <select className="d-select" value={dominantHand} onChange={(e) => setDominantHand(e.target.value as typeof dominantHand)}>
             <option value="unknown">Unknown - let the agent infer per frame</option>
             <option value="right">Right-handed</option>
             <option value="left">Left-handed</option>
@@ -257,6 +256,7 @@ export default function AnalyzePage() {
         <label>
           <span>
             <input
+              className="d-checkbox"
               type="checkbox"
               checked={includePureFootwork}
               onChange={(e) => setIncludePureFootwork(e.target.checked)}
@@ -265,10 +265,10 @@ export default function AnalyzePage() {
           </span>
         </label>
         <div className="row">
-          <button className="btn" disabled={!canAnalyze || busy || !path.trim()} onClick={() => void runAnalyze()}>
+          <button className="d-btn d-btn-primary" disabled={!canAnalyze || busy || !path.trim()} onClick={() => void runAnalyze()}>
             {busy ? "Running…" : "Run analysis"}
           </button>
-          <Link className="btn secondary" href="/capture-guide">Review capture requirements</Link>
+          <Link className="d-btn d-btn-ghost" href="/capture-guide">Review capture requirements</Link>
         </div>
         <p className="status" role="status"><span className="phase">{phaseLabel}</span></p>
         {error ? <p className="status error" role="alert">{error}</p> : null}
@@ -285,7 +285,7 @@ export default function AnalyzePage() {
               aria-label="Analyzed local video"
               src={mediaUrlWithToken(result.agentMediaUrl)}
               onError={() => setMediaError("The local media ticket expired or the file is unavailable. Run the analysis again.")}
-              style={{ width: "100%", maxHeight: 420, background: "#000" }}
+              className="review-video"
             />
             {mediaError ? <p className="status error" role="alert">{mediaError}</p> : null}
             {selectedFrame != null ? (
@@ -319,7 +319,7 @@ export default function AnalyzePage() {
                     <span className="muted">{confidenceLabel(finding.confidence)}</span>
                     {finding.limitation ? <p className="muted">Limitation: {finding.limitation}</p> : null}
                     {(finding.evidenceFrameIndices ?? []).map((frame) => (
-                      <button key={frame} className="btn secondary" type="button" onClick={() => setSelectedFrame(frame)}>
+                      <button key={frame} className="d-btn d-btn-ghost" type="button" onClick={() => setSelectedFrame(frame)}>
                         Review evidence frame f{frame}
                       </button>
                     ))}
@@ -360,7 +360,7 @@ export default function AnalyzePage() {
                         {metric.evidenceFrameIndex == null ? (
                           "-"
                         ) : (
-                          <button className="btn secondary" type="button" onClick={() => setSelectedFrame(metric.evidenceFrameIndex ?? null)}>
+                          <button className="d-btn d-btn-ghost" type="button" onClick={() => setSelectedFrame(metric.evidenceFrameIndex ?? null)}>
                             f{metric.evidenceFrameIndex}
                           </button>
                         )}
@@ -383,7 +383,7 @@ export default function AnalyzePage() {
                   <li key={`${event.type}-${event.frameIndex}-${index}`} className="evidence-item">
                     <strong>{event.type.replaceAll("_", " ")}</strong>
                     <p className="muted">Frame f{event.frameIndex} · {confidenceLabel(event.confidence)}{event.source ? ` · ${event.source}` : ""}</p>
-                    <button className="btn secondary" type="button" onClick={() => setSelectedFrame(event.frameIndex)}>
+                    <button className="d-btn d-btn-ghost" type="button" onClick={() => setSelectedFrame(event.frameIndex)}>
                       Review event frame
                     </button>
                   </li>
@@ -397,7 +397,7 @@ export default function AnalyzePage() {
             <p className="muted">Explains computed findings only - never invents scores.</p>
             <label>
               Provider
-              <select value={byokProvider} onChange={(e) => setByokProvider(e.target.value)}>
+              <select className="d-select" value={byokProvider} onChange={(e) => setByokProvider(e.target.value)}>
                 <option value="openai">OpenAI</option>
                 <option value="openrouter">OpenRouter</option>
               </select>
@@ -405,6 +405,7 @@ export default function AnalyzePage() {
             <label>
               API key (stored on Local Agent only)
               <input
+                className="d-input"
                 type="password"
                 value={byokKey}
                 onChange={(e) => setByokKey(e.target.value)}
@@ -412,15 +413,15 @@ export default function AnalyzePage() {
               />
             </label>
             <div className="row">
-              <button className="btn secondary" onClick={() => void saveByok()} disabled={!byokKey}>
+              <button className="d-btn d-btn-ghost" onClick={() => void saveByok()} disabled={!byokKey}>
                 Save key on agent
               </button>
-              <button className="btn" onClick={() => void loadInsight()}>
+              <button className="d-btn d-btn-primary" onClick={() => void loadInsight()}>
                 Generate insight
               </button>
             </div>
             {insightStatus ? <p className="status" role="status">{insightStatus}</p> : null}
-            {insight ? <pre style={{ whiteSpace: "pre-wrap" }}>{insight}</pre> : null}
+            {insight ? <pre className="insight-output">{insight}</pre> : null}
           </section>
         </>
       ) : null}
