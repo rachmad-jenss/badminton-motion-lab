@@ -521,6 +521,12 @@ h3 {
   color: var(--shell-accent-strong);
 }
 
+.status-badge.locked {
+  border-color: var(--token-border-strong);
+  background: color-mix(in srgb, var(--token-ink) 8%, transparent);
+  color: var(--token-ink-muted);
+}
+
 .hero-actions {
   margin-top: 0.65rem;
 }

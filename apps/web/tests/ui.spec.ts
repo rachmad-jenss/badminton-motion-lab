@@ -89,8 +89,9 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
     expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (route === "/") {
       await page.keyboard.press("Tab");
-      await expect(nav.locator("a").first()).toBeFocused();
-      expect(await nav.locator("a").first().evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+      const brandHome = page.getByRole("link", { name: "Badminton Motion Lab home" });
+      await expect(brandHome).toBeFocused();
+      expect(await brandHome.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
     }
   }
 

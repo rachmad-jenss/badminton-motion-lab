@@ -110,7 +110,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
 
       <header className="app-header">
         <div className="app-header-inner">
-          <Link className="brand-lockup" href="/" aria-label="Badminton Motion Lab home" tabIndex={-1}>
+          <Link className="brand-lockup" href="/" aria-label="Badminton Motion Lab home">
             <span className="brand-logo-frame" aria-hidden="true">
               <img className="brand-logo" src="/logo/image.png" alt="" />
             </span>
