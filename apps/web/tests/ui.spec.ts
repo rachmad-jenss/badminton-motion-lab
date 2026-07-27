@@ -84,7 +84,7 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
   for (const route of ["/", "/agent", "/analyze", "/compare", "/capture-guide"]) {
     await page.goto(route);
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
-    await expect(nav).toContainText("Capture guide");
+    await expect(nav).toContainText("Capture Guide");
     await expect(nav.locator("a[aria-current='page']")).toHaveCount(1);
     expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (route === "/") {
