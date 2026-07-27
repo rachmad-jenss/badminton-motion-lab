@@ -160,12 +160,12 @@ video:focus-visible {
 
 .visual-shell {
   --token-ink: var(--color-base-content);
-  --token-ink-muted: color-mix(in srgb, var(--token-ink) 68%, transparent);
-  --token-ink-soft: color-mix(in srgb, var(--token-ink) 52%, transparent);
+  --token-ink-muted: color-mix(in srgb, var(--token-ink) 78%, transparent);
+  --token-ink-soft: color-mix(in srgb, var(--token-ink) 64%, transparent);
   --token-border: color-mix(in srgb, var(--token-ink) 16%, transparent);
   --token-border-strong: color-mix(in srgb, var(--token-ink) 26%, transparent);
-  --token-glass: color-mix(in srgb, var(--color-base-100) 64%, transparent);
-  --token-glass-soft: color-mix(in srgb, var(--color-base-100) 36%, transparent);
+  --token-glass: color-mix(in srgb, var(--color-base-100) 72%, transparent);
+  --token-glass-soft: color-mix(in srgb, var(--color-base-100) 48%, transparent);
   --token-shadow: 0 1rem 3rem color-mix(in srgb, var(--color-base-content) 12%, transparent);
   --shell-accent: var(--color-primary);
   --shell-accent-strong: var(--color-primary);
@@ -445,6 +445,32 @@ main {
   padding: 0 var(--page-gutter) 5rem;
 }
 
+.page-tool {
+  width: min(var(--content-max), calc(100% - (var(--page-gutter) * 2)));
+  margin: 0 auto;
+  padding: 2.75rem 0 5rem;
+}
+
+.page-tool .hero {
+  padding: 2rem 1.1rem 1.8rem;
+  border: 1px solid var(--token-border);
+  border-radius: var(--radius-card);
+  background: var(--shell-surface);
+  backdrop-filter: blur(14px) saturate(1.08);
+  box-shadow: 0 0.7rem 2rem color-mix(in srgb, var(--color-base-content) 8%, transparent);
+}
+
+.page-tool .panel {
+  padding-right: 0.35rem;
+  padding-left: 0.35rem;
+}
+
+.page-tool label,
+.page-tool .muted,
+.page-tool .tag {
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--color-base-100) 35%, transparent);
+}
+
 h1,
 h2,
 h3 {
@@ -623,7 +649,7 @@ textarea {
   padding: 0.72rem 0.8rem;
   border: 1px solid var(--token-border-strong);
   border-radius: var(--radius-field, 0.75rem);
-  background: var(--token-glass-soft);
+  background: color-mix(in srgb, var(--color-base-100) 55%, transparent);
   color: var(--token-ink);
 }
 
@@ -657,9 +683,9 @@ label {
   border: 1px solid var(--token-border);
   border-left: 3px solid var(--shell-accent);
   border-radius: 0 var(--radius-card) var(--radius-card) 0;
-  background: var(--shell-surface);
+  background: color-mix(in srgb, var(--shell-surface) 88%, var(--color-base-100) 12%);
   color: var(--token-ink-muted);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px) saturate(1.08);
 }
 
 .ok-notice {

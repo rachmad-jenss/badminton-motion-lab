@@ -182,7 +182,7 @@ export default function AnalyzePage() {
   }[phase];
 
   return (
-    <main>
+    <main className="page-tool">
       <header className="hero">
         <h1 className="brand">Analyze</h1>
         <p className="tag">

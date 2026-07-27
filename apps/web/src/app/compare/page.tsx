@@ -92,7 +92,7 @@ export default function ComparePage() {
   const hasAnyData = METRICS.some((id) => (series[id] || []).length > 0);
 
   return (
-    <main>
+    <main className="page-tool">
       <header className="hero">
         <h1 className="brand">Session compare</h1>
         <p className="tag">

@@ -107,7 +107,7 @@ export default function AgentPage() {
   ];
 
   return (
-    <main>
+    <main className="page-tool">
       <header className="hero">
         <h1 className="brand">Local Agent</h1>
         <p className="tag">
