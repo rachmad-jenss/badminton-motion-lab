@@ -879,6 +879,9 @@ td {
 .install-details pre {
   margin-top: 0.75rem;
 }
+
+.insight-output,
+pre {
   max-width: 70ch;
   overflow-x: auto;
   padding: 1rem;
