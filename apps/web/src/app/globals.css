@@ -519,8 +519,9 @@ h3 {
 }
 
 .hero:not(.home-hero) .brand {
-  max-width: 16ch;
-  font-size: clamp(2.8rem, 6vw, 5.2rem);
+  max-width: 18ch;
+  font-size: clamp(2.1rem, 4.2vw, 3.4rem);
+  line-height: 1.02;
 }
 
 .tag {
@@ -813,8 +814,20 @@ td {
   background: var(--color-base-300);
 }
 
-.insight-output,
-pre {
+.install-details {
+  margin-top: 0.85rem;
+}
+
+.install-details summary {
+  cursor: pointer;
+  color: var(--token-ink-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.install-details pre {
+  margin-top: 0.75rem;
+}
   max-width: 70ch;
   overflow-x: auto;
   padding: 1rem;

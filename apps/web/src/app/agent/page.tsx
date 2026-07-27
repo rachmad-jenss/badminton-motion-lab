@@ -114,9 +114,17 @@ export default function AgentPage() {
           Download/install the Windows agent, start it, then pair this browser. The agent streams
           media on localhost and keeps BYOK keys off the cloud.
         </p>
-        <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-          {checking ? "Checking Agent…" : readiness === "ready" ? "Agent ready" : "Agent needs attention"}
-        </span>
+        <div className="row hero-actions">
+          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
+            {checking ? "Checking Agent…" : readiness === "ready" ? "Agent ready" : "Agent needs attention"}
+          </span>
+          <a className="d-btn d-btn-primary" href="#pair">
+            Pair browser
+          </a>
+          <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
+            Refresh health
+          </button>
+        </div>
       </header>
 
       <section className="panel">
@@ -154,14 +162,17 @@ export default function AgentPage() {
           </li>
           <li>Return here and pair with a short code.</li>
         </ol>
-        <pre className="muted">{`cd apps/agent
+        <details className="install-details">
+          <summary>Show install commands</summary>
+          <pre className="muted">{`cd apps/agent
 python -m venv .venv
 .\\.venv\\Scripts\\activate
 pip install -r requirements.txt
 python main.py`}</pre>
+        </details>
       </section>
 
-      <section className="panel">
+      <section className="panel" id="pair">
         <h2>Pair</h2>
         <label>
           Agent URL

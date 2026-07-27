@@ -99,13 +99,16 @@ export default function ComparePage() {
           Compare real analysis runs stored on your Local Agent. Positive or negative change is
           shown neutrally unless the metric definition establishes a better direction.
         </p>
-        <div className="row">
+        <div className="row hero-actions">
           <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
             {agentReadinessLabel(readiness)}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </button>
+          <Link className="d-btn d-btn-ghost" href="/analyze">
+            Run an analysis
+          </Link>
         </div>
       </header>
 
