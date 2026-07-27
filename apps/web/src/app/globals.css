@@ -239,10 +239,11 @@ video:focus-visible {
 
 .app-header-inner {
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, max-content);
   align-items: center;
   gap: 1.25rem;
   width: min(1280px, 100%);
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -313,11 +314,14 @@ nav.app-nav {
 .header-controls {
   display: flex;
   justify-content: flex-end;
+  justify-self: end;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .icon-menu {
   position: relative;
+  flex: 0 0 auto;
 }
 
 .icon-menu summary {
@@ -332,6 +336,7 @@ nav.app-nav {
   display: inline-grid;
   width: 2.75rem;
   height: 2.75rem;
+  min-width: 2.75rem;
   min-height: 2.75rem;
   padding: 0;
   place-items: center;
@@ -339,7 +344,9 @@ nav.app-nav {
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-base-100) 18%, transparent);
   color: var(--token-ink);
+  box-sizing: border-box;
   cursor: pointer;
+  appearance: none;
 }
 
 .icon-button:hover,
