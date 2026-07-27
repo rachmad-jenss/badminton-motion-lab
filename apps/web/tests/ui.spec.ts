@@ -127,17 +127,19 @@ test("color theme follows system and supports explicit light/dark overrides", as
   await page.goto("/");
 
   const theme = page.locator('summary[aria-label="Color theme"]');
+  const themeOptions = page.locator(".icon-menu-panel button");
   await theme.click();
-  await expect(page.getByRole("menuitemradio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+  await expect(themeOptions.nth(0)).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-dark");
 
-  await page.getByRole("menuitemradio", { name: "Light" }).click();
+  await themeOptions.nth(1).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-light");
+  await expect(page.evaluate(() => localStorage.getItem("bml.themeMode"))).resolves.toBe("light");
 
   await page.reload();
 
   await page.locator('summary[aria-label="Color theme"]').click();
-  await expect(page.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
+  await expect(themeOptions.nth(1)).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-light");
 });
 
@@ -294,8 +296,8 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
 
   await page.goto("/compare");
 
-  await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
   await expect(page.locator("td").filter({ hasText: "Baseline session" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
   await expect(page.getByText("Could not load this metric.", { exact: true })).toBeVisible();
   await expect(page.getByText("internal secret", { exact: true })).not.toBeVisible();
 });
