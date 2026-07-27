@@ -13,9 +13,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm.cmd run dev:test",
+    // Prefer production server in CI: next dev Fast Refresh races cause flaky health/theme tests.
+    command: process.env.CI ? "npx next start -p 3101" : "npm.cmd run dev:test",
     url: "http://127.0.0.1:3101",
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: 120_000,
   },
 });

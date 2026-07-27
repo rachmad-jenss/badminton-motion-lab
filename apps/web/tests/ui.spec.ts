@@ -1,12 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const AGENT_URL = "http://127.0.0.1:8787";
+const HEALTH_URL = /http:\/\/127\.0\.0\.1:8787\/health\/?$/;
 
 async function mockHealth(page: Page, overrides: Record<string, unknown> = {}) {
-  await page.route(/http:\/\/127\.0\.0\.1:8787\/health\/?$/, async (route) => {
+  await page.route(HEALTH_URL, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({
         ok: true,
         agentVersion: "test",
@@ -17,6 +19,30 @@ async function mockHealth(page: Page, overrides: Record<string, unknown> = {}) {
         ...overrides,
       }),
     });
+  });
+}
+
+async function clearAgentStorage(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.removeItem("bml.agentUrl");
+    localStorage.removeItem("bml.agentToken");
+  });
+}
+
+async function seedPairedBrowser(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("bml.agentToken", "paired-token");
+  });
+}
+
+async function gotoWithAgentReady(page: Page, path: string) {
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto(path);
+  await healthOk;
+  await expect(page.locator(".status-badge", { hasText: "Agent ready" }).first()).toBeVisible({
+    timeout: 15_000,
   });
 }
 
@@ -33,6 +59,7 @@ test("home explains what remains available while agent is offline", async ({ pag
 });
 
 test("pairing failure is announced inline and remains retryable", async ({ page }) => {
+  await clearAgentStorage(page);
   await mockHealth(page);
   await page.route(`${AGENT_URL}/pair`, async (route) => {
     await route.fulfill({
@@ -42,7 +69,7 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
     });
   });
 
-  await page.goto("/agent");
+  await gotoWithAgentReady(page, "/agent");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
   const pairButton = page.getByRole("button", { name: "Pair browser ↔ agent" });
   await expect(pairButton).toBeEnabled();
@@ -53,9 +80,10 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
 });
 
 test("Analyze requires pairing and exposes dominant-hand input", async ({ page }) => {
+  await clearAgentStorage(page);
   await mockHealth(page);
 
-  await page.goto("/analyze");
+  await gotoWithAgentReady(page, "/analyze");
 
   await expect(page.getByRole("combobox", { name: /Dominant hand/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Run analysis" })).toBeDisabled();
@@ -63,13 +91,14 @@ test("Analyze requires pairing and exposes dominant-hand input", async ({ page }
 });
 
 test("Compare does not call protected series endpoints before pairing", async ({ page }) => {
+  await clearAgentStorage(page);
   await mockHealth(page);
   const protectedRequests: string[] = [];
   page.on("request", (request) => {
     if (request.url().includes("/metrics/series")) protectedRequests.push(request.url());
   });
 
-  await page.goto("/compare");
+  await gotoWithAgentReady(page, "/compare");
 
   await expect(page.getByRole("status")).toContainText("Pair this browser");
   expect(protectedRequests).toHaveLength(0);
@@ -98,20 +127,26 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
   }
 
   expect(consoleErrors).toEqual([]);
+  await page.setViewportSize({ width: 1280, height: 720 });
 });
 
 test("background theme changes the visual shell and persists", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/");
 
   const theme = page.locator('summary[aria-label="Background theme"]');
   const shell = page.locator(".visual-shell");
-  const backgroundOptions = page.locator(".background-menu button");
+  const pairInMotion = page.locator(".background-menu").getByRole("menuitemradio", {
+    name: "Pair in motion",
+  });
 
   await expect(shell).toHaveAttribute("data-content-side", "left");
 
   await theme.click();
-  await backgroundOptions.nth(2).click();
+  await expect(pairInMotion).toBeVisible();
+  await pairInMotion.click();
 
+  // Menu closes on select; assert shell + storage instead of hidden aria-checked.
   await expect(shell).toHaveAttribute("data-content-side", "right");
   await expect(page.evaluate(() => localStorage.getItem("bml.backgroundPreset"))).resolves.toBe(
     "pair-in-motion",
@@ -119,12 +154,15 @@ test("background theme changes the visual shell and persists", async ({ page }) 
 
   await page.reload();
 
+  await expect(shell).toHaveAttribute("data-content-side", "right");
   await page.locator('summary[aria-label="Background theme"]').click();
-  await expect(backgroundOptions.nth(2)).toHaveAttribute("aria-checked", "true");
-  await expect(page.locator(".visual-shell")).toHaveAttribute("data-content-side", "right");
+  await expect(
+    page.locator(".background-menu").getByRole("menuitemradio", { name: "Pair in motion" }),
+  ).toHaveAttribute("aria-checked", "true");
 });
 
 test("color theme follows system and supports explicit light/dark overrides", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
 
@@ -146,18 +184,10 @@ test("color theme follows system and supports explicit light/dark overrides", as
 });
 
 test("changing the Agent URL clears stale pairing readiness", async ({ page }) => {
+  await clearAgentStorage(page);
   await mockHealth(page);
-  await page.addInitScript(() => {
-    localStorage.removeItem("bml.agentUrl");
-    localStorage.removeItem("bml.agentToken");
-  });
 
-  const healthResponse = page.waitForResponse(
-    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
-  );
-  await page.goto("/agent");
-  await healthResponse;
-
+  await gotoWithAgentReady(page, "/agent");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
 
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
@@ -167,8 +197,8 @@ test("changing the Agent URL clears stale pairing readiness", async ({ page }) =
 });
 
 test("analysis success exposes findings, evidence, and withheld metrics", async ({ page }) => {
+  await seedPairedBrowser(page);
   await mockHealth(page);
-  await page.addInitScript(() => localStorage.setItem("bml.agentToken", "paired-token"));
   await page.route(`${AGENT_URL}/captures/register`, async (route) => {
     await route.fulfill({
       status: 200,
@@ -220,9 +250,11 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
     });
   });
 
-  await page.goto("/analyze");
+  await gotoWithAgentReady(page, "/analyze");
   await page.getByLabel("Absolute local video path").fill("C:\\Videos\\clear-drill.mp4");
-  await page.getByRole("button", { name: "Run analysis" }).click();
+  const runButton = page.getByRole("button", { name: "Run analysis" });
+  await expect(runButton).toBeEnabled();
+  await runButton.click();
 
   await expect(page.getByText("Analysis ready for review", { exact: true })).toBeVisible();
   await expect(page.getByText("Contact point is stable", { exact: true })).toBeVisible();
@@ -232,8 +264,8 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
 });
 
 test("analysis quality failure remains actionable", async ({ page }) => {
+  await seedPairedBrowser(page);
   await mockHealth(page);
-  await page.addInitScript(() => localStorage.setItem("bml.agentToken", "paired-token"));
   await page.route(`${AGENT_URL}/captures/register`, async (route) => {
     await route.fulfill({
       status: 422,
@@ -242,17 +274,19 @@ test("analysis quality failure remains actionable", async ({ page }) => {
     });
   });
 
-  await page.goto("/analyze");
+  await gotoWithAgentReady(page, "/analyze");
   await page.getByLabel("Absolute local video path").fill("C:\\Videos\\blurry.mp4");
-  await page.getByRole("button", { name: "Run analysis" }).click();
+  const runButton = page.getByRole("button", { name: "Run analysis" });
+  await expect(runButton).toBeEnabled();
+  await runButton.click();
 
   await expect(page.locator("p[role='alert']")).toContainText("capture did not pass the quality gate");
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
 });
 
 test("Compare explains an empty history", async ({ page }) => {
+  await seedPairedBrowser(page);
   await mockHealth(page);
-  await page.addInitScript(() => localStorage.setItem("bml.agentToken", "paired-token"));
   await page.route(`${AGENT_URL}/metrics/series**`, async (route) => {
     await route.fulfill({
       status: 200,
@@ -261,14 +295,14 @@ test("Compare explains an empty history", async ({ page }) => {
     });
   });
 
-  await page.goto("/compare");
+  await gotoWithAgentReady(page, "/compare");
 
   await expect(page.getByText("No runs yet - analyze a local video first.", { exact: true })).toBeVisible();
 });
 
 test("Compare keeps partial results and hides raw metric errors", async ({ page }) => {
+  await seedPairedBrowser(page);
   await mockHealth(page);
-  await page.addInitScript(() => localStorage.setItem("bml.agentToken", "paired-token"));
   await page.route(`${AGENT_URL}/metrics/series**`, async (route) => {
     const metricId = new URL(route.request().url()).searchParams.get("metric_id");
     if (metricId === "elbow_angle_contact") {
@@ -305,7 +339,7 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
     });
   });
 
-  await page.goto("/compare");
+  await gotoWithAgentReady(page, "/compare");
 
   await expect(page.locator("td").filter({ hasText: "Baseline session" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
