@@ -20,6 +20,7 @@ export default function HomePage() {
 
   const technique = modules.filter((m) => m.kind === "technique_stroke");
   const footwork = modules.filter((m) => m.kind !== "technique_stroke");
+  const readiness = agentReadiness(health);
 
   return (
     <main className="page-home">
@@ -35,14 +36,14 @@ export default function HomePage() {
         </div>
       </header>
 
-      {agentReadiness(health) === "offline" ? (
+      {readiness === "offline" ? (
         <div className="notice" role="status">
           Agent offline: module catalogue remains available, but local session summaries and video
           review need the Local Agent. <Link href="/agent">Pair & start agent →</Link>
         </div>
       ) : null}
 
-      {agentReadiness(health) === "not_ready" ? (
+      {readiness === "not_ready" ? (
         <div className="notice" role="alert">
           Agent is running but a required prerequisite is missing. Open Local Agent to see the
           exact setup action before analyzing. <Link href="/agent">Check prerequisites →</Link>
@@ -54,23 +55,24 @@ export default function HomePage() {
           All Technique + Footwork modules are <strong>on</strong> after fixture benchmarks.
           Stranger-ready public gate satisfied for this build.
         </div>
-      ) : (
-        <div className="notice">
-          Private assembly mode: UI shows every module. Locked modules stay unavailable until
-          each module&apos;s benchmark gate passes.
-        </div>
-      )}
+      ) : null}
 
       <section className="panel">
         <h2>Technique Lab</h2>
-        <div className="grid">
+        {!completeness.complete ? (
+          <p className="muted labs-note">
+            Private assembly mode: locked modules stay unavailable until each module&apos;s
+            benchmark gate passes.
+          </p>
+        ) : null}
+        <div className="lab-list">
           {technique.map((m) => (
-            <article key={m.moduleId} className="module">
-              <div className="row">
-                <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
+            <article key={m.moduleId} className="lab-row">
+              <div className="lab-row-copy">
+                <h3>{m.label}</h3>
+                <p>Body + racket + shuttle · event detector · own benchmark</p>
               </div>
-              <h3>{m.label}</h3>
-              <p>Body + racket + shuttle · event detector · own benchmark</p>
+              <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
             </article>
           ))}
         </div>
@@ -78,18 +80,18 @@ export default function HomePage() {
 
       <section className="panel">
         <h2>Footwork Lab</h2>
-        <div className="grid">
+        <div className="lab-list">
           {footwork.map((m) => (
-            <article key={m.moduleId} className="module">
-              <div className="row">
-                <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
+            <article key={m.moduleId} className="lab-row">
+              <div className="lab-row-copy">
+                <h3>{m.label}</h3>
+                <p>
+                  {m.kind === "footwork_pure"
+                    ? "Pure drill mode · court calibration required"
+                    : "Layer on technique stroke · court required"}
+                </p>
               </div>
-              <h3>{m.label}</h3>
-              <p>
-                {m.kind === "footwork_pure"
-                  ? "Pure drill mode · court calibration required"
-                  : "Layer on technique stroke · court required"}
-              </p>
+              <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
             </article>
           ))}
         </div>

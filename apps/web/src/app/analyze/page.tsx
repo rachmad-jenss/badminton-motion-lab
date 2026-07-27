@@ -182,20 +182,25 @@ export default function AnalyzePage() {
   }[phase];
 
   return (
-    <main>
+    <main className="page-tool">
       <header className="hero">
         <h1 className="brand">Analyze</h1>
         <p className="tag">
           Register a local video path with the agent. Quality gate runs first. Review uses
           localhost media stream - originals are not uploaded.
         </p>
-        <div className="row">
+        <div className="row hero-actions">
           <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
             {agentReadinessLabel(readiness)} · {agentBaseUrl()}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             {checking ? "Refreshing…" : "Refresh"}
           </button>
+          {readiness !== "ready" || !paired ? (
+            <Link className="d-btn d-btn-ghost" href="/agent">
+              Open Local Agent
+            </Link>
+          ) : null}
         </div>
       </header>
 

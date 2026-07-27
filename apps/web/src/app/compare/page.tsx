@@ -92,20 +92,23 @@ export default function ComparePage() {
   const hasAnyData = METRICS.some((id) => (series[id] || []).length > 0);
 
   return (
-    <main>
+    <main className="page-tool">
       <header className="hero">
         <h1 className="brand">Session compare</h1>
         <p className="tag">
           Compare real analysis runs stored on your Local Agent. Positive or negative change is
           shown neutrally unless the metric definition establishes a better direction.
         </p>
-        <div className="row">
+        <div className="row hero-actions">
           <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
             {agentReadinessLabel(readiness)}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </button>
+          <Link className="d-btn d-btn-ghost" href="/analyze">
+            Run an analysis
+          </Link>
         </div>
       </header>
 

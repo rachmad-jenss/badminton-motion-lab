@@ -110,7 +110,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
 
       <header className="app-header">
         <div className="app-header-inner">
-          <Link className="brand-lockup" href="/" aria-label="Badminton Motion Lab home" tabIndex={-1}>
+          <Link className="brand-lockup" href="/" aria-label="Badminton Motion Lab home">
             <span className="brand-logo-frame" aria-hidden="true">
               <img className="brand-logo" src="/logo/image.png" alt="" />
             </span>
@@ -120,7 +120,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
 
           <div className="header-controls">
             <details className="icon-menu">
-              <summary className="icon-button d-btn d-btn-ghost" aria-label="Color theme" title="Color theme">
+              <summary className="icon-button" aria-label="Color theme" title="Color theme">
                 <ThemeGlyph mode={themeMode} />
               </summary>
               <div className="icon-menu-panel" role="menu">
@@ -145,7 +145,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
             </details>
 
             <details className="icon-menu">
-              <summary className="icon-button d-btn d-btn-ghost" aria-label="Background theme" title="Background theme">
+              <summary className="icon-button" aria-label="Background theme" title="Background theme">
                 <BackgroundGlyph />
               </summary>
               <div className="icon-menu-panel background-menu" role="menu">

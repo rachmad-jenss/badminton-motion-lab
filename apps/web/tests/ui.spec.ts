@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const AGENT_URL = "http://127.0.0.1:8787";
 
 async function mockHealth(page: Page, overrides: Record<string, unknown> = {}) {
-  await page.route(`${AGENT_URL}/health`, async (route) => {
+  await page.route(/http:\/\/127\.0\.0\.1:8787\/health\/?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -43,11 +43,13 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
   });
 
   await page.goto("/agent");
-  await expect(page.getByRole("button", { name: "Pair browser" })).toBeEnabled();
-  await page.getByRole("button", { name: "Pair browser" }).click();
+  await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
+  const pairButton = page.getByRole("button", { name: "Pair browser ↔ agent" });
+  await expect(pairButton).toBeEnabled();
+  await pairButton.click();
 
   await expect(page.locator("p[role='alert']")).toContainText("Invalid pairing code");
-  await expect(page.getByRole("button", { name: "Pair browser" })).toBeEnabled();
+  await expect(pairButton).toBeEnabled();
 });
 
 test("Analyze requires pairing and exposes dominant-hand input", async ({ page }) => {
@@ -84,13 +86,14 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
   for (const route of ["/", "/agent", "/analyze", "/compare", "/capture-guide"]) {
     await page.goto(route);
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
-    await expect(nav).toContainText("Capture guide");
+    await expect(nav).toContainText("Capture Guide");
     await expect(nav.locator("a[aria-current='page']")).toHaveCount(1);
     expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (route === "/") {
       await page.keyboard.press("Tab");
-      await expect(nav.locator("a").first()).toBeFocused();
-      expect(await nav.locator("a").first().evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+      const brandHome = page.getByRole("link", { name: "Badminton Motion Lab home" });
+      await expect(brandHome).toBeFocused();
+      expect(await brandHome.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
     }
   }
 
@@ -102,18 +105,22 @@ test("background theme changes the visual shell and persists", async ({ page }) 
 
   const theme = page.locator('summary[aria-label="Background theme"]');
   const shell = page.locator(".visual-shell");
+  const backgroundOptions = page.locator(".background-menu button");
 
   await expect(shell).toHaveAttribute("data-content-side", "left");
 
   await theme.click();
-  await page.getByRole("menuitemradio", { name: "Pair in motion" }).click();
+  await backgroundOptions.nth(2).click();
 
   await expect(shell).toHaveAttribute("data-content-side", "right");
+  await expect(page.evaluate(() => localStorage.getItem("bml.backgroundPreset"))).resolves.toBe(
+    "pair-in-motion",
+  );
 
   await page.reload();
 
   await page.locator('summary[aria-label="Background theme"]').click();
-  await expect(page.getByRole("menuitemradio", { name: "Pair in motion" })).toHaveAttribute("aria-checked", "true");
+  await expect(backgroundOptions.nth(2)).toHaveAttribute("aria-checked", "true");
   await expect(page.locator(".visual-shell")).toHaveAttribute("data-content-side", "right");
 });
 
@@ -122,30 +129,41 @@ test("color theme follows system and supports explicit light/dark overrides", as
   await page.goto("/");
 
   const theme = page.locator('summary[aria-label="Color theme"]');
+  const themeOptions = page.locator(".icon-menu-panel button");
   await theme.click();
-  await expect(page.getByRole("menuitemradio", { name: "System" })).toHaveAttribute("aria-checked", "true");
+  await expect(themeOptions.nth(0)).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-dark");
 
-  await page.getByRole("menuitemradio", { name: "Light" }).click();
+  await themeOptions.nth(1).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-light");
+  await expect(page.evaluate(() => localStorage.getItem("bml.themeMode"))).resolves.toBe("light");
 
   await page.reload();
 
   await page.locator('summary[aria-label="Color theme"]').click();
-  await expect(page.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
+  await expect(themeOptions.nth(1)).toHaveAttribute("aria-checked", "true");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "bml-light");
 });
 
 test("changing the Agent URL clears stale pairing readiness", async ({ page }) => {
   await mockHealth(page);
+  await page.addInitScript(() => {
+    localStorage.removeItem("bml.agentUrl");
+    localStorage.removeItem("bml.agentToken");
+  });
 
+  const healthResponse = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
   await page.goto("/agent");
+  await healthResponse;
+
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
 
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
 
   await expect(page.getByLabel("Pairing code")).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Pair browser" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
 });
 
 test("analysis success exposes findings, evidence, and withheld metrics", async ({ page }) => {
@@ -289,8 +307,8 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
 
   await page.goto("/compare");
 
-  await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
   await expect(page.locator("td").filter({ hasText: "Baseline session" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
   await expect(page.getByText("Could not load this metric.", { exact: true })).toBeVisible();
   await expect(page.getByText("internal secret", { exact: true })).not.toBeVisible();
 });

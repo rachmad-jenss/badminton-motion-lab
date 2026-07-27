@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   ["/analyze", "Analyze"],
   ["/compare", "Compare"],
   ["/agent", "Local Agent"],
-  ["/capture-guide", "Capture guide"],
+  ["/capture-guide", "Capture Guide"],
 ] as const;
 
 export function AppNav() {
