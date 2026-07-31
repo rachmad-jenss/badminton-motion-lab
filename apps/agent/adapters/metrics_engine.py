@@ -39,6 +39,7 @@ def compute_metrics(
     events: dict[str, Any],
     court: dict[str, Any],
     fps: float,
+    dominant_hand: str = "unknown",
 ) -> list[dict[str, Any]]:
     frames = pose.get("frames", [])
     by_idx = index_frames_by_frame_index(frames)
@@ -55,9 +56,10 @@ def compute_metrics(
     if not fr:
         return out
 
-    sh = _landmark(fr, "right_shoulder") or _landmark(fr, "left_shoulder")
-    el = _landmark(fr, "right_elbow") or _landmark(fr, "left_elbow")
-    wr = _landmark(fr, "right_wrist") or _landmark(fr, "left_wrist")
+    racket_side = _racket_side(fr, racket, int(contact["frameIndex"]), dominant_hand)
+    sh = _landmark(fr, f"{racket_side}_shoulder") if racket_side else None
+    el = _landmark(fr, f"{racket_side}_elbow") if racket_side else None
+    wr = _landmark(fr, f"{racket_side}_wrist") if racket_side else None
     lh = _landmark(fr, "left_hip")
     rh = _landmark(fr, "right_hip")
     la = _landmark(fr, "left_ankle")
@@ -75,7 +77,7 @@ def compute_metrics(
                 "limitation": kwargs.get("limitation"),
                 "evidenceFrameIndex": contact["frameIndex"],
                 "repIndex": 0,
-                "version": "1.0.0",
+                "version": kwargs.get("version", "1.0.0"),
                 "moduleIds": kwargs.get("moduleIds", modules),
             }
         )
@@ -89,7 +91,27 @@ def compute_metrics(
         mid_x = (lh["x"] + rh["x"]) / 2
         trunk = math.degrees(math.atan2(sh["x"] - mid_x, rh["y"] - sh["y"] + 1e-6))
         add("trunk_lean_contact", trunk, "degrees", 0.75)
-        add("shoulder_abduction_contact", abs(trunk) + 40, "degrees", 0.7)
+
+    same_side_hip = _landmark(fr, f"{racket_side}_hip") if racket_side else None
+    if sh and el and same_side_hip:
+        add(
+            "shoulder_abduction_contact",
+            _angle(same_side_hip, sh, el),
+            "degrees",
+            0.72,
+            version="1.1.0",
+            limitation="2D projected angle; depth and camera roll are not measured",
+        )
+    else:
+        add(
+            "shoulder_abduction_contact",
+            None,
+            "degrees",
+            0.0,
+            withheld=True,
+            version="1.1.0",
+            limitation="Missing racket-side shoulder, elbow, or hip landmark",
+        )
 
     if wr and la and ra and sh:
         body_h = abs(((la["y"] + ra["y"]) / 2) - wr["y"])
@@ -298,6 +320,36 @@ def compute_metrics(
         add("split_step_count", float(len(splits)), "count", 0.8 if splits else 0.4)
 
     return out
+
+
+def _racket_side(
+    frame: dict[str, Any], racket: dict[str, Any], contact_frame: int, dominant_hand: str
+) -> str | None:
+    if dominant_hand in {"left", "right"}:
+        return dominant_hand
+
+    wrists = {
+        side: _landmark(frame, f"{side}_wrist")
+        for side in ("left", "right")
+    }
+    available = [(side, wrist) for side, wrist in wrists.items() if wrist]
+    if not available:
+        return None
+
+    racket_points = [
+        point
+        for point in racket.get("points", [])
+        if abs(int(point.get("frameIndex", -1)) - contact_frame) <= 1
+    ]
+    if racket_points:
+        target = min(racket_points, key=lambda point: abs(int(point["frameIndex"]) - contact_frame))
+        return min(
+            available,
+            key=lambda item: math.hypot(item[1]["x"] - target["x"], item[1]["y"] - target["y"]),
+        )[0]
+    # Without a dominant-hand hint or a racket point near contact, the
+    # racket-side joint cannot be established from pose confidence alone.
+    return None
 
 
 def findings_from_metrics(

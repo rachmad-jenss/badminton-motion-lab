@@ -17,11 +17,11 @@ import aiosqlite
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from adapters.byok import ByokStore, run_insight
 from adapters.court import calibrate_court
-from adapters.events import propose_events
+from adapters.events import MANUAL_EVENT_TYPES, propose_events, validate_manual_events
 from adapters.media import MediaError, decode_frames, fingerprint_file, probe_media, sample_frame_stats_from_frames
 from adapters.metrics_engine import compute_metrics, findings_from_metrics
 from adapters.paths import assert_allowed_media_path
@@ -113,6 +113,54 @@ class AnalyzeRequest(BaseModel):
     dominant_hand: str = Field(default="unknown", pattern="^(left|right|unknown)$")
     max_frames: int | None = Field(default=None, ge=1, le=MAX_ANALYSIS_FRAMES)
     frame_stride: int | None = Field(default=None, ge=1, le=30)
+
+    @field_validator("court_corners", mode="before")
+    @classmethod
+    def validate_court_corner_shape(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, list) or len(value) != 4:
+            raise ValueError("court_corners must contain exactly four corners")
+        for index, corner in enumerate(value):
+            if not isinstance(corner, dict) or set(corner) != {"x", "y"}:
+                raise ValueError(f"court_corners[{index}] must contain only x and y")
+            for axis in ("x", "y"):
+                coordinate = corner[axis]
+                if isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)):
+                    raise ValueError(f"court_corners[{index}].{axis} must be numeric")
+                if not math.isfinite(float(coordinate)):
+                    raise ValueError(f"court_corners[{index}].{axis} must be finite")
+        return value
+
+    @field_validator("manual_events", mode="before")
+    @classmethod
+    def validate_manual_event_shape(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("manual_events must be an array")
+        allowed_keys = {"type", "frameIndex", "timeMs", "confidence", "repIndex"}
+        for index, event in enumerate(value):
+            if not isinstance(event, dict) or not set(event).issubset(allowed_keys):
+                raise ValueError(f"manual_events[{index}] contains unsupported fields")
+            if event.get("type") not in MANUAL_EVENT_TYPES:
+                raise ValueError(f"manual_events[{index}].type is unsupported")
+            frame_index = event.get("frameIndex")
+            if isinstance(frame_index, bool) or not isinstance(frame_index, int):
+                raise ValueError(f"manual_events[{index}].frameIndex must be an integer")
+            for name in ("timeMs", "confidence"):
+                if name not in event:
+                    continue
+                number = event[name]
+                if isinstance(number, bool) or not isinstance(number, (int, float)):
+                    raise ValueError(f"manual_events[{index}].{name} must be numeric")
+                if not math.isfinite(float(number)):
+                    raise ValueError(f"manual_events[{index}].{name} must be finite")
+            if "repIndex" in event and (
+                isinstance(event["repIndex"], bool) or not isinstance(event["repIndex"], int)
+            ):
+                raise ValueError(f"manual_events[{index}].repIndex must be an integer")
+        return value
 
 
 class ByokUpsert(BaseModel):
@@ -338,9 +386,29 @@ async def revoke_current_token(token: str = Depends(require_bearer)) -> dict[str
     return {"ok": True, "revoked": True}
 
 
+def _capture_metadata_matches(stored: dict[str, Any], fresh: dict[str, Any]) -> bool:
+    if not stored:
+        return False
+    for key in ("width", "height", "frameCount", "bytes"):
+        if stored.get(key) != fresh.get(key):
+            return False
+    return abs(float(stored.get("fps", 0)) - float(fresh.get("fps", 0))) < 0.01 and abs(
+        int(stored.get("durationMs", 0)) - int(fresh.get("durationMs", 0))
+    ) <= 100
+
+
 def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, metadata_json: str) -> dict[str, Any]:
     video_path = Path(path_str)
-    meta = json.loads(metadata_json)
+    stored_meta = json.loads(metadata_json)
+    fresh_fingerprint = fingerprint_file(video_path)
+    if fresh_fingerprint != fingerprint:
+        raise MediaError("Capture bytes changed after registration; register the file again")
+    meta = probe_media(video_path)
+    if not _capture_metadata_matches(stored_meta, meta):
+        raise MediaError("Capture metadata changed after registration; register the file again")
+    meta["fingerprint"] = fresh_fingerprint
+    meta["sessionId"] = stored_meta.get("sessionId")
+    meta["title"] = stored_meta.get("title") or video_path.stem
     width, height, fps = int(meta["width"]), int(meta["height"]), float(meta["fps"])
     frame_count = int(meta.get("frameCount") or max(1, int(meta["durationMs"] / 1000 * fps)))
     max_frames, stride, truncated = resolve_frame_window(
@@ -352,6 +420,11 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
     frames = decode_frames(video_path, max_frames=max_frames, stride=stride)
     if not frames:
         raise MediaError("No frames decoded from video")
+    validate_manual_events(
+        body.manual_events or [],
+        frame_count=max(frame[0] for frame in frames) + 1,
+        duration_ms=max(float(frame[1]) for frame in frames),
+    )
     stats = sample_frame_stats_from_frames(frames)
     pose = estimate_pose(
         frames=frames,
@@ -422,6 +495,7 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         events=events,
         court=court,
         fps=fps,
+        dominant_hand=body.dominant_hand,
     )
     findings = findings_from_metrics(metrics=metrics, events=events, modules=modules)
 
@@ -495,6 +569,15 @@ async def analyze(
     video_path = Path(path_str)
     if not video_path.exists():
         raise HTTPException(410, "Local media missing")
+
+    try:
+        stored_meta = json.loads(metadata_json)
+        current_fingerprint = fingerprint_file(video_path)
+        current_meta = probe_media(video_path)
+    except (MediaError, json.JSONDecodeError) as exc:
+        raise HTTPException(409, "Capture provenance could not be revalidated; register the file again") from exc
+    if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
+        raise HTTPException(409, "Capture changed after registration; register the file again")
 
     try:
         async with ANALYSIS_SEMAPHORE:

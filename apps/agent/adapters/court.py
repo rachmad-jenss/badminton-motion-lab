@@ -19,8 +19,8 @@ def calibrate_court(
     manual_corners: list[dict[str, float]] | None = None,
     sample_frame_bgr: np.ndarray | None = None,
 ) -> dict[str, Any]:
-    if manual_corners and len(manual_corners) == 4:
-        corners = [{"x": float(c["x"]), "y": float(c["y"])} for c in manual_corners]
+    if manual_corners is not None:
+        corners = validate_court_corners(manual_corners, width=width, height=height)
         return {
             "method": "manual_four_corners",
             "valid": True,
@@ -54,6 +54,13 @@ def calibrate_court(
         }
 
     corners, confidence, detail = _detect_court_quad(frame)
+    if corners is not None:
+        try:
+            corners = validate_court_corners(corners, width=width, height=height)
+        except MediaError as exc:
+            corners = None
+            confidence = 0.0
+            detail = str(exc)
     valid = corners is not None and confidence >= 0.55
     return {
         "method": "auto_lines",
@@ -136,6 +143,81 @@ def _homography_from_corners(
     src = np.array([[c["x"], c["y"]] for c in corners], dtype=np.float32)
     dst = np.array([[0.0, 0.0], [6.1, 0.0], [6.1, 13.4], [0.0, 13.4]], dtype=np.float32)
     H, _ = cv2.findHomography(src, dst)
-    if H is None:
+    if H is None or not np.isfinite(H).all():
         return None
     return H.tolist()
+
+
+def validate_court_corners(
+    corners: list[dict[str, float]], *, width: int, height: int
+) -> list[dict[str, float]]:
+    """Validate an ordered, non-degenerate image-space court quadrilateral."""
+    if len(corners) != 4:
+        raise MediaError("Court calibration requires exactly four corners")
+    if width <= 0 or height <= 0:
+        raise MediaError("Court calibration requires positive frame dimensions")
+
+    normalized: list[dict[str, float]] = []
+    for index, corner in enumerate(corners):
+        try:
+            x = float(corner["x"])
+            y = float(corner["y"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise MediaError(f"Court corner {index + 1} must contain numeric x and y") from exc
+        if not np.isfinite([x, y]).all():
+            raise MediaError(f"Court corner {index + 1} must contain finite coordinates")
+        if not (0.0 <= x <= float(width) and 0.0 <= y <= float(height)):
+            raise MediaError(
+                f"Court corner {index + 1} is outside the {width}x{height} frame"
+            )
+        normalized.append({"x": x, "y": y})
+
+    if any(
+        (a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2 <= 1e-6
+        for index, a in enumerate(normalized)
+        for b in normalized[index + 1 :]
+    ):
+        raise MediaError("Court corners must be unique")
+
+    area = abs(
+        sum(
+            normalized[index]["x"] * normalized[(index + 1) % 4]["y"]
+            - normalized[(index + 1) % 4]["x"] * normalized[index]["y"]
+            for index in range(4)
+        )
+    ) / 2.0
+    if area <= max(1.0, width * height * 1e-6):
+        raise MediaError("Court corners must form a non-degenerate quadrilateral")
+
+    if _segments_intersect(normalized[0], normalized[1], normalized[2], normalized[3]) or _segments_intersect(
+        normalized[1], normalized[2], normalized[3], normalized[0]
+    ):
+        raise MediaError("Court corners must not self-intersect")
+
+    turns = [
+        _cross(normalized[index], normalized[(index + 1) % 4], normalized[(index + 2) % 4])
+        for index in range(4)
+    ]
+    if not (all(turn > 1e-6 for turn in turns) or all(turn < -1e-6 for turn in turns)):
+        raise MediaError("Court corners must be ordered as a convex quadrilateral")
+    return normalized
+
+
+def _cross(a: dict[str, float], b: dict[str, float], c: dict[str, float]) -> float:
+    return (b["x"] - a["x"]) * (c["y"] - b["y"]) - (b["y"] - a["y"]) * (c["x"] - b["x"])
+
+
+def _segments_intersect(
+    a: dict[str, float],
+    b: dict[str, float],
+    c: dict[str, float],
+    d: dict[str, float],
+) -> bool:
+    def orientation(p: dict[str, float], q: dict[str, float], r: dict[str, float]) -> float:
+        return (q["x"] - p["x"]) * (r["y"] - p["y"]) - (q["y"] - p["y"]) * (r["x"] - p["x"])
+
+    ab_c = orientation(a, b, c)
+    ab_d = orientation(a, b, d)
+    cd_a = orientation(c, d, a)
+    cd_b = orientation(c, d, b)
+    return (ab_c > 0) != (ab_d > 0) and (cd_a > 0) != (cd_b > 0)

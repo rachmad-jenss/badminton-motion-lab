@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from adapters.frame_index import get_frame, index_frames_by_frame_index
 
 MIN_PROPOSAL_CONFIDENCE = 0.55
+MANUAL_EVENT_TYPES = frozenset(
+    {"rep_start", "split_step", "contact", "rep_end", "base_return", "first_step"}
+)
 
 
 def propose_events(
@@ -20,6 +24,13 @@ def propose_events(
     by_idx = index_frames_by_frame_index(pose_frames)
     if not by_idx:
         return {"mode": "manual_required", "events": [], "reps": [], "reason": "empty pose"}
+    if manual_events:
+        last_time_ms = max(float(frame.get("timeMs", 0.0)) for frame in pose_frames)
+        validate_manual_events(
+            manual_events,
+            frame_count=max(by_idx) + 1,
+            duration_ms=last_time_ms,
+        )
 
     best_i = 0
     best_speed = -1.0
@@ -147,3 +158,47 @@ def _merge_manual_events(
 def _event_frame(events: list[dict[str, Any]], event_type: str, fallback: int) -> int:
     event = next((item for item in reversed(events) if item.get("type") == event_type), None)
     return int(event["frameIndex"]) if event and "frameIndex" in event else fallback
+
+
+def validate_manual_events(
+    events: list[dict[str, Any]], *, frame_count: int, duration_ms: float
+) -> None:
+    """Reject manual overrides that cannot refer to a frame in this capture."""
+    if frame_count <= 0 or not math.isfinite(duration_ms) or duration_ms < 0:
+        raise ValueError("Manual event validation requires a non-empty capture duration")
+    allowed_keys = {"type", "frameIndex", "timeMs", "confidence", "repIndex"}
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            raise ValueError(f"Manual event {index + 1} must be an object")
+        unknown = set(event) - allowed_keys
+        if unknown:
+            raise ValueError(
+                f"Manual event {index + 1} contains unsupported fields: {sorted(unknown)}"
+            )
+        event_type = event.get("type")
+        if event_type not in MANUAL_EVENT_TYPES:
+            raise ValueError(
+                f"Manual event {index + 1} has unsupported type: {event_type!r}"
+            )
+        frame_index = event.get("frameIndex")
+        if isinstance(frame_index, bool) or not isinstance(frame_index, int):
+            raise ValueError(f"Manual event {index + 1} frameIndex must be an integer")
+        if not 0 <= frame_index < frame_count:
+            raise ValueError(
+                f"Manual event {index + 1} frameIndex must be between 0 and {frame_count - 1}"
+            )
+        time_ms = event.get("timeMs")
+        if isinstance(time_ms, bool) or not isinstance(time_ms, (int, float)) or not math.isfinite(float(time_ms)):
+            raise ValueError(f"Manual event {index + 1} timeMs must be finite")
+        if not 0.0 <= float(time_ms) <= duration_ms:
+            raise ValueError(
+                f"Manual event {index + 1} timeMs must be between 0 and {duration_ms:g}"
+            )
+        confidence = event.get("confidence", 1.0)
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(float(confidence)):
+            raise ValueError(f"Manual event {index + 1} confidence must be finite")
+        if not 0.0 <= float(confidence) <= 1.0:
+            raise ValueError(f"Manual event {index + 1} confidence must be between 0 and 1")
+        rep_index = event.get("repIndex", 0)
+        if isinstance(rep_index, bool) or not isinstance(rep_index, int) or not 0 <= rep_index <= 100:
+            raise ValueError(f"Manual event {index + 1} repIndex must be between 0 and 100")

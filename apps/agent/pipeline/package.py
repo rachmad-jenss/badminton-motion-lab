@@ -100,6 +100,7 @@ class AnalysisPackageWriter:
             "qualityGate": quality,
             "court": court,
         }
+        validate_analysis_manifest(manifest)
         man_art = self._write_json("manifest.json", manifest)
         marker_tmp = self.root / ".complete.tmp"
         marker = self.root / ".complete"
@@ -135,3 +136,78 @@ class AnalysisPackageWriter:
                     shutil.rmtree(stale)
                 except FileNotFoundError:
                     continue
+
+
+def validate_analysis_manifest(manifest: dict[str, Any]) -> None:
+    """Validate package output against the checked-in runtime manifest schema."""
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "contracts"
+        / "src"
+        / "schemas"
+        / "analysis-manifest.schema.json"
+    )
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Analysis manifest schema unavailable: {schema_path}") from exc
+    _validate_schema_value(manifest, schema, "manifest")
+
+    required_step_ids = {
+        "quality_gate",
+        "court",
+        "pose",
+        "racket",
+        "shuttle",
+        "events",
+        "metrics",
+    }
+    steps = manifest.get("steps", [])
+    step_ids = {step.get("stepId") for step in steps if isinstance(step, dict)}
+    if step_ids != required_step_ids:
+        raise ValueError(
+            "Analysis manifest must contain exactly the required pipeline steps"
+        )
+    source_media = manifest.get("sourceMedia")
+    if not isinstance(source_media, dict) or not source_media.get("fingerprint"):
+        raise ValueError("Analysis manifest must include the analyzed media fingerprint")
+    if not all(
+        isinstance(source_media.get(key), (int, float))
+        and source_media.get(key) >= 0
+        for key in ("durationMs", "fps", "width", "height")
+    ):
+        raise ValueError("Analysis manifest sourceMedia metadata is incomplete")
+
+
+def _validate_schema_value(value: Any, schema: dict[str, Any], path: str) -> None:
+    schema_type = schema.get("type")
+    valid_types = schema_type if isinstance(schema_type, list) else [schema_type]
+    if schema_type and not any(_matches_json_type(value, item) for item in valid_types):
+        raise ValueError(f"{path} does not match manifest schema type {schema_type}")
+    if isinstance(value, dict):
+        for key in schema.get("required", []):
+            if key not in value:
+                raise ValueError(f"{path}.{key} is required by the manifest schema")
+        for key, child_schema in schema.get("properties", {}).items():
+            if key in value:
+                _validate_schema_value(value[key], child_schema, f"{path}.{key}")
+    if isinstance(value, list) and schema.get("items"):
+        for index, item in enumerate(value):
+            _validate_schema_value(item, schema["items"], f"{path}[{index}]")
+
+
+def _matches_json_type(value: Any, schema_type: str) -> bool:
+    if schema_type == "object":
+        return isinstance(value, dict)
+    if schema_type == "array":
+        return isinstance(value, list)
+    if schema_type == "string":
+        return isinstance(value, str)
+    if schema_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if schema_type == "boolean":
+        return isinstance(value, bool)
+    if schema_type == "null":
+        return value is None
+    return True
