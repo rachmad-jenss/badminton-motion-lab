@@ -109,13 +109,13 @@ export function agentReadiness(health: AgentHealthResult | null): AgentReadiness
 export function agentReadinessLabel(readiness: AgentReadiness): string {
   switch (readiness) {
     case "checking":
-      return "Checking Local Agent...";
+      return "Checking setup...";
     case "offline":
-      return "Agent offline - Start Agent";
+      return "Setup needed - start the helper app";
     case "not_ready":
-      return "Agent online - prerequisites incomplete";
+      return "Setup incomplete";
     case "ready":
-      return "Agent ready";
+      return "Ready to analyze";
   }
 }
 

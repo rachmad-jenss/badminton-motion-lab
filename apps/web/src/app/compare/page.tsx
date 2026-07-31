@@ -50,13 +50,13 @@ export default function ComparePage() {
     const hasToken = Boolean(agentToken());
     setPaired(hasToken);
     if (!nextHealth.online) {
-      setError("Local Agent offline - start it to load real session metrics.");
+      setError("Setup is offline - start the helper app to load real progress.");
       setSeries({});
       setLoading(false);
       return;
     }
     if (!hasToken) {
-      setError("Pair this browser with the Local Agent to load session metrics.");
+      setError("Pair this browser with setup to load your progress.");
       setSeries({});
       setLoading(false);
       return;
@@ -94,10 +94,10 @@ export default function ComparePage() {
   return (
     <main className="page-tool">
       <header className="hero">
-        <h1 className="brand">Session compare</h1>
+        <h1 className="brand">Your progress</h1>
         <p className="tag">
-          Compare real analysis runs stored on your Local Agent. Positive or negative change is
-          shown neutrally unless the metric definition establishes a better direction.
+          See how your measurements change across real analysis runs stored on this PC. A change is
+          shown neutrally unless the measurement has a clear better direction.
         </p>
         <div className="row hero-actions">
           <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
@@ -107,7 +107,7 @@ export default function ComparePage() {
             {loading ? "Refreshing…" : "Refresh"}
           </button>
           <Link className="d-btn d-btn-ghost" href="/analyze">
-            Run an analysis
+            Analyze another video
           </Link>
         </div>
       </header>
@@ -170,7 +170,7 @@ export default function ComparePage() {
 
       {!loading && readiness !== "offline" && paired && hasAnyData ? (
         <section className="panel">
-          <h2>Trend</h2>
+            <h2>Progress over time</h2>
           {METRICS.map((id) => {
             const points = [...(series[id] || [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
             if (points.length === 0) return null;

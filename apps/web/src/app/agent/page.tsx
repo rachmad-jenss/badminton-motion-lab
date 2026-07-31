@@ -101,22 +101,22 @@ export default function AgentPage() {
   const poseReady = health?.payload?.poseModelPresent !== false;
   const pairingReady = typeof health?.payload?.pairingCode === "string";
   const checks = [
-    { label: "Agent process", ok: health?.online === true },
-    { label: "Pose model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
-    { label: "Pairing challenge", ok: typeof health?.payload?.pairingCode === "string" },
+    { label: "Helper app", ok: health?.online === true },
+    { label: "Video model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
+    { label: "Browser pairing", ok: typeof health?.payload?.pairingCode === "string" },
   ];
 
   return (
     <main className="page-tool">
       <header className="hero">
-        <h1 className="brand">Local Agent</h1>
+        <h1 className="brand">Setup on this PC</h1>
         <p className="tag">
-          Download/install the Windows agent, start it, then pair this browser. The agent streams
-          media on localhost and keeps BYOK keys off the cloud.
+          Start the small helper app on this PC, pair this browser, then choose a video. Your
+          original video stays on this PC.
         </p>
         <div className="row hero-actions">
           <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-            {checking ? "Checking Agent…" : readiness === "ready" ? "Agent ready" : "Agent needs attention"}
+            {checking ? "Checking setup…" : readiness === "ready" ? "Ready to analyze" : "Setup needs attention"}
           </span>
           <a className="d-btn d-btn-primary" href="#pair">
             Go to pairing
@@ -128,7 +128,7 @@ export default function AgentPage() {
       </header>
 
       <section className="panel">
-        <h2>Readiness</h2>
+        <h2>Setup check</h2>
         <ul className="check-list">
           {checks.map((check) => (
             <li key={check.label}>
@@ -141,12 +141,12 @@ export default function AgentPage() {
         </ul>
         <p className="muted">
           {readiness === "offline"
-            ? "Start the Windows Local Agent, then refresh health."
+            ? "Start the helper app, then refresh this setup check."
             : !poseReady
-              ? "Install the missing pose model before analyzing."
+              ? "Install the missing video model before analyzing."
               : !pairingReady
-                ? "Refresh health to obtain a live pairing code, then pair this browser."
-                : "The browser can use local media only when these checks are ready."}
+                ? "Refresh this setup check to get a one-time pairing code."
+                : "Pair this browser below, then open Analyze video and choose a video."}
         </p>
       </section>
 
@@ -154,12 +154,12 @@ export default function AgentPage() {
         <h2>Start on Windows</h2>
         <p>
           If you are new to this app, open the project folder in Windows Explorer and double-click
-          <code>infra/windows/install-agent.cmd</code>. It installs the Local Agent, checks its
+          <code>infra/windows/install-agent.cmd</code>. It installs the helper app, checks its
           video tools, and opens this setup page when the agent is healthy.
         </p>
         <ol className="muted">
           <li>
-            Keep the Local Agent console open while you analyze a video.
+            Keep the helper-app console open while you analyze a video.
           </li>
           <li>
             Click <strong>Pair browser ↔ agent</strong> below.
@@ -174,7 +174,7 @@ python -m venv .venv
 pip install -r requirements.txt
 python main.py`}</pre>
         </details>
-        <p className="muted">Default Local Agent URL: <code>http://127.0.0.1:8787</code></p>
+        <p className="muted">Default helper-app address: <code>http://127.0.0.1:8787</code></p>
       </section>
 
       <section className="panel" id="pair">

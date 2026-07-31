@@ -41,7 +41,7 @@ async function gotoWithAgentReady(page: Page, path: string) {
   );
   await page.goto(path);
   await healthOk;
-  await expect(page.locator(".status-badge", { hasText: "Agent ready" }).first()).toBeVisible({
+  await expect(page.locator(".status-badge", { hasText: "Ready to analyze" }).first()).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -53,9 +53,9 @@ test("home explains what remains available while agent is offline", async ({ pag
 
   await page.goto("/");
 
-  await expect(page.getByRole("status")).toContainText("module catalogue remains available");
-  await expect(page.getByRole("link", { name: "Pair & start agent" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Compare");
+  await expect(page.getByRole("status")).toContainText("Setup is not running yet");
+  await expect(page.getByRole("link", { name: "Open setup" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
 });
 
 test("pairing failure is announced inline and remains retryable", async ({ page }) => {
@@ -86,7 +86,7 @@ test("Analyze requires pairing and exposes dominant-hand input", async ({ page }
   await gotoWithAgentReady(page, "/analyze");
 
   await expect(page.getByRole("combobox", { name: /Dominant hand/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run analysis" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Analyze this video" })).toBeDisabled();
   await expect(page.locator("div.notice[role='alert']")).toContainText("Pair this browser");
 });
 
@@ -115,7 +115,7 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
   for (const route of ["/", "/agent", "/analyze", "/compare", "/capture-guide"]) {
     await page.goto(route);
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
-    await expect(nav).toContainText("Capture Guide");
+    await expect(nav).toContainText("Video guide");
     await expect(nav.locator("a[aria-current='page']")).toHaveCount(1);
     expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (route === "/") {
@@ -263,7 +263,7 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
     mimeType: "video/mp4",
     buffer: Buffer.from("local-video"),
   });
-  const runButton = page.getByRole("button", { name: "Run analysis" });
+  const runButton = page.getByRole("button", { name: "Analyze this video" });
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
@@ -310,7 +310,7 @@ test("analysis quality failure remains actionable", async ({ page }) => {
     mimeType: "video/mp4",
     buffer: Buffer.from("local-video"),
   });
-  const runButton = page.getByRole("button", { name: "Run analysis" });
+  const runButton = page.getByRole("button", { name: "Analyze this video" });
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
@@ -379,7 +379,7 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
   await gotoWithAgentReady(page, "/compare");
 
   await expect(page.locator("td").filter({ hasText: "Baseline session" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Progress over time" })).toBeVisible();
   await expect(page.getByText("Could not load this metric.", { exact: true })).toBeVisible();
   await expect(page.getByText("internal secret", { exact: true })).not.toBeVisible();
 });

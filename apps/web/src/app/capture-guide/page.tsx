@@ -4,44 +4,52 @@ export default function CaptureGuidePage() {
   return (
     <main className="page-tool">
       <header className="hero">
-        <h1 className="brand">Capture Guide</h1>
+        <h1 className="brand">How to record a good video</h1>
         <p className="tag">
-          Strict quality gate: videos below threshold are rejected before perception. This protects
-          trust for stranger-ready use.
+          A clear side-on video gives the most useful movement feedback. The app checks the video
+          before measuring anything.
         </p>
         <div className="row hero-actions">
           <Link className="d-btn d-btn-primary" href="/agent">
-            Pair Local Agent
+            Open setup
           </Link>
           <Link className="d-btn d-btn-ghost" href="/analyze">
-            Go to Analyze
+            Choose a video
           </Link>
         </div>
       </header>
 
       <section className="panel">
-        <h2>Required capture</h2>
+        <h2>Record this way</h2>
         <ul className="muted">
-          <li>Full body visible — head to feet</li>
-          <li>Camera roughly side-on (yaw within ±35°)</li>
-          <li>Minimum 1280×720 and 30 fps</li>
-          <li>Usable lighting (not crushed blacks / blown highlights)</li>
+          <li>Keep the whole player in frame, from head to feet.</li>
+          <li>Place the camera to the side, not directly in front or behind.</li>
+          <li>Use steady camera support and enough light to see the player clearly.</li>
+          <li>Record a short clip with the full movement, including the contact moment.</li>
         </ul>
         <p className="muted">
-          Court calibration is semi-automatic (line detection). If auto fails, mark four corners.
-          Without a valid court, Footwork modules stay withheld for that run.
+          If court lines cannot be found, footwork measurements may be withheld. You can still
+          review technique findings when they are available.
         </p>
       </section>
 
       <section className="panel">
-        <h2>Platform note</h2>
+        <h2>What happens next</h2>
         <p className="muted">
-          Public launch is <strong>Windows-only</strong>. macOS Local Agent follows as v1.1. Original
-          video is not uploaded; the agent streams to the browser on localhost.
+          Start the helper app, pair this browser, then choose the video from this PC. The original
+          video is not uploaded.
         </p>
         <p className="muted">
-          When the capture meets these requirements, pair the Local Agent and run the analysis.
+          This first version supports Windows. Your video is read locally by the helper app.
         </p>
+        <details className="install-details">
+          <summary>Technical requirements</summary>
+          <ul className="muted">
+            <li>At least 1280 × 720 resolution and 30 frames per second.</li>
+            <li>Side angle within roughly 35 degrees of a true side view.</li>
+            <li>Lighting between the automatic brightness limits.</li>
+          </ul>
+        </details>
       </section>
     </main>
   );
