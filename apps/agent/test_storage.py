@@ -6,6 +6,8 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from storage.db import cleanup_storage, init_db
 
 
@@ -123,3 +125,28 @@ def test_cleanup_is_idempotent_and_rejects_empty_retention(tmp_path: Path):
         assert str(error) == "retention limits must be at least 1"
     else:
         raise AssertionError("empty retention should be rejected")
+
+
+def test_cleanup_deletes_only_agent_owned_capture_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    data_dir = tmp_path / "agent-data"
+    capture_dir = data_dir / "captures"
+    capture_dir.mkdir(parents=True)
+    owned_media = capture_dir / "owned.mp4"
+    owned_media.write_bytes(b"agent-owned")
+    db_path = data_dir / "agent.sqlite3"
+    _run(init_db(db_path))
+    with sqlite3.connect(db_path) as db:
+        db.executemany(
+            "INSERT INTO captures (id, path, fingerprint, metadata_json, created_at, owned) VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                ("capture-old-owned", str(owned_media), "a" * 64, "{}", "2026-01-01", 1),
+                ("capture-new", "newest.mp4", "b" * 64, "{}", "2026-01-02", 0),
+            ],
+        )
+        db.commit()
+
+    monkeypatch.delenv("BML_MEDIA_ROOTS", raising=False)
+    deleted = _run(cleanup_storage(db_path, capture_retention=1, analysis_retention=1))
+
+    assert deleted["media_files"] == 1
+    assert not owned_media.exists()

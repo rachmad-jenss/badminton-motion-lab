@@ -22,6 +22,44 @@ Never claim medical diagnosis. Return JSON only with prose, citedFindingIds, cit
 and fabricatedMetricsAttempted. Use only IDs and numeric values present in the input.
 Set fabricatedMetricsAttempted to true if the request cannot be answered without inventing data."""
 
+_PROSE_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z0-9])[+-]?\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?(?![A-Za-z0-9])"
+)
+
+
+def _numeric_values(value: Any) -> list[float]:
+    """Collect numeric evidence fields without treating identifier digits as evidence."""
+    if isinstance(value, bool):
+        return []
+    if isinstance(value, (int, float)):
+        return [float(value)]
+    if isinstance(value, list):
+        numbers: list[float] = []
+        for item in value:
+            numbers.extend(_numeric_values(item))
+        return numbers
+    if isinstance(value, dict):
+        numbers: list[float] = []
+        for key, item in value.items():
+            if key in {"id", "metricId", "moduleId", "metricIds", "findingIds"}:
+                continue
+            numbers.extend(_numeric_values(item))
+        return numbers
+    return []
+
+
+def _prose_numbers(prose: str) -> list[float]:
+    """Read signed numbers while treating a hyphenated score such as 5-3 as two values."""
+    numbers: list[float] = []
+    for match in _PROSE_NUMBER_RE.finditer(prose):
+        token = match.group(0).replace(" ", "")
+        if "-" in token[1:]:
+            first, second = token.split("-", 1)
+            numbers.extend((float(first), float(second)))
+        else:
+            numbers.append(float(token))
+    return numbers
+
 
 def _fernet_for(root: Path) -> Fernet:
     key_path = root / ".byok_key"
@@ -214,25 +252,28 @@ def _validate_provider_response(
         isinstance(item, str) for item in cited_metric_ids
     ):
         raise ValueError("Provider citedMetricIds must be a string array")
-    if not isinstance(fabricated, bool):
-        raise ValueError("Provider fabricatedMetricsAttempted must be boolean")
+    if fabricated is not None and not isinstance(fabricated, bool):
+        raise ValueError("Provider fabricatedMetricsAttempted must be boolean or null")
 
-    finding_ids = {str(finding.get("id")) for finding in findings}
-    metric_ids = {str(metric.get("metricId")) for metric in metrics}
+    finding_ids = {
+        finding["id"] for finding in findings if isinstance(finding.get("id"), str)
+    }
+    metric_ids = {
+        metric["metricId"]
+        for metric in metrics
+        if not metric.get("withheld") and isinstance(metric.get("metricId"), str)
+    }
     if not set(cited_finding_ids).issubset(finding_ids):
         raise ValueError("Provider cited an unknown finding")
     if not set(cited_metric_ids).issubset(metric_ids):
         raise ValueError("Provider cited an unknown metric")
 
-    allowed_numbers = [
-        float(metric["value"])
-        for metric in metrics
-        if not metric.get("withheld") and isinstance(metric.get("value"), (int, float))
-    ]
-    for identifier in finding_ids | metric_ids:
-        allowed_numbers.extend(float(token) for token in re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", identifier))
-    for token in re.findall(r"(?<![A-Za-z])[-+]?\d+(?:\.\d+)?", prose):
-        if not any(abs(float(token) - allowed) <= 1e-6 for allowed in allowed_numbers):
+    allowed_numbers = _numeric_values(findings)
+    for metric in metrics:
+        if not metric.get("withheld"):
+            allowed_numbers.extend(_numeric_values(metric))
+    for number in _prose_numbers(prose):
+        if not any(abs(number - allowed) <= 1e-6 for allowed in allowed_numbers):
             raise ValueError("Provider prose contains a numeric value absent from computed metrics")
 
     return {
@@ -268,15 +309,15 @@ async def run_insight(
             else "https://api.openai.com/v1"
         )
         headers = {"Authorization": f"Bearer {cfg['api_key']}", "Content-Type": "application/json"}
+        model = cfg.get("model") or "gpt-4o-mini"
         body = {
-            "model": cfg.get("model") or "gpt-4o-mini",
+            "model": model,
             "messages": [
                 {"role": "system", "content": SYSTEM},
                 {"role": "user", "content": json.dumps(payload)},
             ],
             "temperature": 0.2,
         }
-        model = cfg.get("model") or "gpt-4o-mini"
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 r = await client.post(f"{base}/chat/completions", headers=headers, json=body)
@@ -288,7 +329,7 @@ async def run_insight(
                 findings=findings,
                 metrics=metrics,
             )
-        except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (httpx.HTTPError, IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             return _remote_fallback(
                 findings,
                 metrics,
@@ -296,7 +337,7 @@ async def run_insight(
                 model=model,
                 warning=f"Provider output rejected safely: {exc}",
             )
-        if validated["fabricatedMetricsAttempted"]:
+        if validated["fabricatedMetricsAttempted"] is True:
             return _remote_fallback(
                 findings,
                 metrics,

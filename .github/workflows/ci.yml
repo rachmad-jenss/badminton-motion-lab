@@ -132,20 +132,24 @@ jobs:
           $pidFile = $env:BML_AGENT_PID_FILE
           if ([string]::IsNullOrWhiteSpace($pidFile) -or -not (Test-Path $pidFile)) {
             Write-Host "No owned agent PID file was created"
-            exit 0
+          } else {
+            $agentPid = [int](Get-Content -Raw -Path $pidFile).Trim()
+            $identity = Get-CimInstance Win32_Process -Filter "ProcessId = $agentPid" -ErrorAction SilentlyContinue
+            if (-not $identity) {
+              Write-Host "Owned agent process $agentPid is already stopped"
+            } elseif ($identity.CommandLine -notmatch "main\.py") {
+              throw "Refusing to stop PID $agentPid because its command line is not the test agent"
+            } else {
+              Stop-Process -Id $agentPid -Force
+              for ($i = 0; $i -lt 10; $i++) {
+                if (-not (Get-Process -Id $agentPid -ErrorAction SilentlyContinue)) { break }
+                Start-Sleep -Seconds 1
+              }
+              if (Get-Process -Id $agentPid -ErrorAction SilentlyContinue) {
+                throw "Owned agent process $agentPid did not stop cleanly"
+              }
+            }
           }
-          $agentPid = [int](Get-Content -Raw -Path $pidFile).Trim()
-          $identity = Get-CimInstance Win32_Process -Filter "ProcessId = $agentPid" -ErrorAction SilentlyContinue
-          if (-not $identity) {
-            Write-Host "Owned agent process $agentPid is already stopped"
-            exit 0
+          if ($env:BML_AGENT_DATA_DIR -and (Test-Path -LiteralPath $env:BML_AGENT_DATA_DIR)) {
+            Remove-Item -LiteralPath $env:BML_AGENT_DATA_DIR -Recurse -Force -ErrorAction SilentlyContinue
           }
-          if ($identity.CommandLine -notmatch "main\.py") {
-            throw "Refusing to stop PID $agentPid because its command line is not the test agent"
-          }
-          Stop-Process -Id $agentPid -Force
-          for ($i = 0; $i -lt 10; $i++) {
-            if (-not (Get-Process -Id $agentPid -ErrorAction SilentlyContinue)) { exit 0 }
-            Start-Sleep -Seconds 1
-          }
-          throw "Owned agent process $agentPid did not stop cleanly"

@@ -29,7 +29,7 @@ storage behavior.
    pose geometry when available, otherwise omit the metric rather than invent a
    value. Commit: `test: pin analysis metric integrity`.
 2. Implement the metric geometry/withholding behavior and update its contract
-   metadata if required. Commit: `fix: make shoulder metrics evidence based`.
+   metadata if required. Commit: `fix: make shoulder metrics evidence-based`.
 3. Validate four court corners and manual events at the request boundary:
    finite numeric coordinates, frame bounds, unique/non-collinear/non-
    self-intersecting corners, and bounded event frame/time/type fields. Commit:

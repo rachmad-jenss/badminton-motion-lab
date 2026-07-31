@@ -91,6 +91,45 @@ def test_byok_output_accepts_only_known_citations_and_metrics():
         metrics=[{"metricId": "elbow_angle_contact", "value": 90.0}],
     )
     assert valid["fabricatedMetricsAttempted"] is False
+    nullable = _validate_provider_response(
+        json.dumps(
+            {
+                "prose": "Confidence 0.75 was observed at frame 12.",
+                "citedFindingIds": ["finding-elbow"],
+                "citedMetricIds": ["elbow_angle_contact"],
+                "fabricatedMetricsAttempted": None,
+            }
+        ),
+        findings=[{"id": "finding-elbow", "confidence": 0.75, "evidenceFrameIndices": [12]}],
+        metrics=[{"metricId": "elbow_angle_contact", "value": 90.0, "evidenceFrameIndex": 12}],
+    )
+    assert nullable["fabricatedMetricsAttempted"] is None
+    with pytest.raises(ValueError, match="unknown metric"):
+        _validate_provider_response(
+            json.dumps(
+                {
+                    "prose": "The elbow angle is stable.",
+                    "citedFindingIds": [],
+                    "citedMetricIds": ["withheld_metric"],
+                    "fabricatedMetricsAttempted": False,
+                }
+            ),
+            findings=[],
+            metrics=[{"metricId": "withheld_metric", "value": 90.0, "withheld": True}],
+        )
+    with pytest.raises(ValueError, match="numeric value"):
+        _validate_provider_response(
+            json.dumps(
+                {
+                    "prose": "The score is 90.",
+                    "citedFindingIds": [],
+                    "citedMetricIds": [],
+                    "fabricatedMetricsAttempted": False,
+                }
+            ),
+            findings=[],
+            metrics=[{"metricId": "score_90", "value": 45.0}],
+        )
     with pytest.raises(ValueError, match="unknown metric"):
         _validate_provider_response(
             json.dumps(
@@ -225,3 +264,30 @@ def test_analyze_rejects_malformed_manual_inputs_before_lookup(tmp_path: Path, m
             },
         )
         assert response.status_code == 422
+
+
+def test_manifest_validation_failure_removes_partial_package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    root = tmp_path / "packages" / "invalid"
+    writer = AnalysisPackageWriter(root)
+    monkeypatch.setattr(
+        "pipeline.package.validate_analysis_manifest",
+        lambda _manifest: (_ for _ in ()).throw(ValueError("invalid test manifest")),
+    )
+    with pytest.raises(ValueError, match="invalid test manifest"):
+        writer.write(
+            analysis_run_id="run-invalid",
+            capture_id="capture-invalid",
+            fingerprint="a" * 64,
+            meta={"width": 1280, "height": 720, "fps": 30, "durationMs": 1000},
+            modules=[],
+            quality={"passed": True},
+            court={"valid": False},
+            pose={},
+            racket={},
+            shuttle={},
+            events={},
+            metrics=[],
+            findings=[],
+            pipeline_version="test",
+        )
+    assert not root.exists()

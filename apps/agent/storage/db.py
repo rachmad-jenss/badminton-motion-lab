@@ -36,9 +36,9 @@ async def cleanup_storage(
 
     Analysis runs retained by ``analysis_retention`` keep their capture rows,
     even when those captures are older than ``capture_retention``. This
-    routine prunes transient metadata and deletes retired capture files only
-    when the path still satisfies the media allowlist and is not referenced by
-    a retained capture.
+    routine prunes transient metadata and deletes only explicitly agent-owned
+    capture copies under the agent data directory. Registered source media is
+    never treated as owned by the agent.
     """
     now = int(time.time()) if now is None else now
     capture_retention = (
@@ -92,14 +92,11 @@ async def cleanup_storage(
             deleted["analysis_runs"] = max(cur.rowcount, 0)
 
         cur = await db.execute(
-            """SELECT id, path FROM captures ORDER BY created_at DESC, id DESC"""
+            """SELECT id, path, owned FROM captures ORDER BY created_at DESC, id DESC"""
         )
         capture_rows = await cur.fetchall()
         retained_capture_ids = {row[0] for row in capture_rows[:capture_retention]}
         retained_capture_ids.update(row[1] for row in retained_runs)
-        retained_capture_paths = {
-            row[1] for row in capture_rows if row[0] in retained_capture_ids
-        }
         stale_capture_ids = [
             row[0] for row in capture_rows if row[0] not in retained_capture_ids
         ]
@@ -115,18 +112,19 @@ async def cleanup_storage(
                 stale_capture_ids,
             )
             deleted["captures"] = max(cur.rowcount, 0)
-            for capture_id, capture_path in capture_rows:
-                if capture_id not in stale_capture_ids or capture_path in retained_capture_paths:
+            agent_captures = (db_path.parent / "captures").resolve()
+            for capture_id, capture_path, owned in capture_rows:
+                if capture_id not in stale_capture_ids or not owned:
                     continue
                 try:
-                    allowed_path = assert_allowed_media_path(
-                        Path(capture_path), data_dir=db_path.parent
-                    )
+                    allowed_path = Path(capture_path).resolve()
+                    allowed_path.relative_to(agent_captures)
+                    allowed_path = assert_allowed_media_path(allowed_path, data_dir=db_path.parent)
                 except (MediaError, OSError):
                     continue
                 try:
                     allowed_path.unlink()
-                except FileNotFoundError:
+                except OSError:
                     continue
                 deleted["media_files"] += 1
 
@@ -177,7 +175,8 @@ async def init_db(db_path: Path) -> None:
               path TEXT NOT NULL,
               fingerprint TEXT NOT NULL,
               metadata_json TEXT NOT NULL,
-              created_at TEXT NOT NULL
+              created_at TEXT NOT NULL,
+              owned INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS analysis_runs (
               id TEXT PRIMARY KEY,
@@ -189,6 +188,11 @@ async def init_db(db_path: Path) -> None:
             );
             """
         )
+        capture_columns = {
+            row[1] async for row in await db.execute("PRAGMA table_info(captures)")
+        }
+        if "owned" not in capture_columns:
+            await db.execute("ALTER TABLE captures ADD COLUMN owned INTEGER NOT NULL DEFAULT 0")
         columns = {
             row[1] async for row in await db.execute("PRAGMA table_info(devices)")
         }

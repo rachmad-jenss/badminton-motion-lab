@@ -19,16 +19,22 @@ def propose_events(
     fps: float,
     stroke_hint: str,
     manual_events: list[dict[str, Any]] | None = None,
+    source_frame_count: int | None = None,
+    source_duration_ms: float | None = None,
 ) -> dict[str, Any]:
     """Auto-propose rep bounds + contact; fall back to manual when confidence low."""
     by_idx = index_frames_by_frame_index(pose_frames)
     if not by_idx:
         return {"mode": "manual_required", "events": [], "reps": [], "reason": "empty pose"}
     if manual_events:
-        last_time_ms = max(float(frame.get("timeMs", 0.0)) for frame in pose_frames)
+        last_time_ms = (
+            float(source_duration_ms)
+            if source_duration_ms is not None
+            else max(float(frame.get("timeMs", 0.0)) for frame in pose_frames)
+        )
         validate_manual_events(
             manual_events,
-            frame_count=max(by_idx) + 1,
+            frame_count=source_frame_count or max(by_idx) + 1,
             duration_ms=last_time_ms,
         )
 
@@ -160,6 +166,25 @@ def _event_frame(events: list[dict[str, Any]], event_type: str, fallback: int) -
     return int(event["frameIndex"]) if event and "frameIndex" in event else fallback
 
 
+def validate_manual_event_fields(event: dict[str, Any], *, label: str) -> None:
+    """Validate manual-event field types before applying capture bounds."""
+    frame_index = event.get("frameIndex")
+    if isinstance(frame_index, bool) or not isinstance(frame_index, int):
+        raise ValueError(f"{label} frameIndex must be an integer")
+    for name in ("timeMs", "confidence"):
+        if name not in event:
+            continue
+        number = event[name]
+        if isinstance(number, bool) or not isinstance(number, (int, float)):
+            raise ValueError(f"{label} {name} must be numeric")
+        if not math.isfinite(float(number)):
+            raise ValueError(f"{label} {name} must be finite")
+    if "repIndex" in event:
+        rep_index = event["repIndex"]
+        if isinstance(rep_index, bool) or not isinstance(rep_index, int):
+            raise ValueError(f"{label} repIndex must be an integer")
+
+
 def validate_manual_events(
     events: list[dict[str, Any]], *, frame_count: int, duration_ms: float
 ) -> None:
@@ -180,23 +205,21 @@ def validate_manual_events(
             raise ValueError(
                 f"Manual event {index + 1} has unsupported type: {event_type!r}"
             )
+        label = f"Manual event {index + 1}"
+        validate_manual_event_fields(event, label=label)
         frame_index = event.get("frameIndex")
-        if isinstance(frame_index, bool) or not isinstance(frame_index, int):
-            raise ValueError(f"Manual event {index + 1} frameIndex must be an integer")
         if not 0 <= frame_index < frame_count:
             raise ValueError(
                 f"Manual event {index + 1} frameIndex must be between 0 and {frame_count - 1}"
             )
         time_ms = event.get("timeMs")
-        if isinstance(time_ms, bool) or not isinstance(time_ms, (int, float)) or not math.isfinite(float(time_ms)):
+        if time_ms is None:
             raise ValueError(f"Manual event {index + 1} timeMs must be finite")
         if not 0.0 <= float(time_ms) <= duration_ms:
             raise ValueError(
                 f"Manual event {index + 1} timeMs must be between 0 and {duration_ms:g}"
             )
         confidence = event.get("confidence", 1.0)
-        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not math.isfinite(float(confidence)):
-            raise ValueError(f"Manual event {index + 1} confidence must be finite")
         if not 0.0 <= float(confidence) <= 1.0:
             raise ValueError(f"Manual event {index + 1} confidence must be between 0 and 1")
         rep_index = event.get("repIndex", 0)

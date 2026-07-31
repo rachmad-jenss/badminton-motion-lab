@@ -21,7 +21,12 @@ from pydantic import BaseModel, Field, field_validator
 
 from adapters.byok import ByokStore, run_insight
 from adapters.court import calibrate_court
-from adapters.events import MANUAL_EVENT_TYPES, propose_events, validate_manual_events
+from adapters.events import (
+    MANUAL_EVENT_TYPES,
+    propose_events,
+    validate_manual_event_fields,
+    validate_manual_events,
+)
 from adapters.media import MediaError, decode_frames, fingerprint_file, probe_media, sample_frame_stats_from_frames
 from adapters.metrics_engine import compute_metrics, findings_from_metrics
 from adapters.paths import assert_allowed_media_path
@@ -145,21 +150,7 @@ class AnalyzeRequest(BaseModel):
                 raise ValueError(f"manual_events[{index}] contains unsupported fields")
             if event.get("type") not in MANUAL_EVENT_TYPES:
                 raise ValueError(f"manual_events[{index}].type is unsupported")
-            frame_index = event.get("frameIndex")
-            if isinstance(frame_index, bool) or not isinstance(frame_index, int):
-                raise ValueError(f"manual_events[{index}].frameIndex must be an integer")
-            for name in ("timeMs", "confidence"):
-                if name not in event:
-                    continue
-                number = event[name]
-                if isinstance(number, bool) or not isinstance(number, (int, float)):
-                    raise ValueError(f"manual_events[{index}].{name} must be numeric")
-                if not math.isfinite(float(number)):
-                    raise ValueError(f"manual_events[{index}].{name} must be finite")
-            if "repIndex" in event and (
-                isinstance(event["repIndex"], bool) or not isinstance(event["repIndex"], int)
-            ):
-                raise ValueError(f"manual_events[{index}].repIndex must be an integer")
+            validate_manual_event_fields(event, label=f"manual_events[{index}]")
         return value
 
 
@@ -311,7 +302,7 @@ async def register_capture(
     db_path = get_db_path(DATA_DIR)
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
-            "INSERT INTO captures (id, path, fingerprint, metadata_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO captures (id, path, fingerprint, metadata_json, created_at, owned) VALUES (?, ?, ?, ?, ?, 0)",
             (capture_id, str(path), fp, json.dumps(meta), utc_now()),
         )
         await db.commit()
@@ -397,6 +388,12 @@ def _capture_metadata_matches(stored: dict[str, Any], fresh: dict[str, Any]) -> 
     ) <= 100
 
 
+def _timed_stage(callback: Any) -> tuple[Any, tuple[str, str]]:
+    started_at = utc_now()
+    result = callback()
+    return result, (started_at, utc_now())
+
+
 def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, metadata_json: str) -> dict[str, Any]:
     video_path = Path(path_str)
     stored_meta = json.loads(metadata_json)
@@ -422,64 +419,79 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         raise MediaError("No frames decoded from video")
     validate_manual_events(
         body.manual_events or [],
-        frame_count=max(frame[0] for frame in frames) + 1,
-        duration_ms=max(float(frame[1]) for frame in frames),
+        frame_count=frame_count,
+        duration_ms=float(meta["durationMs"]),
     )
     stats = sample_frame_stats_from_frames(frames)
-    pose = estimate_pose(
-        frames=frames,
-        fps=fps,
-        width=width,
-        height=height,
+    pose, pose_timing = _timed_stage(
+        lambda: estimate_pose(
+            frames=frames,
+            fps=fps,
+            width=width,
+            height=height,
+        )
     )
     visibility = body_visibility_ratio(pose)
-    quality = run_quality_gate(
-        width=width,
-        height=height,
-        fps=fps,
-        frame_count=frame_count,
-        mean_brightness=stats["meanBrightness"],
-        body_visibility_ratio=visibility,
-        mean_edge_ratio=stats["meanEdgeRatio"],
+    quality, quality_timing = _timed_stage(
+        lambda: run_quality_gate(
+            width=width,
+            height=height,
+            fps=fps,
+            frame_count=frame_count,
+            mean_brightness=stats["meanBrightness"],
+            body_visibility_ratio=visibility,
+            mean_edge_ratio=stats["meanEdgeRatio"],
+        )
     )
     if not quality["passed"]:
         raise ValueError(json.dumps({"message": "Quality gate rejected capture", "quality": quality}))
 
     mid = frames[len(frames) // 2][2]
-    court = calibrate_court(
-        video_path=None,
-        width=width,
-        height=height,
-        manual_corners=body.court_corners,
-        sample_frame_bgr=mid,
-    )
-    racket = track_racket(
-        pose_frames=pose["frames"], fps=fps, dominant_hand=body.dominant_hand
-    )
-    try:
-        shuttle = track_shuttle(
-            frames=frames,
-            fps=fps,
+    court, court_timing = _timed_stage(
+        lambda: calibrate_court(
+            video_path=None,
             width=width,
             height=height,
-            pose_frames=pose["frames"],
+            manual_corners=body.court_corners,
+            sample_frame_bgr=mid,
         )
-    except MediaError as shuttle_err:
-        shuttle = {
-            "adapter": "opencv-motion-blob-shuttle",
-            "version": "1.0.0",
-            "points": [],
-            "coverage": 0.0,
-            "error": str(shuttle_err),
-        }
+    )
+    racket, racket_timing = _timed_stage(
+        lambda: track_racket(
+            pose_frames=pose["frames"], fps=fps, dominant_hand=body.dominant_hand
+        )
+    )
+    def shuttle_stage() -> dict[str, Any]:
+        try:
+            return track_shuttle(
+                frames=frames,
+                fps=fps,
+                width=width,
+                height=height,
+                pose_frames=pose["frames"],
+            )
+        except MediaError as shuttle_err:
+            return {
+                "adapter": "opencv-motion-blob-shuttle",
+                "version": "1.0.0",
+                "points": [],
+                "coverage": 0.0,
+                "error": str(shuttle_err),
+            }
 
-    events = propose_events(
-        pose_frames=pose["frames"],
-        racket_track=racket["points"],
-        shuttle_track=shuttle["points"],
-        fps=fps,
-        stroke_hint=body.stroke_hint or "clear",
-        manual_events=body.manual_events,
+    shuttle, shuttle_timing = _timed_stage(shuttle_stage)
+
+    events, events_timing = _timed_stage(
+        lambda: propose_events(
+            pose_frames=pose["frames"],
+            racket_track=racket["points"],
+            shuttle_track=shuttle["points"],
+            fps=fps,
+            stroke_hint=body.stroke_hint or "clear",
+            manual_events=body.manual_events,
+            source_frame_count=frame_count,
+            source_duration_ms=float(meta["durationMs"]),
+        )
     )
 
     modules = body.modules or [
@@ -487,17 +499,20 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         f"footwork:layer:{body.stroke_hint or 'clear'}",
     ]
 
-    metrics = compute_metrics(
-        modules=modules,
-        pose=pose,
-        racket=racket,
-        shuttle=shuttle,
-        events=events,
-        court=court,
-        fps=fps,
-        dominant_hand=body.dominant_hand,
-    )
-    findings = findings_from_metrics(metrics=metrics, events=events, modules=modules)
+    def metrics_stage() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        metrics = compute_metrics(
+            modules=modules,
+            pose=pose,
+            racket=racket,
+            shuttle=shuttle,
+            events=events,
+            court=court,
+            fps=fps,
+            dominant_hand=body.dominant_hand,
+        )
+        return metrics, findings_from_metrics(metrics=metrics, events=events, modules=modules)
+
+    (metrics, findings), metrics_timing = _timed_stage(metrics_stage)
 
     run_id = str(uuid.uuid4())
     writer = AnalysisPackageWriter(DATA_DIR / "packages" / run_id)
@@ -516,6 +531,24 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         metrics=metrics,
         findings=findings,
         pipeline_version=PIPELINE_VERSION,
+        step_timings={
+            "quality_gate": quality_timing,
+            "court": court_timing,
+            "pose": pose_timing,
+            "racket": racket_timing,
+            "shuttle": shuttle_timing,
+            "events": events_timing,
+            "metrics": metrics_timing,
+        },
+        step_input_artifacts={
+            "quality_gate": ["sourceMedia", "pose"],
+            "court": ["sourceMedia"],
+            "pose": ["sourceMedia"],
+            "racket": ["pose"],
+            "shuttle": ["pose"],
+            "events": ["pose", "racket", "shuttle"],
+            "metrics": ["sourceMedia", "court", "pose", "racket", "shuttle", "events"],
+        },
     )
     writer.prune_siblings(DATA_DIR / "packages", keep=PACKAGE_RETENTION)
 
