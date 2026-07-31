@@ -72,6 +72,7 @@ function metricLabel(metricId: string): string {
 export default function AnalyzePage() {
   const [path, setPath] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [stroke, setStroke] = useState<(typeof TECHNIQUE_STROKES)[number]>("clear");
   const [dominantHand, setDominantHand] = useState<"left" | "right" | "unknown">("unknown");
   const [includePureFootwork, setIncludePureFootwork] = useState(false);
@@ -235,10 +236,15 @@ export default function AnalyzePage() {
         <label>
           Choose a video from this PC
           <input
+            key={fileInputKey}
             className="d-input"
             type="file"
             accept="video/*"
-            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setSelectedFile(file);
+              if (file) setPath("");
+            }}
             aria-describedby="file-help"
           />
           <span id="file-help" className="muted">
@@ -253,7 +259,14 @@ export default function AnalyzePage() {
           <input
             className="d-input"
             value={path}
-            onChange={(e) => setPath(e.target.value)}
+            onChange={(e) => {
+              const nextPath = e.target.value;
+              setPath(nextPath);
+              if (nextPath.trim()) {
+                setSelectedFile(null);
+                setFileInputKey((current) => current + 1);
+              }
+            }}
             placeholder="C:\\Videos\\clear-drill.mp4"
             aria-describedby="path-help"
           />

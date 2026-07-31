@@ -337,6 +337,25 @@ test("analysis quality failure remains actionable", async ({ page }) => {
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
 });
 
+test("advanced path mode clears a previously selected file", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "first-choice.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await expect(page.getByText("Selected: first-choice.mp4", { exact: true })).toBeVisible();
+
+  await page.getByText("Advanced: use a video path", { exact: true }).click();
+  await page.getByLabel("Local video path").fill("C:\\Videos\\second-choice.mp4");
+
+  await expect(page.getByText("Selected: first-choice.mp4", { exact: true })).not.toBeVisible();
+  await expect(page.getByLabel("Choose a video from this PC")).toHaveValue("");
+});
+
 test("Compare explains an empty history", async ({ page }) => {
   await seedPairedBrowser(page);
   await mockHealth(page);

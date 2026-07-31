@@ -14,9 +14,18 @@ function Refresh-Path {
   $env:Path = "$machinePath;$userPath"
 }
 
+function Test-PythonCommand([string]$commandPath) {
+  try {
+    & $commandPath -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" 2>$null
+    return $LASTEXITCODE -eq 0
+  } catch {
+    return $false
+  }
+}
+
 function Resolve-Python {
   $command = Get-Command python -ErrorAction SilentlyContinue
-  if ($command) { return $command.Source }
+  if ($command -and (Test-PythonCommand $command.Source)) { return $command.Source }
 
   if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     throw "Python 3.11+ is required. Install it from python.org, then run install-agent.cmd again."
@@ -26,7 +35,7 @@ function Resolve-Python {
   winget install --id Python.Python.3.13 -e --accept-source-agreements --accept-package-agreements
   Refresh-Path
   $command = Get-Command python -ErrorAction SilentlyContinue
-  if (-not $command) {
+  if (-not $command -or -not (Test-PythonCommand $command.Source)) {
     throw "Python was installed but is not on PATH yet. Close this window, open a new one, and run install-agent.cmd again."
   }
   return $command.Source
