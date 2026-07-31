@@ -64,6 +64,25 @@ Findings covered by 017: locked badge CSS, brand keyboard focus, tool-page
 contrast, tool headers + CTAs, Capture Guide / Agent Install density, home
 notices + Labs restyle, panel rhythm. Deferred: Analyze side-by-side workspace.
 
+## Follow-up integrity and operations plans (2026-07-31)
+
+The live audit found correctness, provenance, validation, tenant-isolation,
+retention, and runner-lifecycle gaps that are independent of the completed UI
+plans. These plans are executed in dependency order and each implementation
+slice is verified before its atomic commit.
+
+| Order | Plan | Status | Depends on |
+|------:|------|--------|------------|
+| 18 | [018-analysis-integrity-and-inputs](018-analysis-integrity-and-inputs.md) | IN PROGRESS | 009; 016 |
+| 19 | [019-provenance-manifest-and-byok](019-provenance-manifest-and-byok.md) | PENDING | 018 |
+| 20 | [020-runner-and-retention](020-runner-and-retention.md) | PENDING | 018 |
+| 21 | [021-tenant-integrity](021-tenant-integrity.md) | PENDING | 018; 019 |
+| 22 | [022-release-and-plan-reconciliation](022-release-and-plan-reconciliation.md) | PENDING | 018-021 |
+
+The completion gate is the repository verification suite, the browser suite
+against the running website, a clean review of the intended diff, green PR CI,
+green post-merge `main`, and removal of only the merged feature branch.
+
 ## Verification
 
 ```bash
