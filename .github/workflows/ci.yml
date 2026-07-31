@@ -15,19 +15,21 @@ concurrency:
 
 jobs:
   verify:
-    # Never execute untrusted fork code on the persistent self-hosted runner.
+    # Fork pull requests are excluded because this job installs and executes
+    # the local-agent dependency set; same-repository PRs run on an ephemeral
+    # Windows VM so stale local processes cannot affect verification.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Windows, X64, bml-windows]
+    runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - name: Runner preflight
+      - name: Windows runner preflight
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "ffprobe is required on the self-hosted runner" }
-          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "ffmpeg is required on the self-hosted runner" }
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw "ffprobe is required on the Windows runner" }
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "ffmpeg is required on the Windows runner" }
           $pythonVersion = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
           if ([version]$pythonVersion -lt [version]'3.11') { throw "Python 3.11+ is required; found $pythonVersion" }
           $nodeVersion = (& node --version).TrimStart('v')
