@@ -140,6 +140,18 @@ export async function agentPost<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export async function agentImport<T>(file: File): Promise<T> {
+  const form = new FormData();
+  form.append("upload", file, file.name);
+  const res = await fetch(`${agentBaseUrl()}/captures/import`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) throw new AgentRequestError(res.status, await responseDetail(res));
+  return res.json() as Promise<T>;
+}
+
 export async function agentPut<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${agentBaseUrl()}${path}`, {
     method: "PUT",

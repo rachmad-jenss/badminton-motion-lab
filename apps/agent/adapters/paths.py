@@ -24,7 +24,8 @@ def media_roots(data_dir: Path) -> list[Path]:
             roots.append(videos.resolve())
         fixtures = Path(__file__).resolve().parents[3] / "validation" / "fixtures"
         roots.append(fixtures.resolve())
-        captures = (data_dir / "captures").resolve()
+    captures = (data_dir / "captures").resolve()
+    if captures not in roots:
         roots.append(captures)
     return roots
 

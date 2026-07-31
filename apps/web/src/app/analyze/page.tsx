@@ -7,6 +7,7 @@ import {
   agentBaseUrl,
   agentErrorMessage,
   agentHealth,
+  agentImport,
   agentPost,
   agentPut,
   agentReadiness,
@@ -67,6 +68,7 @@ function metricLabel(metricId: string): string {
 
 export default function AnalyzePage() {
   const [path, setPath] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [stroke, setStroke] = useState<(typeof TECHNIQUE_STROKES)[number]>("clear");
   const [dominantHand, setDominantHand] = useState<"left" | "right" | "unknown">("unknown");
   const [includePureFootwork, setIncludePureFootwork] = useState(false);
@@ -111,8 +113,8 @@ export default function AnalyzePage() {
 
   async function runAnalyze() {
     const localPath = path.trim();
-    if (!localPath) {
-      setError("Enter the absolute path to a local video first.");
+    if (!selectedFile && !localPath) {
+      setError("Choose a video from this PC before starting the analysis.");
       return;
     }
 
@@ -123,7 +125,9 @@ export default function AnalyzePage() {
     setInsightStatus(null);
     setResult(null);
     try {
-      const reg = await agentPost<{ captureId: string }>("/captures/register", { path: localPath });
+      const reg = selectedFile
+        ? await agentImport<{ captureId: string }>(selectedFile)
+        : await agentPost<{ captureId: string }>("/captures/register", { path: localPath });
       setPhase("analyzing");
       const out = await agentPost<AnalyzeResult>("/analyze", {
         capture_id: reg.captureId,
@@ -175,7 +179,7 @@ export default function AnalyzePage() {
 
   const phaseLabel = {
     idle: "Ready to analyze",
-    registering: "Registering local capture...",
+    registering: selectedFile ? "Preparing your local video..." : "Registering local capture...",
     analyzing: "Running quality gate and perception...",
     ready: "Analysis ready for review",
     failed: "Analysis needs attention",
@@ -222,7 +226,23 @@ export default function AnalyzePage() {
       <section className="panel">
         <h2>Job</h2>
         <label>
-          Absolute local video path
+          Choose a video from this PC
+          <input
+            className="d-input"
+            type="file"
+            accept="video/*"
+            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+            aria-describedby="file-help"
+          />
+          <span id="file-help" className="muted">
+            The video is sent only to the Local Agent on this PC. It is not uploaded to the cloud.
+          </span>
+        </label>
+        {selectedFile ? <p className="status" role="status">Selected: {selectedFile.name}</p> : null}
+        <details className="advanced-details">
+          <summary>Advanced: use a video path</summary>
+          <label>
+            Local video path
           <input
             className="d-input"
             value={path}
@@ -234,7 +254,8 @@ export default function AnalyzePage() {
             The path is read by the Windows Local Agent on this machine; it is not uploaded to the
             cloud.
           </span>
-        </label>
+          </label>
+        </details>
         <label>
           Stroke module
           <select
@@ -270,7 +291,7 @@ export default function AnalyzePage() {
           </span>
         </label>
         <div className="row">
-          <button className="d-btn d-btn-primary" disabled={!canAnalyze || busy || !path.trim()} onClick={() => void runAnalyze()}>
+          <button className="d-btn d-btn-primary" disabled={!canAnalyze || busy || (!selectedFile && !path.trim())} onClick={() => void runAnalyze()}>
             {busy ? "Running…" : "Run analysis"}
           </button>
           <Link className="d-btn d-btn-ghost" href="/capture-guide">Review capture requirements</Link>

@@ -14,7 +14,7 @@ export default defineConfig({
   },
   webServer: {
     // Prefer production server in CI: next dev Fast Refresh races cause flaky health/theme tests.
-    command: process.env.CI ? "npx next start -p 3101" : "npm.cmd run dev:test",
+    command: process.env.CI ? "npx next start -p 3101" : "npm.cmd run dev:test -w @bml/web",
     url: "http://127.0.0.1:3101",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -214,6 +214,63 @@ def test_capture_register_analyze_run_and_media_ticket_lifecycle(tmp_path: Path,
     assert (data / "packages" / "run-lifecycle" / ".complete").is_file()
 
 
+def test_capture_import_stores_owned_local_copy_and_enforces_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    data = tmp_path / "agent-data"
+    monkeypatch.delenv("BML_MEDIA_ROOTS", raising=False)
+    monkeypatch.setattr(agent_main, "DATA_DIR", data)
+    monkeypatch.setattr(agent_main, "byok", agent_main.ByokStore(data / "secrets"))
+    monkeypatch.setattr(
+        agent_main,
+        "probe_media",
+        lambda path: {
+            "path": str(path.resolve()),
+            "bytes": 11,
+            "width": 1280,
+            "height": 720,
+            "fps": 30.0,
+            "durationMs": 1000,
+            "frameCount": 30,
+        },
+    )
+    monkeypatch.setattr(agent_main, "fingerprint_file", lambda _path: "b" * 64)
+    monkeypatch.setattr(agent_main, "MAX_CAPTURE_BYTES", 12)
+
+    with TestClient(agent_main.app) as client:
+        health = client.get("/health").json()
+        token = client.post("/pair", json={"pairing_code": health["pairingCode"]}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        imported = client.post(
+            "/captures/import",
+            files={"upload": ("training.mp4", b"local-video", "video/mp4")},
+            headers=headers,
+        )
+        assert imported.status_code == 200, imported.text
+        imported_path = Path(imported.json()["metadata"]["path"])
+        assert imported_path.is_file()
+
+        with sqlite3.connect(data / "agent.sqlite3") as db:
+            row = db.execute("select path, owned from captures").fetchone()
+        assert row == (str(imported_path), 1)
+
+        oversized = client.post(
+            "/captures/import",
+            files={"upload": ("too-large.mp4", b"0123456789abc", "video/mp4")},
+            headers=headers,
+        )
+        assert oversized.status_code == 413
+        assert not list((data / "captures").glob("*.part"))
+
+        unsupported = client.post(
+            "/captures/import",
+            files={"upload": ("notes.txt", b"not a video", "text/plain")},
+            headers=headers,
+        )
+        assert unsupported.status_code == 400
+
+
 def test_analyze_rejects_capture_provenance_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     data = tmp_path / "agent-data"
     media_root = tmp_path / "media"

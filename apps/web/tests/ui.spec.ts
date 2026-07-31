@@ -206,6 +206,13 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
       body: JSON.stringify({ captureId: "capture-1" }),
     });
   });
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ captureId: "capture-1" }),
+    });
+  });
   await page.route(`${AGENT_URL}/analyze`, async (route) => {
     await route.fulfill({
       status: 200,
@@ -251,7 +258,11 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
   });
 
   await gotoWithAgentReady(page, "/analyze");
-  await page.getByLabel("Absolute local video path").fill("C:\\Videos\\clear-drill.mp4");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "clear-drill.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
   const runButton = page.getByRole("button", { name: "Run analysis" });
   await expect(runButton).toBeEnabled();
   await runButton.click();
@@ -273,9 +284,20 @@ test("analysis quality failure remains actionable", async ({ page }) => {
       body: JSON.stringify({ detail: "invalid capture" }),
     });
   });
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "invalid capture" }),
+    });
+  });
 
   await gotoWithAgentReady(page, "/analyze");
-  await page.getByLabel("Absolute local video path").fill("C:\\Videos\\blurry.mp4");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "blurry.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
   const runButton = page.getByRole("button", { name: "Run analysis" });
   await expect(runButton).toBeEnabled();
   await runButton.click();
