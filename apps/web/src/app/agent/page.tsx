@@ -151,25 +151,30 @@ export default function AgentPage() {
       </section>
 
       <section className="panel">
-        <h2>Install (Windows)</h2>
+        <h2>Start on Windows</h2>
+        <p>
+          If you are new to this app, open the project folder in Windows Explorer and double-click
+          <code>infra/windows/install-agent.cmd</code>. It installs the Local Agent, checks its
+          video tools, and opens this setup page when the agent is healthy.
+        </p>
         <ol className="muted">
           <li>
-            Run <code>infra/windows/install-agent.ps1</code> or start manually from{" "}
-            <code>apps/agent</code>.
+            Keep the Local Agent console open while you analyze a video.
           </li>
           <li>
-            Default URL: <code>http://127.0.0.1:8787</code>
+            Click <strong>Pair browser ↔ agent</strong> below.
           </li>
-          <li>Return here and pair with a short code.</li>
+          <li>Then open Analyze and choose a video from this PC.</li>
         </ol>
         <details className="install-details">
-          <summary>Show install commands</summary>
+          <summary>Advanced: show manual install commands</summary>
           <pre className="muted">{`cd apps/agent
 python -m venv .venv
 .\\.venv\\Scripts\\activate
 pip install -r requirements.txt
 python main.py`}</pre>
         </details>
+        <p className="muted">Default Local Agent URL: <code>http://127.0.0.1:8787</code></p>
       </section>
 
       <section className="panel" id="pair">
@@ -211,7 +216,7 @@ python main.py`}</pre>
         </div>
         <p className="muted">Current base: {agentBaseUrl()}</p>
         {error ? <p className="status error" role="alert">{error}</p> : null}
-        {status ? <p className="status success" role="status">{status}</p> : null}
+        {status ? <p className="status success" role="status">{status} Next: open Analyze and choose a video.</p> : null}
       </section>
     </main>
   );

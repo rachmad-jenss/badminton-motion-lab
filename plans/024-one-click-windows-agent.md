@@ -6,6 +6,7 @@
 
 ## Status
 
+- **Status**: DONE
 - **Priority**: P1
 - **Effort**: L
 - **Risk**: MED

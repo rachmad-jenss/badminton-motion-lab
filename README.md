@@ -48,6 +48,19 @@ Open http://localhost:3001
 Requires **FFmpeg/ffprobe** on PATH and MediaPipe pose model at
 `apps/agent/models/pose_landmarker_full.task` (auto-downloadable from Google MediaPipe models).
 
+### Windows beginner path
+
+1. Start the web app with `npm run dev:web` and open http://localhost:3001.
+2. In Windows Explorer, double-click `infra/windows/install-agent.cmd`.
+3. Keep the Local Agent console open. The script opens `/agent` after the health check;
+   pair the browser, then choose a video from this PC.
+
+The launcher installs Python and FFmpeg through `winget` when needed, creates the
+Local Agent environment, verifies the pose-model checksum, and keeps the original
+video on this PC. It is a development bootstrap, not a signed installer.
+
+### Advanced developer setup
+
 ```powershell
 cd apps/agent
 python -m venv .venv
