@@ -288,7 +288,19 @@ test("analysis quality failure remains actionable", async ({ page }) => {
     await route.fulfill({
       status: 422,
       contentType: "application/json",
-      body: JSON.stringify({ detail: "invalid capture" }),
+      body: JSON.stringify({
+        detail: {
+          code: "quality_rejected",
+          message: "This video did not pass the automatic video check.",
+          action: "Record from the side with the full body visible, good light, and a steady camera.",
+          quality: {
+            passed: false,
+            checks: [
+              { id: "body_visibility", passed: false, message: "Pose must see full-body landmarks on enough frames" },
+            ],
+          },
+        },
+      }),
     });
   });
 
@@ -302,7 +314,10 @@ test("analysis quality failure remains actionable", async ({ page }) => {
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  await expect(page.locator("p[role='alert']")).toContainText("capture did not pass the quality gate");
+  const captureError = page.locator("div.status.error[role='alert']");
+  await expect(captureError).toContainText("video did not pass the automatic video check");
+  await expect(captureError).toContainText("Record from the side");
+  await expect(captureError).toContainText("full-body landmarks");
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
 });
 

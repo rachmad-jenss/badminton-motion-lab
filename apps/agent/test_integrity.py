@@ -261,6 +261,7 @@ def test_capture_import_stores_owned_local_copy_and_enforces_size(
             headers=headers,
         )
         assert oversized.status_code == 413
+        assert oversized.json()["detail"]["code"] == "capture_too_large"
         assert not list((data / "captures").glob("*.part"))
 
         unsupported = client.post(
@@ -269,6 +270,13 @@ def test_capture_import_stores_owned_local_copy_and_enforces_size(
             headers=headers,
         )
         assert unsupported.status_code == 400
+        assert unsupported.json()["detail"]["code"] == "unsupported_format"
+
+
+def test_capture_error_details_include_a_recovery_action():
+    detail = agent_main.capture_error_detail("File not found: C:/Videos/missing.mp4")
+    assert detail["code"] == "missing_file"
+    assert "Choose" in detail["action"]
 
 
 def test_analyze_rejects_capture_provenance_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

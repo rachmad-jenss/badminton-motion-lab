@@ -56,6 +56,39 @@ CAPTURE_WRITE_CHUNK_BYTES = 1024 * 1024
 PUBLIC_PATHS = {"/health", "/pair", "/docs", "/openapi.json", "/redoc"}
 ANALYSIS_SEMAPHORE = asyncio.Semaphore(1)
 
+
+def capture_error_detail(message: str) -> dict[str, str]:
+    lowered = message.lower()
+    if "file not found" in lowered:
+        return {
+            "code": "missing_file",
+            "message": "The selected video could not be found on this PC.",
+            "action": "Choose the video again, or check that the drive is connected.",
+        }
+    if "unsupported media extension" in lowered:
+        return {
+            "code": "unsupported_format",
+            "message": "This file format is not supported for analysis.",
+            "action": "Choose an MP4, MOV, AVI, MKV, WEBM, or M4V video.",
+        }
+    if "ffprobe" in lowered:
+        return {
+            "code": "missing_video_tools",
+            "message": "The Local Agent cannot inspect this video yet.",
+            "action": "Install FFmpeg with the Windows setup launcher, then try again.",
+        }
+    if "outside bml_media_roots" in lowered:
+        return {
+            "code": "file_not_allowed",
+            "message": "The Local Agent is not allowed to read this folder.",
+            "action": "Choose the file from the file picker, or place it in an allowed video folder.",
+        }
+    return {
+        "code": "invalid_capture",
+        "message": "The Local Agent could not read this video.",
+        "action": "Try another video and use the capture guide for a clear, full-body view.",
+    }
+
 app = FastAPI(title="BML Local Agent", version=AGENT_VERSION)
 app.add_middleware(
     CORSMiddleware,
@@ -297,7 +330,7 @@ async def _register_capture_path(
         meta = probe_media(path)
         fp = fingerprint_file(path)
     except MediaError as e:
-        raise HTTPException(400, str(e)) from e
+        raise HTTPException(400, capture_error_detail(str(e))) from e
     meta["path"] = str(path.resolve())
     meta["fingerprint"] = fp
     meta["sessionId"] = session_id
@@ -321,7 +354,7 @@ async def register_capture(
     try:
         path = assert_allowed_media_path(Path(body.path), data_dir=DATA_DIR)
     except MediaError as e:
-        raise HTTPException(400, str(e)) from e
+        raise HTTPException(400, capture_error_detail(str(e))) from e
     return await _register_capture_path(
         path,
         owned=False,
@@ -338,7 +371,7 @@ async def import_capture(
     filename = (upload.filename or "").strip()
     suffix = Path(filename).suffix.lower()
     if not filename or suffix not in VIDEO_EXTENSIONS:
-        raise HTTPException(400, "Choose a supported video file: MP4, MOV, AVI, MKV, WEBM, or M4V.")
+        raise HTTPException(400, capture_error_detail("Unsupported media extension"))
 
     captures_dir = (DATA_DIR / "captures").resolve()
     captures_dir.mkdir(parents=True, exist_ok=True)
@@ -354,7 +387,14 @@ async def import_capture(
                     break
                 total += len(chunk)
                 if total > MAX_CAPTURE_BYTES:
-                    raise HTTPException(413, "This video is too large for local analysis. Choose a shorter video.")
+                    raise HTTPException(
+                        413,
+                        {
+                            "code": "capture_too_large",
+                            "message": "This video is too large for local analysis.",
+                            "action": "Choose a shorter video or reduce its resolution, then try again.",
+                        },
+                    )
                 output.write(chunk)
         temporary.replace(destination)
         path = assert_allowed_media_path(destination, data_dir=DATA_DIR)
@@ -364,7 +404,7 @@ async def import_capture(
     except HTTPException:
         raise
     except MediaError as e:
-        raise HTTPException(400, str(e)) from e
+        raise HTTPException(400, capture_error_detail(str(e))) from e
     finally:
         await upload.close()
         if not success:
@@ -512,7 +552,16 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         )
     )
     if not quality["passed"]:
-        raise ValueError(json.dumps({"message": "Quality gate rejected capture", "quality": quality}))
+        raise ValueError(
+            json.dumps(
+                {
+                    "code": "quality_rejected",
+                    "message": "This video did not pass the automatic video check.",
+                    "action": "Record from the side with the full body visible, good light, and a steady camera.",
+                    "quality": quality,
+                }
+            )
+        )
 
     mid = frames[len(frames) // 2][2]
     court, court_timing = _timed_stage(
@@ -686,12 +735,16 @@ async def analyze(
                 _run_analyze_sync, body, path_str, fingerprint, metadata_json
             )
     except MediaError as e:
-        raise HTTPException(400, str(e)) from e
+        raise HTTPException(400, capture_error_detail(str(e))) from e
     except ValueError as e:
         try:
             detail = json.loads(str(e))
         except json.JSONDecodeError:
-            detail = str(e)
+            detail = capture_error_detail(str(e))
+        if isinstance(detail, dict):
+            detail.setdefault("code", "analysis_input_invalid")
+            detail.setdefault("message", "The Local Agent could not analyze this video.")
+            detail.setdefault("action", "Check the capture guide and try again.")
         raise HTTPException(422, detail) from e
 
     async with aiosqlite.connect(db_path) as db:

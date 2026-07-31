@@ -89,7 +89,7 @@ unlock readiness modules without domain-valid evidence.
 |------:|------|----------|--------|------------|
 | 23 | [023-local-video-picker](023-local-video-picker.md) | P1 | DONE | none |
 | 24 | [024-one-click-windows-agent](024-one-click-windows-agent.md) | P1 | DONE | none |
-| 25 | [025-actionable-capture-errors](025-actionable-capture-errors.md) | P1 | TODO | 023 |
+| 25 | [025-actionable-capture-errors](025-actionable-capture-errors.md) | P1 | DONE | 023 |
 | 26 | [026-plain-language-surface](026-plain-language-surface.md) | P1 | TODO | 023, 025 |
 | 27 | [027-guided-first-run](027-guided-first-run.md) | P1 | TODO | 023-026 |
 

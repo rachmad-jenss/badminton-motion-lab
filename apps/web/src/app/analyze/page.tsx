@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { METRIC_CATALOGUE, STROKE_LABELS, TECHNIQUE_STROKES } from "@bml/contracts";
 import {
   agentBaseUrl,
+  agentErrorInfo,
   agentErrorMessage,
   agentHealth,
   agentImport,
@@ -14,6 +15,7 @@ import {
   agentReadinessLabel,
   agentToken,
   mediaUrlWithToken,
+  type AgentErrorInfo,
   type AgentHealthResult,
 } from "@/lib/agent";
 
@@ -76,6 +78,7 @@ export default function AnalyzePage() {
   const [paired, setPaired] = useState(false);
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [errorInfo, setErrorInfo] = useState<AgentErrorInfo | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
@@ -120,6 +123,7 @@ export default function AnalyzePage() {
 
     setPhase("registering");
     setError(null);
+    setErrorInfo(null);
     setMediaError(null);
     setInsight(null);
     setInsightStatus(null);
@@ -139,7 +143,9 @@ export default function AnalyzePage() {
       setPhase("ready");
     } catch (e) {
       setPhase("failed");
-      setError(agentErrorMessage(e, "Analysis failed. Check the Local Agent and capture guide."));
+      const info = agentErrorInfo(e, "Analysis failed. Check the Local Agent and capture guide.");
+      setErrorInfo(info);
+      setError(info.message);
     }
   }
 
@@ -297,7 +303,19 @@ export default function AnalyzePage() {
           <Link className="d-btn d-btn-ghost" href="/capture-guide">Review capture requirements</Link>
         </div>
         <p className="status" role="status"><span className="phase">{phaseLabel}</span></p>
-        {error ? <p className="status error" role="alert">{error}</p> : null}
+        {error ? (
+          <div className="status error" role="alert">
+            <p>{error}</p>
+            {errorInfo?.action ? <p>Next step: {errorInfo.action}</p> : null}
+            {errorInfo?.failedQualityChecks?.length ? (
+              <ul>
+                {errorInfo.failedQualityChecks.map((check) => (
+                  <li key={check.id}>{check.message ?? check.id}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       {result ? (
