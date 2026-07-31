@@ -279,6 +279,15 @@ def test_capture_error_details_include_a_recovery_action():
     assert "Choose" in detail["action"]
 
 
+def test_capture_error_details_explain_provenance_changes():
+    detail = agent_main.capture_error_detail("Capture metadata changed after registration")
+    assert detail == {
+        "code": "capture_changed",
+        "message": "This video changed since it was registered.",
+        "action": "Register the file again, then try analyzing.",
+    }
+
+
 def test_analyze_rejects_capture_provenance_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     data = tmp_path / "agent-data"
     media_root = tmp_path / "media"

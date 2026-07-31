@@ -95,10 +95,10 @@ horizontal overflow; all primary routes retain one accessible heading.
 
 ## Done criteria
 
-- [ ] A recreational player can understand the primary action on every route.
-- [ ] Technical evidence is still available and honest.
-- [ ] API/metric identifiers are not used as the primary copy.
-- [ ] Existing accessibility and browser tests pass.
+- [x] A recreational player can understand the primary action on every route.
+- [x] Technical evidence is still available and honest.
+- [x] API/metric identifiers are not used as the primary copy.
+- [x] Existing accessibility and browser tests pass.
 
 ## STOP conditions
 

@@ -13,7 +13,7 @@ function stepsFor({ readiness, paired, completed }: OnboardingStepsProps) {
   const setupDone = readiness === "ready";
   const pairDone = paired;
 
-  if (completed) {
+  if (completed && setupDone && pairDone) {
     return {
       nextLabel: "See your progress",
       nextHref: "/compare",

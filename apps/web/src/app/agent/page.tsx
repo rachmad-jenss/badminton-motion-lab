@@ -8,6 +8,7 @@ import {
   agentHealth,
   agentPost,
   agentReadiness,
+  agentToken,
   setAgentToken,
   AgentRequestError,
   type AgentHealthResult,
@@ -21,6 +22,7 @@ export default function AgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [pairing, setPairing] = useState(false);
+  const [paired, setPaired] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
   const urlRef = useRef(url);
   const healthRequestRef = useRef(0);
@@ -33,6 +35,7 @@ export default function AgentPage() {
   }
 
   useEffect(() => {
+    setPaired(Boolean(agentToken()));
     const saved = localStorage.getItem("bml.agentUrl");
     if (saved) {
       urlRef.current = saved;
@@ -85,6 +88,7 @@ export default function AgentPage() {
         device_name: "Windows Local Agent",
       });
       setAgentToken(res.token);
+      setPaired(Boolean(agentToken()));
       await refreshHealth();
       setStatus("Paired locally. Keep the agent running while reviewing video.");
     } catch (e) {
@@ -100,11 +104,12 @@ export default function AgentPage() {
 
   const readiness = agentReadiness(health);
   const poseReady = health?.payload?.poseModelPresent !== false;
-  const pairingReady = typeof health?.payload?.pairingCode === "string";
+  const pairingCodeReady = typeof health?.payload?.pairingCode === "string";
+  const readyToAnalyze = readiness === "ready" && paired;
   const checks = [
     { label: "Helper app", ok: health?.online === true },
     { label: "Video model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
-    { label: "Browser pairing", ok: typeof health?.payload?.pairingCode === "string" },
+    { label: "Browser pairing", ok: paired },
   ];
 
   return (
@@ -116,8 +121,8 @@ export default function AgentPage() {
           original video stays on this PC.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-            {checking ? "Checking setup…" : readiness === "ready" ? "Ready to analyze" : "Setup needs attention"}
+          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "locked"}`}>
+            {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Setup needs attention"}
           </span>
           <a className="d-btn d-btn-primary" href="#pair">
             Go to pairing
@@ -145,9 +150,11 @@ export default function AgentPage() {
             ? "Start the helper app, then refresh this setup check."
             : !poseReady
               ? "Install the missing video model before analyzing."
-              : !pairingReady
+              : !pairingCodeReady
                 ? "Refresh this setup check to get a one-time pairing code."
-                : "Pair this browser below, then open Analyze video and choose a video."}
+                : !paired
+                  ? "Pair this browser below, then open Analyze video and choose a video."
+                  : "Pairing is complete. Open Analyze video and choose a video."}
         </p>
       </section>
 

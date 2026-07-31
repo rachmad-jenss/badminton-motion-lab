@@ -35,13 +35,13 @@ async function seedPairedBrowser(page: Page) {
   });
 }
 
-async function gotoWithAgentReady(page: Page, path: string) {
+async function gotoWithAgentReady(page: Page, path: string, expectedBadge = "Ready to analyze") {
   const healthOk = page.waitForResponse(
     (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
   );
   await page.goto(path);
   await healthOk;
-  await expect(page.locator(".status-badge", { hasText: "Ready to analyze" }).first()).toBeVisible({
+  await expect(page.locator(".status-badge", { hasText: expectedBadge }).first()).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -84,7 +84,7 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
     });
   });
 
-  await gotoWithAgentReady(page, "/agent");
+  await gotoWithAgentReady(page, "/agent", "Setup needs attention");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
   const pairButton = page.getByRole("button", { name: "Pair browser ↔ agent" });
   await expect(pairButton).toBeEnabled();
@@ -98,7 +98,7 @@ test("Analyze requires pairing and exposes dominant-hand input", async ({ page }
   await clearAgentStorage(page);
   await mockHealth(page);
 
-  await gotoWithAgentReady(page, "/analyze");
+  await gotoWithAgentReady(page, "/analyze", "Pair this browser first");
 
   await expect(page.getByRole("combobox", { name: /Dominant hand/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Analyze this video" })).toBeDisabled();
@@ -113,7 +113,7 @@ test("Compare does not call protected series endpoints before pairing", async ({
     if (request.url().includes("/metrics/series")) protectedRequests.push(request.url());
   });
 
-  await gotoWithAgentReady(page, "/compare");
+  await gotoWithAgentReady(page, "/compare", "Pair this browser first");
 
   await expect(page.getByRole("status")).toContainText("Pair this browser");
   expect(protectedRequests).toHaveLength(0);
@@ -202,7 +202,7 @@ test("changing the Agent URL clears stale pairing readiness", async ({ page }) =
   await clearAgentStorage(page);
   await mockHealth(page);
 
-  await gotoWithAgentReady(page, "/agent");
+  await gotoWithAgentReady(page, "/agent", "Setup needs attention");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
 
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
@@ -312,7 +312,13 @@ test("analysis quality failure remains actionable", async ({ page }) => {
           quality: {
             passed: false,
             checks: [
-              { id: "body_visibility", passed: false, message: "Pose must see full-body landmarks on enough frames" },
+              {
+                id: "body_visibility",
+                passed: false,
+                measured: 0.42,
+                threshold: 0.8,
+                message: "Pose must see full-body landmarks on enough frames",
+              },
             ],
           },
         },
@@ -334,6 +340,7 @@ test("analysis quality failure remains actionable", async ({ page }) => {
   await expect(captureError).toContainText("video did not pass the automatic video check");
   await expect(captureError).toContainText("Record from the side");
   await expect(captureError).toContainText("full-body landmarks");
+  await expect(captureError).toContainText("measured 0.42, needs 0.8");
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
 });
 

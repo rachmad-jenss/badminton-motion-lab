@@ -89,11 +89,11 @@ and the 390px viewport has no horizontal overflow.
 
 ## Done criteria
 
-- [ ] A first-time user sees one next action at every setup state.
-- [ ] Pairing leads to video selection and analysis.
-- [ ] Analysis leads to review and optional Compare.
-- [ ] Expert routes remain available without competing with the first action.
-- [ ] Browser suite and full verification pass.
+- [x] A first-time user sees one next action at every setup state.
+- [x] Pairing leads to video selection and analysis.
+- [x] Analysis leads to review and optional Compare.
+- [x] Expert routes remain available without competing with the first action.
+- [x] Browser suite and full verification pass.
 
 ## STOP conditions
 

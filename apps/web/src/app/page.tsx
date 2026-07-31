@@ -63,7 +63,7 @@ export default function HomePage() {
 
       {readiness === "not_ready" ? (
         <div className="notice" role="alert">
-          Setup is almost ready, but one video tool is missing. <Link href="/agent">Check setup →</Link>
+          Setup is almost ready. Check the helper app, video model, and browser pairing before analyzing. <Link href="/agent">Check setup →</Link>
         </div>
       ) : null}
 

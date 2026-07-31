@@ -57,6 +57,12 @@ PUBLIC_PATHS = {"/health", "/pair", "/docs", "/openapi.json", "/redoc"}
 ANALYSIS_SEMAPHORE = asyncio.Semaphore(1)
 
 
+class QualityGateRejected(RuntimeError):
+    def __init__(self, detail: dict[str, Any]) -> None:
+        super().__init__(str(detail.get("message", "Quality gate rejected")))
+        self.detail = detail
+
+
 def capture_error_detail(message: str) -> dict[str, str]:
     lowered = message.lower()
     if "file not found" in lowered:
@@ -82,6 +88,12 @@ def capture_error_detail(message: str) -> dict[str, str]:
             "code": "file_not_allowed",
             "message": "The Local Agent is not allowed to read this folder.",
             "action": "Choose the file from the file picker, or place it in an allowed video folder.",
+        }
+    if "changed after registration" in lowered:
+        return {
+            "code": "capture_changed",
+            "message": "This video changed since it was registered.",
+            "action": "Register the file again, then try analyzing.",
         }
     return {
         "code": "invalid_capture",
@@ -552,15 +564,13 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         )
     )
     if not quality["passed"]:
-        raise ValueError(
-            json.dumps(
-                {
-                    "code": "quality_rejected",
-                    "message": "This video did not pass the automatic video check.",
-                    "action": "Record from the side with the full body visible, good light, and a steady camera.",
-                    "quality": quality,
-                }
-            )
+        raise QualityGateRejected(
+            {
+                "code": "quality_rejected",
+                "message": "This video did not pass the automatic video check.",
+                "action": "Record from the side with the full body visible, good light, and a steady camera.",
+                "quality": quality,
+            }
         )
 
     mid = frames[len(frames) // 2][2]
@@ -736,16 +746,8 @@ async def analyze(
             )
     except MediaError as e:
         raise HTTPException(400, capture_error_detail(str(e))) from e
-    except ValueError as e:
-        try:
-            detail = json.loads(str(e))
-        except json.JSONDecodeError:
-            detail = capture_error_detail(str(e))
-        if isinstance(detail, dict):
-            detail.setdefault("code", "analysis_input_invalid")
-            detail.setdefault("message", "The Local Agent could not analyze this video.")
-            detail.setdefault("action", "Check the capture guide and try again.")
-        raise HTTPException(422, detail) from e
+    except QualityGateRejected as e:
+        raise HTTPException(422, e.detail) from e
 
     async with aiosqlite.connect(db_path) as db:
         await db.execute(

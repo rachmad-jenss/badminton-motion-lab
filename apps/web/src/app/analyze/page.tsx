@@ -120,6 +120,7 @@ export default function AnalyzePage() {
     const localPath = path.trim();
     if (!selectedFile && !localPath) {
       setError("Choose a video from this PC before starting the analysis.");
+      setErrorInfo(null);
       return;
     }
 
@@ -202,8 +203,12 @@ export default function AnalyzePage() {
           movement; the original stays on this PC.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-            {agentReadinessLabel(readiness)} · {agentBaseUrl()}
+          <span className={`d-badge status-badge ${canAnalyze ? "on" : "locked"}`}>
+            {canAnalyze
+              ? "Ready to analyze"
+              : readiness === "ready"
+                ? "Pair this browser first"
+                : agentReadinessLabel(readiness)} · {agentBaseUrl()}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             {checking ? "Refreshing…" : "Refresh"}
@@ -324,7 +329,12 @@ export default function AnalyzePage() {
             {errorInfo?.failedQualityChecks?.length ? (
               <ul>
                 {errorInfo.failedQualityChecks.map((check) => (
-                  <li key={check.id}>{check.message ?? check.id}</li>
+                  <li key={check.id}>
+                    {check.message ?? check.id}
+                    {check.measured != null && check.threshold != null
+                      ? ` (measured ${check.measured}, needs ${check.threshold})`
+                      : null}
+                  </li>
                 ))}
               </ul>
             ) : null}
@@ -334,7 +344,7 @@ export default function AnalyzePage() {
 
       {result ? (
         <>
-          <OnboardingSteps readiness={readiness} paired={paired} completed />
+          <OnboardingSteps readiness={readiness} paired={paired} completed={phase === "ready"} />
           <section className="panel">
             <h2>Your video review</h2>
             <p className="muted">The helper app serves this video locally. The original remains on this PC.</p>

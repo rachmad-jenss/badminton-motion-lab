@@ -148,7 +148,7 @@ export function agentErrorInfo(error: unknown, fallback: string): AgentErrorInfo
       };
     }
     if (error.status === 422) return { message: "The capture did not pass the quality gate. Open Capture guide and update the video." };
-    return { message: fallback };
+    return { message: error.detail || fallback };
   }
   if (error instanceof Error && error.message) return { message: error.message };
   return { message: fallback };

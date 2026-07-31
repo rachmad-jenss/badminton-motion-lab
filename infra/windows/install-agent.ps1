@@ -23,6 +23,13 @@ function Test-PythonCommand([string]$commandPath) {
   }
 }
 
+function Get-ListeningProcessId([int]$port) {
+  $connection = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($connection) { return [int]$connection.OwningProcess }
+  return $null
+}
+
 function Resolve-Python {
   $command = Get-Command python -ErrorAction SilentlyContinue
   if ($command -and (Test-PythonCommand $command.Source)) { return $command.Source }
@@ -33,6 +40,10 @@ function Resolve-Python {
 
   Write-Host "[1/5] Python not found; installing Python 3.13 for this Windows user..."
   winget install --id Python.Python.3.13 -e --accept-source-agreements --accept-package-agreements
+  if ($LASTEXITCODE -ne 0) {
+    $installExitCode = $LASTEXITCODE
+    throw "Python installation failed with exit code $installExitCode. Resolve the winget error, then run install-agent.cmd again."
+  }
   Refresh-Path
   $command = Get-Command python -ErrorAction SilentlyContinue
   if (-not $command -or -not (Test-PythonCommand $command.Source)) {
@@ -53,6 +64,10 @@ if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
   }
   Write-Host "[2/5] FFmpeg not found; installing the Gyan.FFmpeg winget package..."
   winget install --id Gyan.FFmpeg.Shared -e --accept-source-agreements --accept-package-agreements
+  if ($LASTEXITCODE -ne 0) {
+    $installExitCode = $LASTEXITCODE
+    throw "FFmpeg installation failed with exit code $installExitCode. Resolve the winget error, then run install-agent.cmd again."
+  }
   Refresh-Path
   if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
     throw "FFmpeg was installed but ffprobe is not on PATH yet. Close this window, open a new one, and run install-agent.cmd again."
@@ -94,16 +109,28 @@ Write-Host "[5/5] Local Agent is installed and ready."
 if ($LaunchBrowser) {
   $agentProcess = $null
   try {
+    $existingProcessId = Get-ListeningProcessId 8787
+    if ($existingProcessId) {
+      throw "Port 8787 is already in use by process $existingProcessId. Close the existing Local Agent, then run install-agent.cmd again."
+    }
     $agentProcess = Start-Process -FilePath (Join-Path $Root ".venv\Scripts\python.exe") `
       -ArgumentList "main.py" -WorkingDirectory $Root -WindowStyle Normal -PassThru
     $healthy = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
       Start-Sleep -Seconds 1
+      if ($agentProcess.HasExited) {
+        throw "The Local Agent exited before becoming healthy (exit code $($agentProcess.ExitCode))."
+      }
+      $listeningProcessId = Get-ListeningProcessId 8787
+      if ($listeningProcessId -and $listeningProcessId -ne $agentProcess.Id) {
+        throw "Port 8787 is owned by another process ($listeningProcessId); the Local Agent could not claim it."
+      }
+      if ($listeningProcessId -ne $agentProcess.Id) { continue }
       try {
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
         if ($health.ok -eq $true) { $healthy = $true; break }
       } catch {
-        # The agent may still be loading its model.
+        Write-Verbose "Health probe failed while the Local Agent was starting: $($_.Exception.Message)"
       }
     }
     if (-not $healthy) { throw "The Local Agent did not become healthy within 30 seconds." }

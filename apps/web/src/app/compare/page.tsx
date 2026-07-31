@@ -10,6 +10,7 @@ import {
   agentReadiness,
   agentReadinessLabel,
   agentToken,
+  AgentRequestError,
   type AgentHealthResult,
 } from "@/lib/agent";
 import { compareLatest, type SessionMetricPoint } from "@/lib/compare";
@@ -70,7 +71,10 @@ export default function ComparePage() {
           );
           return { id, points: response.points, error: null };
         } catch (e) {
-          return { id, points: [], error: agentErrorMessage(e, "Could not load this metric.") };
+          const message = e instanceof AgentRequestError && e.status >= 500
+            ? "Could not load this metric."
+            : agentErrorMessage(e, "Could not load this metric.");
+          return { id, points: [], error: message };
         }
       }),
     );
@@ -89,6 +93,7 @@ export default function ComparePage() {
   }, [load]);
 
   const readiness = agentReadiness(health);
+  const readyToAnalyze = readiness === "ready" && paired;
   const hasAnyData = METRICS.some((id) => (series[id] || []).length > 0);
 
   return (
@@ -100,8 +105,12 @@ export default function ComparePage() {
           shown neutrally unless the measurement has a clear better direction.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-            {agentReadinessLabel(readiness)}
+          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "locked"}`}>
+            {readyToAnalyze
+              ? agentReadinessLabel(readiness)
+              : readiness === "ready"
+                ? "Pair this browser first"
+                : agentReadinessLabel(readiness)}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
