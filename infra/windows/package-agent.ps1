@@ -19,11 +19,13 @@ if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -F
 if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $stage "apps\agent"), (Join-Path $stage "infra\windows") | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $stage "apps\agent\pipeline") | Out-Null
 
 Get-ChildItem -LiteralPath $source -Force |
   Where-Object { $_.Name -notin @(".venv", "data", "__pycache__", ".pytest_cache", ".pytest-temp", "test-tmp") } |
   Copy-Item -Destination (Join-Path $stage "apps\agent") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $repo "infra\windows\install-agent.ps1") -Destination (Join-Path $stage "infra\windows") -Force
+Copy-Item -LiteralPath (Join-Path $repo "packages\contracts\src\schemas\analysis-manifest.schema.json") -Destination (Join-Path $stage "apps\agent\pipeline") -Force
 Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination $stage -Force
 
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $archive -CompressionLevel Optimal

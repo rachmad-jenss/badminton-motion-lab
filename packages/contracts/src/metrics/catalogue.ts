@@ -45,12 +45,12 @@ const SHARED_JOINT: MetricDefinition[] = [
   {
     id: "shoulder_abduction_contact",
     name: "Shoulder abduction at contact",
-    description: "Abduction of racket-side shoulder at contact.",
+    description: "2D projected angle between the racket-side upper arm and trunk at contact.",
     unit: "degrees",
     inputs: ["pose.landmarks", "events.contact_frame"],
     failSafe: "withhold",
-    limitations: ["Camera angle sensitive"],
-    version: "1.0.0",
+    limitations: ["Camera angle and depth sensitive", "Not a 3D anatomical measurement"],
+    version: "1.1.0",
   },
   {
     id: "trunk_lean_contact",

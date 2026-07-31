@@ -17,11 +17,16 @@ import aiosqlite
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from adapters.byok import ByokStore, run_insight
 from adapters.court import calibrate_court
-from adapters.events import propose_events
+from adapters.events import (
+    MANUAL_EVENT_TYPES,
+    propose_events,
+    validate_manual_event_fields,
+    validate_manual_events,
+)
 from adapters.media import MediaError, decode_frames, fingerprint_file, probe_media, sample_frame_stats_from_frames
 from adapters.metrics_engine import compute_metrics, findings_from_metrics
 from adapters.paths import assert_allowed_media_path
@@ -113,6 +118,40 @@ class AnalyzeRequest(BaseModel):
     dominant_hand: str = Field(default="unknown", pattern="^(left|right|unknown)$")
     max_frames: int | None = Field(default=None, ge=1, le=MAX_ANALYSIS_FRAMES)
     frame_stride: int | None = Field(default=None, ge=1, le=30)
+
+    @field_validator("court_corners", mode="before")
+    @classmethod
+    def validate_court_corner_shape(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, list) or len(value) != 4:
+            raise ValueError("court_corners must contain exactly four corners")
+        for index, corner in enumerate(value):
+            if not isinstance(corner, dict) or set(corner) != {"x", "y"}:
+                raise ValueError(f"court_corners[{index}] must contain only x and y")
+            for axis in ("x", "y"):
+                coordinate = corner[axis]
+                if isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)):
+                    raise ValueError(f"court_corners[{index}].{axis} must be numeric")
+                if not math.isfinite(float(coordinate)):
+                    raise ValueError(f"court_corners[{index}].{axis} must be finite")
+        return value
+
+    @field_validator("manual_events", mode="before")
+    @classmethod
+    def validate_manual_event_shape(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            raise ValueError("manual_events must be an array")
+        allowed_keys = {"type", "frameIndex", "timeMs", "confidence", "repIndex"}
+        for index, event in enumerate(value):
+            if not isinstance(event, dict) or not set(event).issubset(allowed_keys):
+                raise ValueError(f"manual_events[{index}] contains unsupported fields")
+            if event.get("type") not in MANUAL_EVENT_TYPES:
+                raise ValueError(f"manual_events[{index}].type is unsupported")
+            validate_manual_event_fields(event, label=f"manual_events[{index}]")
+        return value
 
 
 class ByokUpsert(BaseModel):
@@ -263,7 +302,7 @@ async def register_capture(
     db_path = get_db_path(DATA_DIR)
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
-            "INSERT INTO captures (id, path, fingerprint, metadata_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO captures (id, path, fingerprint, metadata_json, created_at, owned) VALUES (?, ?, ?, ?, ?, 0)",
             (capture_id, str(path), fp, json.dumps(meta), utc_now()),
         )
         await db.commit()
@@ -338,9 +377,35 @@ async def revoke_current_token(token: str = Depends(require_bearer)) -> dict[str
     return {"ok": True, "revoked": True}
 
 
+def _capture_metadata_matches(stored: dict[str, Any], fresh: dict[str, Any]) -> bool:
+    if not stored:
+        return False
+    for key in ("width", "height", "frameCount", "bytes"):
+        if stored.get(key) != fresh.get(key):
+            return False
+    return abs(float(stored.get("fps", 0)) - float(fresh.get("fps", 0))) < 0.01 and abs(
+        int(stored.get("durationMs", 0)) - int(fresh.get("durationMs", 0))
+    ) <= 100
+
+
+def _timed_stage(callback: Any) -> tuple[Any, tuple[str, str]]:
+    started_at = utc_now()
+    result = callback()
+    return result, (started_at, utc_now())
+
+
 def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, metadata_json: str) -> dict[str, Any]:
     video_path = Path(path_str)
-    meta = json.loads(metadata_json)
+    stored_meta = json.loads(metadata_json)
+    fresh_fingerprint = fingerprint_file(video_path)
+    if fresh_fingerprint != fingerprint:
+        raise MediaError("Capture bytes changed after registration; register the file again")
+    meta = probe_media(video_path)
+    if not _capture_metadata_matches(stored_meta, meta):
+        raise MediaError("Capture metadata changed after registration; register the file again")
+    meta["fingerprint"] = fresh_fingerprint
+    meta["sessionId"] = stored_meta.get("sessionId")
+    meta["title"] = stored_meta.get("title") or video_path.stem
     width, height, fps = int(meta["width"]), int(meta["height"]), float(meta["fps"])
     frame_count = int(meta.get("frameCount") or max(1, int(meta["durationMs"] / 1000 * fps)))
     max_frames, stride, truncated = resolve_frame_window(
@@ -352,61 +417,81 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
     frames = decode_frames(video_path, max_frames=max_frames, stride=stride)
     if not frames:
         raise MediaError("No frames decoded from video")
+    validate_manual_events(
+        body.manual_events or [],
+        frame_count=frame_count,
+        duration_ms=float(meta["durationMs"]),
+    )
     stats = sample_frame_stats_from_frames(frames)
-    pose = estimate_pose(
-        frames=frames,
-        fps=fps,
-        width=width,
-        height=height,
+    pose, pose_timing = _timed_stage(
+        lambda: estimate_pose(
+            frames=frames,
+            fps=fps,
+            width=width,
+            height=height,
+        )
     )
     visibility = body_visibility_ratio(pose)
-    quality = run_quality_gate(
-        width=width,
-        height=height,
-        fps=fps,
-        frame_count=frame_count,
-        mean_brightness=stats["meanBrightness"],
-        body_visibility_ratio=visibility,
-        mean_edge_ratio=stats["meanEdgeRatio"],
+    quality, quality_timing = _timed_stage(
+        lambda: run_quality_gate(
+            width=width,
+            height=height,
+            fps=fps,
+            frame_count=frame_count,
+            mean_brightness=stats["meanBrightness"],
+            body_visibility_ratio=visibility,
+            mean_edge_ratio=stats["meanEdgeRatio"],
+        )
     )
     if not quality["passed"]:
         raise ValueError(json.dumps({"message": "Quality gate rejected capture", "quality": quality}))
 
     mid = frames[len(frames) // 2][2]
-    court = calibrate_court(
-        video_path=None,
-        width=width,
-        height=height,
-        manual_corners=body.court_corners,
-        sample_frame_bgr=mid,
-    )
-    racket = track_racket(
-        pose_frames=pose["frames"], fps=fps, dominant_hand=body.dominant_hand
-    )
-    try:
-        shuttle = track_shuttle(
-            frames=frames,
-            fps=fps,
+    court, court_timing = _timed_stage(
+        lambda: calibrate_court(
+            video_path=None,
             width=width,
             height=height,
-            pose_frames=pose["frames"],
+            manual_corners=body.court_corners,
+            sample_frame_bgr=mid,
         )
-    except MediaError as shuttle_err:
-        shuttle = {
-            "adapter": "opencv-motion-blob-shuttle",
-            "version": "1.0.0",
-            "points": [],
-            "coverage": 0.0,
-            "error": str(shuttle_err),
-        }
+    )
+    racket, racket_timing = _timed_stage(
+        lambda: track_racket(
+            pose_frames=pose["frames"], fps=fps, dominant_hand=body.dominant_hand
+        )
+    )
+    def shuttle_stage() -> dict[str, Any]:
+        try:
+            return track_shuttle(
+                frames=frames,
+                fps=fps,
+                width=width,
+                height=height,
+                pose_frames=pose["frames"],
+            )
+        except MediaError as shuttle_err:
+            return {
+                "adapter": "opencv-motion-blob-shuttle",
+                "version": "1.0.0",
+                "points": [],
+                "coverage": 0.0,
+                "error": str(shuttle_err),
+            }
 
-    events = propose_events(
-        pose_frames=pose["frames"],
-        racket_track=racket["points"],
-        shuttle_track=shuttle["points"],
-        fps=fps,
-        stroke_hint=body.stroke_hint or "clear",
-        manual_events=body.manual_events,
+    shuttle, shuttle_timing = _timed_stage(shuttle_stage)
+
+    events, events_timing = _timed_stage(
+        lambda: propose_events(
+            pose_frames=pose["frames"],
+            racket_track=racket["points"],
+            shuttle_track=shuttle["points"],
+            fps=fps,
+            stroke_hint=body.stroke_hint or "clear",
+            manual_events=body.manual_events,
+            source_frame_count=frame_count,
+            source_duration_ms=float(meta["durationMs"]),
+        )
     )
 
     modules = body.modules or [
@@ -414,16 +499,20 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         f"footwork:layer:{body.stroke_hint or 'clear'}",
     ]
 
-    metrics = compute_metrics(
-        modules=modules,
-        pose=pose,
-        racket=racket,
-        shuttle=shuttle,
-        events=events,
-        court=court,
-        fps=fps,
-    )
-    findings = findings_from_metrics(metrics=metrics, events=events, modules=modules)
+    def metrics_stage() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        metrics = compute_metrics(
+            modules=modules,
+            pose=pose,
+            racket=racket,
+            shuttle=shuttle,
+            events=events,
+            court=court,
+            fps=fps,
+            dominant_hand=body.dominant_hand,
+        )
+        return metrics, findings_from_metrics(metrics=metrics, events=events, modules=modules)
+
+    (metrics, findings), metrics_timing = _timed_stage(metrics_stage)
 
     run_id = str(uuid.uuid4())
     writer = AnalysisPackageWriter(DATA_DIR / "packages" / run_id)
@@ -442,6 +531,24 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         metrics=metrics,
         findings=findings,
         pipeline_version=PIPELINE_VERSION,
+        step_timings={
+            "quality_gate": quality_timing,
+            "court": court_timing,
+            "pose": pose_timing,
+            "racket": racket_timing,
+            "shuttle": shuttle_timing,
+            "events": events_timing,
+            "metrics": metrics_timing,
+        },
+        step_input_artifacts={
+            "quality_gate": ["sourceMedia", "pose"],
+            "court": ["sourceMedia"],
+            "pose": ["sourceMedia"],
+            "racket": ["pose"],
+            "shuttle": ["pose"],
+            "events": ["pose", "racket", "shuttle"],
+            "metrics": ["sourceMedia", "court", "pose", "racket", "shuttle", "events"],
+        },
     )
     writer.prune_siblings(DATA_DIR / "packages", keep=PACKAGE_RETENTION)
 
@@ -495,6 +602,15 @@ async def analyze(
     video_path = Path(path_str)
     if not video_path.exists():
         raise HTTPException(410, "Local media missing")
+
+    try:
+        stored_meta = json.loads(metadata_json)
+        current_fingerprint = fingerprint_file(video_path)
+        current_meta = probe_media(video_path)
+    except (MediaError, json.JSONDecodeError) as exc:
+        raise HTTPException(409, "Capture provenance could not be revalidated; register the file again") from exc
+    if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
+        raise HTTPException(409, "Capture changed after registration; register the file again")
 
     try:
         async with ANALYSIS_SEMAPHORE:

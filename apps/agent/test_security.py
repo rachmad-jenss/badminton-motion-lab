@@ -5,12 +5,13 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
+import asyncio
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adapters.byok import ByokStore
+from adapters.byok import ByokStore, run_insight
 from adapters.events import propose_events
 from adapters.media import MediaError
 from adapters.paths import assert_allowed_media_path
@@ -33,6 +34,34 @@ def test_byok_encrypted_not_plaintext():
         loaded = store.load()
         assert loaded is not None
         assert loaded["api_key"] == "sk-test-secret"
+
+
+def test_byok_empty_choices_falls_back(monkeypatch: pytest.MonkeyPatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": []}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    store = ByokStore(Path("unused"))
+    monkeypatch.setattr(store, "load", lambda: {"provider": "openai", "api_key": "test"})
+    monkeypatch.setattr("adapters.byok.httpx.AsyncClient", lambda **_kwargs: FakeClient())
+
+    result = asyncio.run(run_insight(byok=store, findings=[], metrics=[], locale="en"))
+
+    assert result["byokUsed"] is True
+    assert "rejected safely" in result["warning"]
 
 
 def test_allowlist_rejects_secrets_and_non_video(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -165,6 +194,29 @@ def test_manual_contact_replaces_model_event_and_reaches_racket_metric():
     assert events["reps"][0]["contactFrame"] == 20
 
 
+def test_manual_event_can_target_unsampled_source_frame():
+    pose_frames = [
+        {
+            "frameIndex": index,
+            "timeMs": index * 33.3,
+            "landmarks": [],
+        }
+        for index in range(30)
+    ]
+    events = propose_events(
+        pose_frames=pose_frames,
+        racket_track=[{"frameIndex": 0, "x": 0.1, "y": 0.2}],
+        shuttle_track=[],
+        fps=30,
+        stroke_hint="clear",
+        manual_events=[{"type": "contact", "frameIndex": 40, "timeMs": 1333.0}],
+        source_frame_count=60,
+        source_duration_ms=2000.0,
+    )
+    contact = next(event for event in events["events"] if event["type"] == "contact")
+    assert contact["frameIndex"] == 40
+
+
 def test_analysis_manifest_matches_contract_step_shape(tmp_path: Path):
     writer = AnalysisPackageWriter(tmp_path / "packages" / "run-1")
     package = writer.write(
@@ -182,8 +234,22 @@ def test_analysis_manifest_matches_contract_step_shape(tmp_path: Path):
         metrics=[],
         findings=[],
         pipeline_version="0.2.2",
+        step_timings={
+            "pose": ("2026-01-01T00:00:00+00:00", "2026-01-01T00:00:01+00:00"),
+            "quality_gate": ("2026-01-01T00:00:01+00:00", "2026-01-01T00:00:02+00:00"),
+        },
+        step_input_artifacts={
+            "pose": ["sourceMedia"],
+            "quality_gate": ["sourceMedia", "pose"],
+        },
     )
     assert all(
         {"startedAt", "finishedAt", "inputHashes", "outputHashes"}.issubset(step)
         for step in package["manifest"]["steps"]
     )
+    steps = {step["stepId"]: step for step in package["manifest"]["steps"]}
+    assert steps["pose"]["startedAt"] != steps["pose"]["finishedAt"]
+    assert steps["quality_gate"]["inputHashes"] == [
+        "a" * 64,
+        steps["pose"]["outputHashes"][0],
+    ]

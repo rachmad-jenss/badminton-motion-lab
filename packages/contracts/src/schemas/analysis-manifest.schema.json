@@ -8,7 +8,10 @@
     "pipelineVersion",
     "analysisRunId",
     "captureId",
+    "createdAt",
+    "sourceMedia",
     "modulesRequested",
+    "steps",
     "artifacts",
     "qualityGate"
   ],
@@ -17,7 +20,44 @@
     "pipelineVersion": { "type": "string" },
     "analysisRunId": { "type": "string" },
     "captureId": { "type": "string" },
+    "createdAt": { "type": "string" },
+    "sourceMedia": {
+      "type": "object",
+      "required": ["fingerprint", "durationMs", "fps", "width", "height"],
+      "properties": {
+        "fingerprint": { "type": "string" },
+        "originalPath": { "type": ["string", "null"] },
+        "durationMs": { "type": "number" },
+        "fps": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      }
+    },
     "modulesRequested": { "type": "array", "items": { "type": "string" } },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "stepId",
+          "version",
+          "status",
+          "startedAt",
+          "finishedAt",
+          "inputHashes",
+          "outputHashes"
+        ],
+        "properties": {
+          "stepId": { "type": "string" },
+          "version": { "type": "string" },
+          "status": { "type": "string" },
+          "startedAt": { "type": "string" },
+          "finishedAt": { "type": "string" },
+          "inputHashes": { "type": "array", "items": { "type": "string" } },
+          "outputHashes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
     "artifacts": { "type": "object" },
     "qualityGate": { "type": "object" },
     "court": { "type": ["object", "null"] }

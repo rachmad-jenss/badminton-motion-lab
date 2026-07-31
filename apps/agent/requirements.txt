@@ -9,4 +9,5 @@ aiosqlite==0.21.0
 opencv-python-headless>=4.8
 mediapipe>=0.10.14
 cryptography>=42.0.0
+jsonschema==4.23.0
 pytest>=8.0.0

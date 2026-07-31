@@ -127,7 +127,8 @@ export interface InsightRequest {
 export interface InsightResponse {
   prose: string;
   citedFindingIds: string[];
+  citedMetricIds?: string[];
   provider: string;
   model: string;
-  fabricatedMetricsAttempted: false;
+  fabricatedMetricsAttempted: boolean | null;
 }
