@@ -2,6 +2,7 @@
 
 ## Status
 
+- **Status**: DONE — 2026-07-31
 - **Priority**: P1
 - **Risk**: LOW
 - **Depends on**: Plans 018-021
@@ -30,7 +31,19 @@ the user's configured GitHub identity without adding agent/tool branding.
 
 ## Completion evidence
 
-- PR URL, commit list, review/comment state, hosted CI run, post-merge `main`
-  run, exact local browser result, and branch cleanup result.
+- PR #8: https://github.com/rachmad-jenss/badminton-motion-lab/pull/8
+- User-authored commits: `0d3083d`, `cd208dc`, `e8894ef`, `d01bd37`,
+  `3f2a75f`, `4ef667b`, `4339e5d`, and `20dc82f`; author identity was checked
+  before push.
+- Hosted PR verification run `30604689871` passed all steps, including the
+  full Chromium suite, agent smoke, real fixture benchmarks, provenance check,
+  and owned-process cleanup.
+- Direct local browser check passed for `/`, `/analyze`, `/capture-guide`,
+  `/agent`, and `/compare`; expected offline-agent health fetch was the only
+  remaining console error, and the favicon 404 was fixed.
+- All PR review threads are resolved; PR #8 merged at `96a837b9`, and the
+  post-merge `main` run `30605012001` passed all steps.
+- Remote feature branch `jenss/bml-integrity-hardening` was deleted; unrelated
+  local user changes remain untouched.
 - `readiness:check` remains a separate product-data gate if real domain-valid
   fixtures are not available; do not fabricate fixtures to make it pass.
