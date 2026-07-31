@@ -1,12 +1,144 @@
 from __future__ import annotations
 
+import os
+import time
 from pathlib import Path
 
 import aiosqlite
 
+from adapters.media import MediaError
+from adapters.paths import assert_allowed_media_path
+
 
 def get_db_path(data_dir: Path) -> Path:
     return data_dir / "agent.sqlite3"
+
+
+def _retention_limit(name: str, fallback: int = 100) -> int:
+    raw = os.getenv(name)
+    if raw in (None, ""):
+        return fallback
+    try:
+        value = int(raw)
+    except ValueError:
+        return fallback
+    return max(1, value)
+
+
+async def cleanup_storage(
+    db_path: Path,
+    *,
+    now: int | None = None,
+    capture_retention: int | None = None,
+    analysis_retention: int | None = None,
+) -> dict[str, int]:
+    """Expire transient rows and bound local history without deleting evidence.
+
+    Analysis runs retained by ``analysis_retention`` keep their capture rows,
+    even when those captures are older than ``capture_retention``. This
+    routine prunes transient metadata and deletes retired capture files only
+    when the path still satisfies the media allowlist and is not referenced by
+    a retained capture.
+    """
+    now = int(time.time()) if now is None else now
+    capture_retention = (
+        _retention_limit("BML_CAPTURE_RETENTION")
+        if capture_retention is None
+        else capture_retention
+    )
+    analysis_retention = (
+        _retention_limit("BML_ANALYSIS_RETENTION")
+        if analysis_retention is None
+        else analysis_retention
+    )
+    if capture_retention < 1 or analysis_retention < 1:
+        raise ValueError("retention limits must be at least 1")
+
+    deleted = {
+        "pairing_challenges": 0,
+        "media_tickets": 0,
+        "analysis_runs": 0,
+        "captures": 0,
+        "media_files": 0,
+    }
+    async with aiosqlite.connect(db_path) as db:
+        cur = await db.execute(
+            """DELETE FROM pairing_challenges
+               WHERE expires_at <= ? OR used_at IS NOT NULL""",
+            (now,),
+        )
+        deleted["pairing_challenges"] = max(cur.rowcount, 0)
+
+        cur = await db.execute(
+            """DELETE FROM media_tickets
+               WHERE expires_at <= ? OR used_at IS NOT NULL""",
+            (now,),
+        )
+        deleted["media_tickets"] = max(cur.rowcount, 0)
+
+        cur = await db.execute(
+            """SELECT id, capture_id FROM analysis_runs
+               ORDER BY created_at DESC, id DESC"""
+        )
+        run_rows = await cur.fetchall()
+        retained_runs = run_rows[:analysis_retention]
+        stale_run_ids = [row[0] for row in run_rows[analysis_retention:]]
+        if stale_run_ids:
+            placeholders = ", ".join("?" for _ in stale_run_ids)
+            cur = await db.execute(
+                f"DELETE FROM analysis_runs WHERE id IN ({placeholders})",
+                stale_run_ids,
+            )
+            deleted["analysis_runs"] = max(cur.rowcount, 0)
+
+        cur = await db.execute(
+            """SELECT id, path FROM captures ORDER BY created_at DESC, id DESC"""
+        )
+        capture_rows = await cur.fetchall()
+        retained_capture_ids = {row[0] for row in capture_rows[:capture_retention]}
+        retained_capture_ids.update(row[1] for row in retained_runs)
+        retained_capture_paths = {
+            row[1] for row in capture_rows if row[0] in retained_capture_ids
+        }
+        stale_capture_ids = [
+            row[0] for row in capture_rows if row[0] not in retained_capture_ids
+        ]
+        if stale_capture_ids:
+            placeholders = ", ".join("?" for _ in stale_capture_ids)
+            cur = await db.execute(
+                f"DELETE FROM media_tickets WHERE capture_id IN ({placeholders})",
+                stale_capture_ids,
+            )
+            deleted["media_tickets"] += max(cur.rowcount, 0)
+            cur = await db.execute(
+                f"DELETE FROM captures WHERE id IN ({placeholders})",
+                stale_capture_ids,
+            )
+            deleted["captures"] = max(cur.rowcount, 0)
+            for capture_id, capture_path in capture_rows:
+                if capture_id not in stale_capture_ids or capture_path in retained_capture_paths:
+                    continue
+                try:
+                    allowed_path = assert_allowed_media_path(
+                        Path(capture_path), data_dir=db_path.parent
+                    )
+                except (MediaError, OSError):
+                    continue
+                try:
+                    allowed_path.unlink()
+                except FileNotFoundError:
+                    continue
+                deleted["media_files"] += 1
+
+        cur = await db.execute(
+            """DELETE FROM media_tickets
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM captures WHERE captures.id = media_tickets.capture_id
+               )"""
+        )
+        deleted["media_tickets"] += max(cur.rowcount, 0)
+        await db.commit()
+    return deleted
 
 
 async def init_db(db_path: Path) -> None:
@@ -73,3 +205,4 @@ async def init_db(db_path: Path) -> None:
         # Revoke them rather than migrating the secret into another field.
         await db.execute("UPDATE devices SET token = '', token_hash = '' WHERE token <> ''")
         await db.commit()
+    await cleanup_storage(db_path)

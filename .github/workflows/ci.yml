@@ -19,9 +19,6 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, Windows, X64, bml-windows]
     timeout-minutes: 30
-    env:
-      BML_AGENT_PORT: "8788"
-      BML_AGENT_URL: "http://127.0.0.1:8788"
     steps:
       - uses: actions/checkout@v4
 
@@ -80,14 +77,33 @@ jobs:
         working-directory: apps/agent
         shell: powershell
         run: |
-          $env:BML_AGENT_DATA_DIR = Join-Path $env:RUNNER_TEMP "bml-agent-data"
+          $ErrorActionPreference = "Stop"
+          $runKey = "$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $dataDir = Join-Path $env:RUNNER_TEMP "bml-agent-data-$runKey-$([guid]::NewGuid().ToString('N'))"
+          $pidFile = Join-Path $env:RUNNER_TEMP "bml-agent-process-$runKey.txt"
+          $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          $listener.Start()
+          $port = $listener.LocalEndpoint.Port
+          $listener.Stop()
+          $env:BML_AGENT_PORT = "$port"
+          $env:BML_AGENT_URL = "http://127.0.0.1:$port"
+          $env:BML_AGENT_DATA_DIR = $dataDir
           New-Item -ItemType Directory -Force -Path $env:BML_AGENT_DATA_DIR | Out-Null
-          Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory (Get-Location) -WindowStyle Hidden
+          "BML_AGENT_PORT=$port" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BML_AGENT_URL=$env:BML_AGENT_URL" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BML_AGENT_DATA_DIR=$env:BML_AGENT_DATA_DIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BML_AGENT_PID_FILE=$pidFile" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $process = Start-Process -FilePath python -ArgumentList "main.py" -WorkingDirectory (Get-Location) -WindowStyle Hidden -PassThru
+          $process.Id | Out-File -FilePath $pidFile -Encoding ascii
+          $identity = Get-CimInstance Win32_Process -Filter "ProcessId = $($process.Id)"
+          if (-not $identity -or $identity.CommandLine -notmatch "main\.py") {
+            throw "Started agent process identity could not be verified"
+          }
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
             try {
               $r = Invoke-RestMethod -Uri "$env:BML_AGENT_URL/health" -TimeoutSec 2
-              if ($r.ok) { $ok = $true; break }
+              if ($r.ok -and [int]$r.port -eq $port) { $ok = $true; break }
             } catch {}
             Start-Sleep -Seconds 2
           }
@@ -101,3 +117,29 @@ jobs:
 
       - name: Validate readiness provenance
         run: npm run readiness:integrity
+
+      - name: Stop test agent
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pidFile = $env:BML_AGENT_PID_FILE
+          if ([string]::IsNullOrWhiteSpace($pidFile) -or -not (Test-Path $pidFile)) {
+            Write-Host "No owned agent PID file was created"
+            exit 0
+          }
+          $agentPid = [int](Get-Content -Raw -Path $pidFile).Trim()
+          $identity = Get-CimInstance Win32_Process -Filter "ProcessId = $agentPid" -ErrorAction SilentlyContinue
+          if (-not $identity) {
+            Write-Host "Owned agent process $agentPid is already stopped"
+            exit 0
+          }
+          if ($identity.CommandLine -notmatch "main\.py") {
+            throw "Refusing to stop PID $agentPid because its command line is not the test agent"
+          }
+          Stop-Process -Id $agentPid -Force
+          for ($i = 0; $i -lt 10; $i++) {
+            if (-not (Get-Process -Id $agentPid -ErrorAction SilentlyContinue)) { exit 0 }
+            Start-Sleep -Seconds 1
+          }
+          throw "Owned agent process $agentPid did not stop cleanly"
