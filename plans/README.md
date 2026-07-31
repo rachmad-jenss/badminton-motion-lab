@@ -73,11 +73,11 @@ slice is verified before its atomic commit.
 
 | Order | Plan | Status | Depends on |
 |------:|------|--------|------------|
-| 18 | [018-analysis-integrity-and-inputs](018-analysis-integrity-and-inputs.md) | IN PROGRESS | 009; 016 |
-| 19 | [019-provenance-manifest-and-byok](019-provenance-manifest-and-byok.md) | PENDING | 018 |
-| 20 | [020-runner-and-retention](020-runner-and-retention.md) | PENDING | 018 |
-| 21 | [021-tenant-integrity](021-tenant-integrity.md) | PENDING | 018; 019 |
-| 22 | [022-release-and-plan-reconciliation](022-release-and-plan-reconciliation.md) | PENDING | 018-021 |
+| 18 | [018-analysis-integrity-and-inputs](018-analysis-integrity-and-inputs.md) | DONE | 009; 016 |
+| 19 | [019-provenance-manifest-and-byok](019-provenance-manifest-and-byok.md) | DONE | 018 |
+| 20 | [020-runner-and-retention](020-runner-and-retention.md) | DONE | 018 |
+| 21 | [021-tenant-integrity](021-tenant-integrity.md) | DONE | 018; 019 |
+| 22 | [022-release-and-plan-reconciliation](022-release-and-plan-reconciliation.md) | IN PROGRESS | 018-021 |
 
 The completion gate is the repository verification suite, the browser suite
 against the running website, a clean review of the intended diff, green PR CI,
