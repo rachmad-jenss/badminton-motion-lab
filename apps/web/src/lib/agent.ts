@@ -26,10 +26,32 @@ export type AgentHealthResult = {
 
 export type AgentReadiness = "checking" | "offline" | "not_ready" | "ready";
 
+export type AgentQualityCheck = {
+  id: string;
+  passed: boolean;
+  measured?: number | string;
+  threshold?: number | string;
+  message?: string;
+};
+
+export type AgentErrorPayload = {
+  code?: string;
+  message?: string;
+  action?: string;
+  quality?: { passed?: boolean; checks?: AgentQualityCheck[] };
+};
+
+export type AgentErrorInfo = {
+  message: string;
+  action?: string;
+  failedQualityChecks?: AgentQualityCheck[];
+};
+
 export class AgentRequestError extends Error {
   constructor(
     readonly status: number,
     readonly detail: string,
+    readonly payload?: AgentErrorPayload,
   ) {
     super(detail || `Agent request failed (HTTP ${status})`);
     this.name = "AgentRequestError";
@@ -87,38 +109,53 @@ export function agentReadiness(health: AgentHealthResult | null): AgentReadiness
 export function agentReadinessLabel(readiness: AgentReadiness): string {
   switch (readiness) {
     case "checking":
-      return "Checking Local Agent...";
+      return "Checking setup...";
     case "offline":
-      return "Agent offline - Start Agent";
+      return "Setup needed - start the helper app";
     case "not_ready":
-      return "Agent online - prerequisites incomplete";
+      return "Setup incomplete";
     case "ready":
-      return "Agent ready";
+      return "Ready to analyze";
   }
 }
 
-async function responseDetail(res: Response): Promise<string> {
+async function responseDetail(res: Response): Promise<{ message: string; payload?: AgentErrorPayload }> {
   const text = await res.text();
-  if (!text) return `HTTP ${res.status}`;
+  if (!text) return { message: `HTTP ${res.status}` };
   try {
     const body = JSON.parse(text) as { detail?: unknown; message?: unknown };
-    if (typeof body.detail === "string") return body.detail;
-    if (typeof body.message === "string") return body.message;
+    if (body.detail && typeof body.detail === "object") {
+      const payload = body.detail as AgentErrorPayload;
+      if (typeof payload.message === "string") return { message: payload.message, payload };
+    }
+    if (typeof body.detail === "string") return { message: body.detail };
+    if (typeof body.message === "string") return { message: body.message };
   } catch {
     // Keep the plain response text as a fallback for local agent errors.
   }
-  return text;
+  return { message: text };
+}
+
+export function agentErrorInfo(error: unknown, fallback: string): AgentErrorInfo {
+  if (error instanceof AgentRequestError) {
+    if (error.status === 401) return { message: "Pair the browser first, or refresh the pairing code." };
+    if (error.status === 410) return { message: "The local media is no longer available. Re-link the file and try again." };
+    if (error.payload) {
+      return {
+        message: error.payload.message ?? error.detail ?? fallback,
+        action: error.payload.action,
+        failedQualityChecks: error.payload.quality?.checks?.filter((check) => !check.passed),
+      };
+    }
+    if (error.status === 422) return { message: "The capture did not pass the quality gate. Open Capture guide and update the video." };
+    return { message: error.detail || fallback };
+  }
+  if (error instanceof Error && error.message) return { message: error.message };
+  return { message: fallback };
 }
 
 export function agentErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof AgentRequestError) {
-    if (error.status === 401) return "Pair the browser first, or refresh the pairing code.";
-    if (error.status === 410) return "The local media is no longer available. Re-link the file and try again.";
-    if (error.status === 422) return "The capture did not pass the quality gate. Open Capture guide and update the video.";
-    return fallback;
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
+  return agentErrorInfo(error, fallback).message;
 }
 
 export async function agentGet<T>(path: string): Promise<T> {
@@ -126,7 +163,10 @@ export async function agentGet<T>(path: string): Promise<T> {
     cache: "no-store",
     headers: authHeaders(),
   });
-  if (!res.ok) throw new AgentRequestError(res.status, await responseDetail(res));
+  if (!res.ok) {
+    const error = await responseDetail(res);
+    throw new AgentRequestError(res.status, error.message, error.payload);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -136,7 +176,25 @@ export async function agentPost<T>(path: string, body: unknown): Promise<T> {
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new AgentRequestError(res.status, await responseDetail(res));
+  if (!res.ok) {
+    const error = await responseDetail(res);
+    throw new AgentRequestError(res.status, error.message, error.payload);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function agentImport<T>(file: File): Promise<T> {
+  const form = new FormData();
+  form.append("upload", file, file.name);
+  const res = await fetch(`${agentBaseUrl()}/captures/import`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!res.ok) {
+    const error = await responseDetail(res);
+    throw new AgentRequestError(res.status, error.message, error.payload);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -146,6 +204,9 @@ export async function agentPut<T>(path: string, body: unknown): Promise<T> {
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new AgentRequestError(res.status, await responseDetail(res));
+  if (!res.ok) {
+    const error = await responseDetail(res);
+    throw new AgentRequestError(res.status, error.message, error.payload);
+  }
   return res.json() as Promise<T>;
 }

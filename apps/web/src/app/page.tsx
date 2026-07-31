@@ -5,22 +5,39 @@ import { getModules, publicCompletenessFromSeed } from "@/lib/modules";
 import {
   agentHealth,
   agentReadiness,
+  agentToken,
   type AgentHealthResult,
 } from "@/lib/agent";
+import { OnboardingSteps } from "@/components/OnboardingSteps";
 import Link from "next/link";
+
+function moduleStatusLabel(status: string): string {
+  return status === "on" ? "Ready" : "In review";
+}
 
 export default function HomePage() {
   const modules = getModules();
   const completeness = publicCompletenessFromSeed();
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [paired, setPaired] = useState(false);
 
   useEffect(() => {
+    setPaired(Boolean(agentToken()));
     void agentHealth().then(setHealth);
   }, []);
 
   const technique = modules.filter((m) => m.kind === "technique_stroke");
   const footwork = modules.filter((m) => m.kind !== "technique_stroke");
   const readiness = agentReadiness(health);
+  const primaryHref = readiness === "ready" && paired ? "/analyze" : "/agent";
+  const primaryLabel =
+    readiness === "ready" && paired
+      ? "Choose a video"
+      : readiness === "not_ready"
+        ? "Finish setup"
+        : readiness === "checking"
+          ? "Check setup"
+          : "Set up on this PC";
 
   return (
     <main className="page-home">
@@ -31,22 +48,22 @@ export default function HomePage() {
           PC.
         </p>
         <div className="row hero-actions">
-          <Link className="d-btn d-btn-primary" href="/analyze">Start an analysis</Link>
-          <Link className="d-btn d-btn-ghost" href="/capture-guide">View capture guide</Link>
+          <Link className="d-btn d-btn-primary" href={primaryHref}>{primaryLabel}</Link>
+          <Link className="d-btn d-btn-ghost" href="/capture-guide">How to record a good video</Link>
         </div>
       </header>
 
       {readiness === "offline" ? (
         <div className="notice" role="status">
-          Agent offline: module catalogue remains available, but local session summaries and video
-          review need the Local Agent. <Link href="/agent">Pair & start agent →</Link>
+          Setup is not running yet. Start it to analyze and review a video on this PC. <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
 
+      <OnboardingSteps readiness={readiness} paired={paired} />
+
       {readiness === "not_ready" ? (
         <div className="notice" role="alert">
-          Agent is running but a required prerequisite is missing. Open Local Agent to see the
-          exact setup action before analyzing. <Link href="/agent">Check prerequisites →</Link>
+          Setup is almost ready. Check the helper app, video model, and browser pairing before analyzing. <Link href="/agent">Check setup →</Link>
         </div>
       ) : null}
 
@@ -61,8 +78,8 @@ export default function HomePage() {
         <h2>Technique Lab</h2>
         {!completeness.complete ? (
           <p className="muted labs-note">
-            Private assembly mode: locked modules stay unavailable until each module&apos;s
-            benchmark gate passes.
+            Some analysis areas are still in review. They will appear here when their measurements
+            are ready; you can still use the available areas below.
           </p>
         ) : null}
         <div className="lab-list">
@@ -70,9 +87,9 @@ export default function HomePage() {
             <article key={m.moduleId} className="lab-row">
               <div className="lab-row-copy">
                 <h3>{m.label}</h3>
-                <p>Body + racket + shuttle · event detector · own benchmark</p>
+                <p>Body, racket, and shuttle movement</p>
               </div>
-              <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
+              <span className={`d-badge status-badge ${m.status}`}>{moduleStatusLabel(m.status)}</span>
             </article>
           ))}
         </div>
@@ -87,11 +104,11 @@ export default function HomePage() {
                 <h3>{m.label}</h3>
                 <p>
                   {m.kind === "footwork_pure"
-                    ? "Pure drill mode · court calibration required"
-                    : "Layer on technique stroke · court required"}
+                    ? "Footwork-only practice; court setup helps"
+                    : "Footwork during a stroke; court setup helps"}
                 </p>
               </div>
-              <span className={`d-badge status-badge ${m.status}`}>{m.status}</span>
+              <span className={`d-badge status-badge ${m.status}`}>{moduleStatusLabel(m.status)}</span>
             </article>
           ))}
         </div>

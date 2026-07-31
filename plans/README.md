@@ -12,7 +12,7 @@
 | 6 | [006-real-readiness-benchmarks](006-real-readiness-benchmarks.md) | DONE |
 | 7 | [007-single-pass-analyze-offload](007-single-pass-analyze-offload.md) | DONE |
 | 8 | [008-docs-supabase-cleanup](008-docs-supabase-cleanup.md) | DONE |
-| 9 | [009-all-findings-self-hosted-runner](009-all-findings-self-hosted-runner.md) | IN PROGRESS |
+| 9 | [009-all-findings-self-hosted-runner](009-all-findings-self-hosted-runner.md) | DONE |
 
 ## Plan 009 dependency order
 
@@ -77,7 +77,28 @@ slice is verified before its atomic commit.
 | 19 | [019-provenance-manifest-and-byok](019-provenance-manifest-and-byok.md) | DONE | 018 |
 | 20 | [020-runner-and-retention](020-runner-and-retention.md) | DONE | 018 |
 | 21 | [021-tenant-integrity](021-tenant-integrity.md) | DONE | 018; 019 |
-| 22 | [022-release-and-plan-reconciliation](022-release-and-plan-reconciliation.md) | IN PROGRESS | 018-021 |
+| 22 | [022-release-and-plan-reconciliation](022-release-and-plan-reconciliation.md) | DONE | 018-021 |
+
+## Beginner onboarding plans (2026-07-31)
+
+These plans implement the five verified usability findings for ordinary
+Windows users. They preserve ADR-001/ADR-013 local-first processing and do not
+unlock readiness modules without domain-valid evidence.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 23 | [023-local-video-picker](023-local-video-picker.md) | P1 | DONE | none |
+| 24 | [024-one-click-windows-agent](024-one-click-windows-agent.md) | P1 | DONE | none |
+| 25 | [025-actionable-capture-errors](025-actionable-capture-errors.md) | P1 | DONE | 023 |
+| 26 | [026-plain-language-surface](026-plain-language-surface.md) | P1 | DONE | 023, 025 |
+| 27 | [027-guided-first-run](027-guided-first-run.md) | P1 | DONE | 023-026 |
+
+Recommended implementation order is 023, 024, 025, 026, and 027. Each slice
+gets one atomic commit and its own focused verification before the next slice.
+
+The existing readiness blocker remains separate: `readiness:integrity` is
+truthful while `complete=false`; no synthetic fixture may be used to make it
+green.
 
 The completion gate is the repository verification suite, the browser suite
 against the running website, a clean review of the intended diff, green PR CI,

@@ -35,13 +35,13 @@ async function seedPairedBrowser(page: Page) {
   });
 }
 
-async function gotoWithAgentReady(page: Page, path: string) {
+async function gotoWithAgentReady(page: Page, path: string, expectedBadge = "Ready to analyze") {
   const healthOk = page.waitForResponse(
     (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
   );
   await page.goto(path);
   await healthOk;
-  await expect(page.locator(".status-badge", { hasText: "Agent ready" }).first()).toBeVisible({
+  await expect(page.locator(".status-badge", { hasText: expectedBadge }).first()).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -53,9 +53,24 @@ test("home explains what remains available while agent is offline", async ({ pag
 
   await page.goto("/");
 
-  await expect(page.getByRole("status")).toContainText("module catalogue remains available");
-  await expect(page.getByRole("link", { name: "Pair & start agent" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Compare");
+  await expect(page.getByRole("status")).toContainText("Setup is not running yet");
+  await expect(page.getByRole("link", { name: "Open setup" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
+});
+
+test("paired home points to choosing a video", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto("/");
+  await healthOk;
+
+  await expect(page.getByRole("link", { name: "Choose a video" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your next step" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Choose a video →/ })).toBeVisible();
 });
 
 test("pairing failure is announced inline and remains retryable", async ({ page }) => {
@@ -69,7 +84,7 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
     });
   });
 
-  await gotoWithAgentReady(page, "/agent");
+  await gotoWithAgentReady(page, "/agent", "Setup needs attention");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
   const pairButton = page.getByRole("button", { name: "Pair browser ↔ agent" });
   await expect(pairButton).toBeEnabled();
@@ -83,10 +98,10 @@ test("Analyze requires pairing and exposes dominant-hand input", async ({ page }
   await clearAgentStorage(page);
   await mockHealth(page);
 
-  await gotoWithAgentReady(page, "/analyze");
+  await gotoWithAgentReady(page, "/analyze", "Pair this browser first");
 
   await expect(page.getByRole("combobox", { name: /Dominant hand/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run analysis" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Analyze this video" })).toBeDisabled();
   await expect(page.locator("div.notice[role='alert']")).toContainText("Pair this browser");
 });
 
@@ -98,7 +113,7 @@ test("Compare does not call protected series endpoints before pairing", async ({
     if (request.url().includes("/metrics/series")) protectedRequests.push(request.url());
   });
 
-  await gotoWithAgentReady(page, "/compare");
+  await gotoWithAgentReady(page, "/compare", "Pair this browser first");
 
   await expect(page.getByRole("status")).toContainText("Pair this browser");
   expect(protectedRequests).toHaveLength(0);
@@ -115,7 +130,7 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
   for (const route of ["/", "/agent", "/analyze", "/compare", "/capture-guide"]) {
     await page.goto(route);
     const nav = page.getByRole("navigation", { name: "Primary navigation" });
-    await expect(nav).toContainText("Capture Guide");
+    await expect(nav).toContainText("Video guide");
     await expect(nav.locator("a[aria-current='page']")).toHaveCount(1);
     expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (route === "/") {
@@ -187,7 +202,7 @@ test("changing the Agent URL clears stale pairing readiness", async ({ page }) =
   await clearAgentStorage(page);
   await mockHealth(page);
 
-  await gotoWithAgentReady(page, "/agent");
+  await gotoWithAgentReady(page, "/agent", "Setup needs attention");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
 
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
@@ -200,6 +215,13 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
   await seedPairedBrowser(page);
   await mockHealth(page);
   await page.route(`${AGENT_URL}/captures/register`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ captureId: "capture-1" }),
+    });
+  });
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -251,14 +273,19 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
   });
 
   await gotoWithAgentReady(page, "/analyze");
-  await page.getByLabel("Absolute local video path").fill("C:\\Videos\\clear-drill.mp4");
-  const runButton = page.getByRole("button", { name: "Run analysis" });
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "clear-drill.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  const runButton = page.getByRole("button", { name: "Analyze this video" });
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
   await expect(page.getByText("Analysis ready for review", { exact: true })).toBeVisible();
   await expect(page.getByText("Contact point is stable", { exact: true })).toBeVisible();
   await expect(page.getByText("Withheld - Court validation failed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /See your progress →/ })).toBeVisible();
   await page.getByRole("button", { name: "Review evidence frame f12" }).click();
   await expect(page.locator("p[role='status']").filter({ hasText: "Selected evidence frame f12" })).toBeVisible();
 });
@@ -273,15 +300,67 @@ test("analysis quality failure remains actionable", async ({ page }) => {
       body: JSON.stringify({ detail: "invalid capture" }),
     });
   });
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({
+        detail: {
+          code: "quality_rejected",
+          message: "This video did not pass the automatic video check.",
+          action: "Record from the side with the full body visible, good light, and a steady camera.",
+          quality: {
+            passed: false,
+            checks: [
+              {
+                id: "body_visibility",
+                passed: false,
+                measured: 0.42,
+                threshold: 0.8,
+                message: "Pose must see full-body landmarks on enough frames",
+              },
+            ],
+          },
+        },
+      }),
+    });
+  });
 
   await gotoWithAgentReady(page, "/analyze");
-  await page.getByLabel("Absolute local video path").fill("C:\\Videos\\blurry.mp4");
-  const runButton = page.getByRole("button", { name: "Run analysis" });
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "blurry.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  const runButton = page.getByRole("button", { name: "Analyze this video" });
   await expect(runButton).toBeEnabled();
   await runButton.click();
 
-  await expect(page.locator("p[role='alert']")).toContainText("capture did not pass the quality gate");
+  const captureError = page.locator("div.status.error[role='alert']");
+  await expect(captureError).toContainText("video did not pass the automatic video check");
+  await expect(captureError).toContainText("Record from the side");
+  await expect(captureError).toContainText("full-body landmarks");
+  await expect(captureError).toContainText("measured 0.42, needs 0.8");
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
+});
+
+test("advanced path mode clears a previously selected file", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "first-choice.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await expect(page.getByText("Selected: first-choice.mp4", { exact: true })).toBeVisible();
+
+  await page.getByText("Advanced: use a video path", { exact: true }).click();
+  await page.getByLabel("Local video path").fill("C:\\Videos\\second-choice.mp4");
+
+  await expect(page.getByText("Selected: first-choice.mp4", { exact: true })).not.toBeVisible();
+  await expect(page.getByLabel("Choose a video from this PC")).toHaveValue("");
 });
 
 test("Compare explains an empty history", async ({ page }) => {
@@ -342,7 +421,7 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
   await gotoWithAgentReady(page, "/compare");
 
   await expect(page.locator("td").filter({ hasText: "Baseline session" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Trend" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Progress over time" })).toBeVisible();
   await expect(page.getByText("Could not load this metric.", { exact: true })).toBeVisible();
   await expect(page.getByText("internal secret", { exact: true })).not.toBeVisible();
 });

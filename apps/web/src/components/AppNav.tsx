@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  ["/", "Labs"],
-  ["/analyze", "Analyze"],
-  ["/compare", "Compare"],
-  ["/agent", "Local Agent"],
-  ["/capture-guide", "Capture Guide"],
+  ["/", "Home"],
+  ["/analyze", "Analyze video"],
+  ["/compare", "Progress"],
+  ["/agent", "Setup"],
+  ["/capture-guide", "Video guide"],
 ] as const;
 
 export function AppNav() {

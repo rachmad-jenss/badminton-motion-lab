@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   agentBaseUrl,
@@ -7,6 +8,7 @@ import {
   agentHealth,
   agentPost,
   agentReadiness,
+  agentToken,
   setAgentToken,
   AgentRequestError,
   type AgentHealthResult,
@@ -20,6 +22,7 @@ export default function AgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [pairing, setPairing] = useState(false);
+  const [paired, setPaired] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
   const urlRef = useRef(url);
   const healthRequestRef = useRef(0);
@@ -32,6 +35,7 @@ export default function AgentPage() {
   }
 
   useEffect(() => {
+    setPaired(Boolean(agentToken()));
     const saved = localStorage.getItem("bml.agentUrl");
     if (saved) {
       urlRef.current = saved;
@@ -84,6 +88,7 @@ export default function AgentPage() {
         device_name: "Windows Local Agent",
       });
       setAgentToken(res.token);
+      setPaired(Boolean(agentToken()));
       await refreshHealth();
       setStatus("Paired locally. Keep the agent running while reviewing video.");
     } catch (e) {
@@ -99,24 +104,25 @@ export default function AgentPage() {
 
   const readiness = agentReadiness(health);
   const poseReady = health?.payload?.poseModelPresent !== false;
-  const pairingReady = typeof health?.payload?.pairingCode === "string";
+  const pairingCodeReady = typeof health?.payload?.pairingCode === "string";
+  const readyToAnalyze = readiness === "ready" && paired;
   const checks = [
-    { label: "Agent process", ok: health?.online === true },
-    { label: "Pose model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
-    { label: "Pairing challenge", ok: typeof health?.payload?.pairingCode === "string" },
+    { label: "Helper app", ok: health?.online === true },
+    { label: "Video model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
+    { label: "Browser pairing", ok: paired },
   ];
 
   return (
     <main className="page-tool">
       <header className="hero">
-        <h1 className="brand">Local Agent</h1>
+        <h1 className="brand">Setup on this PC</h1>
         <p className="tag">
-          Download/install the Windows agent, start it, then pair this browser. The agent streams
-          media on localhost and keeps BYOK keys off the cloud.
+          Start the small helper app on this PC, pair this browser, then choose a video. Your
+          original video stays on this PC.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-            {checking ? "Checking Agent…" : readiness === "ready" ? "Agent ready" : "Agent needs attention"}
+          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "locked"}`}>
+            {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Setup needs attention"}
           </span>
           <a className="d-btn d-btn-primary" href="#pair">
             Go to pairing
@@ -128,7 +134,7 @@ export default function AgentPage() {
       </header>
 
       <section className="panel">
-        <h2>Readiness</h2>
+        <h2>Setup check</h2>
         <ul className="check-list">
           {checks.map((check) => (
             <li key={check.label}>
@@ -141,35 +147,42 @@ export default function AgentPage() {
         </ul>
         <p className="muted">
           {readiness === "offline"
-            ? "Start the Windows Local Agent, then refresh health."
+            ? "Start the helper app, then refresh this setup check."
             : !poseReady
-              ? "Install the missing pose model before analyzing."
-              : !pairingReady
-                ? "Refresh health to obtain a live pairing code, then pair this browser."
-                : "The browser can use local media only when these checks are ready."}
+              ? "Install the missing video model before analyzing."
+              : !pairingCodeReady
+                ? "Refresh this setup check to get a one-time pairing code."
+                : !paired
+                  ? "Pair this browser below, then open Analyze video and choose a video."
+                  : "Pairing is complete. Open Analyze video and choose a video."}
         </p>
       </section>
 
       <section className="panel">
-        <h2>Install (Windows)</h2>
+        <h2>Start on Windows</h2>
+        <p>
+          If you are new to this app, open the project folder in Windows Explorer and double-click
+          <code>infra/windows/install-agent.cmd</code>. It installs the helper app, checks its
+          video tools, and opens this setup page when the agent is healthy.
+        </p>
         <ol className="muted">
           <li>
-            Run <code>infra/windows/install-agent.ps1</code> or start manually from{" "}
-            <code>apps/agent</code>.
+            Keep the helper-app console open while you analyze a video.
           </li>
           <li>
-            Default URL: <code>http://127.0.0.1:8787</code>
+            Click <strong>Pair browser ↔ agent</strong> below.
           </li>
-          <li>Return here and pair with a short code.</li>
+          <li>Then open Analyze and choose a video from this PC.</li>
         </ol>
         <details className="install-details">
-          <summary>Show install commands</summary>
+          <summary>Advanced: show manual install commands</summary>
           <pre className="muted">{`cd apps/agent
 python -m venv .venv
 .\\.venv\\Scripts\\activate
 pip install -r requirements.txt
 python main.py`}</pre>
         </details>
+        <p className="muted">Default helper-app address: <code>http://127.0.0.1:8787</code></p>
       </section>
 
       <section className="panel" id="pair">
@@ -211,7 +224,11 @@ python main.py`}</pre>
         </div>
         <p className="muted">Current base: {agentBaseUrl()}</p>
         {error ? <p className="status error" role="alert">{error}</p> : null}
-        {status ? <p className="status success" role="status">{status}</p> : null}
+        {status ? (
+          <p className="status success" role="status">
+            {status} <Link href="/analyze">Choose a video →</Link>
+          </p>
+        ) : null}
       </section>
     </main>
   );

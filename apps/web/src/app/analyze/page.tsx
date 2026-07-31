@@ -3,16 +3,20 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { METRIC_CATALOGUE, STROKE_LABELS, TECHNIQUE_STROKES } from "@bml/contracts";
+import { OnboardingSteps } from "@/components/OnboardingSteps";
 import {
   agentBaseUrl,
+  agentErrorInfo,
   agentErrorMessage,
   agentHealth,
+  agentImport,
   agentPost,
   agentPut,
   agentReadiness,
   agentReadinessLabel,
   agentToken,
   mediaUrlWithToken,
+  type AgentErrorInfo,
   type AgentHealthResult,
 } from "@/lib/agent";
 
@@ -67,6 +71,8 @@ function metricLabel(metricId: string): string {
 
 export default function AnalyzePage() {
   const [path, setPath] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [stroke, setStroke] = useState<(typeof TECHNIQUE_STROKES)[number]>("clear");
   const [dominantHand, setDominantHand] = useState<"left" | "right" | "unknown">("unknown");
   const [includePureFootwork, setIncludePureFootwork] = useState(false);
@@ -74,6 +80,7 @@ export default function AnalyzePage() {
   const [paired, setPaired] = useState(false);
   const [phase, setPhase] = useState<AnalysisPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [errorInfo, setErrorInfo] = useState<AgentErrorInfo | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [selectedFrame, setSelectedFrame] = useState<number | null>(null);
@@ -111,19 +118,23 @@ export default function AnalyzePage() {
 
   async function runAnalyze() {
     const localPath = path.trim();
-    if (!localPath) {
-      setError("Enter the absolute path to a local video first.");
+    if (!selectedFile && !localPath) {
+      setError("Choose a video from this PC before starting the analysis.");
+      setErrorInfo(null);
       return;
     }
 
     setPhase("registering");
     setError(null);
+    setErrorInfo(null);
     setMediaError(null);
     setInsight(null);
     setInsightStatus(null);
     setResult(null);
     try {
-      const reg = await agentPost<{ captureId: string }>("/captures/register", { path: localPath });
+      const reg = selectedFile
+        ? await agentImport<{ captureId: string }>(selectedFile)
+        : await agentPost<{ captureId: string }>("/captures/register", { path: localPath });
       setPhase("analyzing");
       const out = await agentPost<AnalyzeResult>("/analyze", {
         capture_id: reg.captureId,
@@ -135,7 +146,9 @@ export default function AnalyzePage() {
       setPhase("ready");
     } catch (e) {
       setPhase("failed");
-      setError(agentErrorMessage(e, "Analysis failed. Check the Local Agent and capture guide."));
+      const info = agentErrorInfo(e, "Analysis failed. Check the Local Agent and capture guide.");
+      setErrorInfo(info);
+      setError(info.message);
     }
   }
 
@@ -148,9 +161,9 @@ export default function AnalyzePage() {
         model: "gpt-4o-mini",
       });
       setByokKey("");
-      setInsightStatus("BYOK stored only on the Local Agent.");
+      setInsightStatus("Provider key stored only on this PC.");
     } catch (e) {
-      setInsightStatus(agentErrorMessage(e, "Could not store the BYOK key on the Local Agent."));
+      setInsightStatus(agentErrorMessage(e, "Could not store the provider key on this PC."));
     }
   }
 
@@ -165,7 +178,7 @@ export default function AnalyzePage() {
       setInsight(
         res.prose +
           (res.byokUsed
-            ? "\n\n(BYOK LLM used)"
+            ? "\n\n(Your provider key was used)"
             : "\n\n(No API key - showing deterministic explanation of computed findings only)"),
       );
     } catch (e) {
@@ -175,7 +188,7 @@ export default function AnalyzePage() {
 
   const phaseLabel = {
     idle: "Ready to analyze",
-    registering: "Registering local capture...",
+    registering: selectedFile ? "Preparing your local video..." : "Registering local capture...",
     analyzing: "Running quality gate and perception...",
     ready: "Analysis ready for review",
     failed: "Analysis needs attention",
@@ -184,21 +197,25 @@ export default function AnalyzePage() {
   return (
     <main className="page-tool">
       <header className="hero">
-        <h1 className="brand">Analyze</h1>
+        <h1 className="brand">Analyze video</h1>
         <p className="tag">
-          Register a local video path with the agent. Quality gate runs first. Review uses
-          localhost media stream - originals are not uploaded.
+          Choose a video from this PC. We check whether it is clear enough before measuring your
+          movement; the original stays on this PC.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readiness === "ready" ? "on" : "locked"}`}>
-            {agentReadinessLabel(readiness)} · {agentBaseUrl()}
+          <span className={`d-badge status-badge ${canAnalyze ? "on" : "locked"}`}>
+            {canAnalyze
+              ? "Ready to analyze"
+              : readiness === "ready"
+                ? "Pair this browser first"
+                : agentReadinessLabel(readiness)} · {agentBaseUrl()}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             {checking ? "Refreshing…" : "Refresh"}
           </button>
           {readiness !== "ready" || !paired ? (
             <Link className="d-btn d-btn-ghost" href="/agent">
-              Open Local Agent
+              Open setup
             </Link>
           ) : null}
         </div>
@@ -207,36 +224,65 @@ export default function AnalyzePage() {
       {readiness !== "ready" || !paired ? (
         <div className="notice" role={readiness === "checking" ? "status" : "alert"}>
           {readiness === "checking"
-            ? "Checking the Local Agent before analysis..."
+            ? "Checking setup before analysis..."
             : !poseReady
-              ? "The Local Agent is missing its pose model."
+              ? "The helper app is missing its video model."
               : !pairingChallengeReady
-                ? "Refresh Local Agent health to obtain a live pairing code."
+                ? "Refresh setup to get a live pairing code."
                 : !paired
-                  ? "Pair this browser with the Local Agent before analyzing."
-                  : "Start and pair the Local Agent before analyzing."}{" "}
+                  ? "Pair this browser before analyzing."
+                  : "Start and pair the helper app before analyzing."}{" "}
           <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
 
       <section className="panel">
-        <h2>Job</h2>
+        <h2>Choose your video</h2>
         <label>
-          Absolute local video path
+          Choose a video from this PC
+          <input
+            key={fileInputKey}
+            className="d-input"
+            type="file"
+            accept="video/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setSelectedFile(file);
+              if (file) setPath("");
+            }}
+            aria-describedby="file-help"
+          />
+          <span id="file-help" className="muted">
+            The video is sent only to the helper app on this PC. It is not uploaded to the cloud.
+          </span>
+        </label>
+        {selectedFile ? <p className="status" role="status">Selected: {selectedFile.name}</p> : null}
+        <details className="advanced-details">
+          <summary>Advanced: use a video path</summary>
+          <label>
+            Local video path
           <input
             className="d-input"
             value={path}
-            onChange={(e) => setPath(e.target.value)}
+            onChange={(e) => {
+              const nextPath = e.target.value;
+              setPath(nextPath);
+              if (nextPath.trim()) {
+                setSelectedFile(null);
+                setFileInputKey((current) => current + 1);
+              }
+            }}
             placeholder="C:\\Videos\\clear-drill.mp4"
             aria-describedby="path-help"
           />
           <span id="path-help" className="muted">
-            The path is read by the Windows Local Agent on this machine; it is not uploaded to the
+            The path is read by the helper app on this machine; it is not uploaded to the
             cloud.
           </span>
-        </label>
+          </label>
+        </details>
         <label>
-          Stroke module
+          What are you practicing?
           <select
             className="d-select"
             value={stroke}
@@ -266,24 +312,42 @@ export default function AnalyzePage() {
               checked={includePureFootwork}
               onChange={(e) => setIncludePureFootwork(e.target.checked)}
             />{" "}
-            Also run Footwork Lab (pure)
+            Also include a footwork-only check
           </span>
         </label>
         <div className="row">
-          <button className="d-btn d-btn-primary" disabled={!canAnalyze || busy || !path.trim()} onClick={() => void runAnalyze()}>
-            {busy ? "Running…" : "Run analysis"}
+          <button className="d-btn d-btn-primary" disabled={!canAnalyze || busy || (!selectedFile && !path.trim())} onClick={() => void runAnalyze()}>
+            {busy ? "Checking video…" : "Analyze this video"}
           </button>
-          <Link className="d-btn d-btn-ghost" href="/capture-guide">Review capture requirements</Link>
+          <Link className="d-btn d-btn-ghost" href="/capture-guide">How to record a good video</Link>
         </div>
         <p className="status" role="status"><span className="phase">{phaseLabel}</span></p>
-        {error ? <p className="status error" role="alert">{error}</p> : null}
+        {error ? (
+          <div className="status error" role="alert">
+            <p>{error}</p>
+            {errorInfo?.action ? <p>Next step: {errorInfo.action}</p> : null}
+            {errorInfo?.failedQualityChecks?.length ? (
+              <ul>
+                {errorInfo.failedQualityChecks.map((check) => (
+                  <li key={check.id}>
+                    {check.message ?? check.id}
+                    {check.measured != null && check.threshold != null
+                      ? ` (measured ${check.measured}, needs ${check.threshold})`
+                      : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       {result ? (
         <>
+          <OnboardingSteps readiness={readiness} paired={paired} completed={phase === "ready"} />
           <section className="panel">
-            <h2>Local review stream</h2>
-            <p className="muted">Served by the Local Agent. Original video remains local.</p>
+            <h2>Your video review</h2>
+            <p className="muted">The helper app serves this video locally. The original remains on this PC.</p>
             <video
               key={result.agentMediaUrl}
               controls
@@ -299,20 +363,28 @@ export default function AnalyzePage() {
           </section>
 
           <section className="panel">
-            <h2>Perception</h2>
+            <h2>Video check</h2>
             <p className="muted">
-              Pose: {result.summary.pose?.adapter ?? "unknown"} · detected{" "}
-              {result.summary.pose?.detectedFrames ?? "-"}/{result.summary.pose?.totalFrames ?? "-"} · racket
-              coverage {Number(result.summary.racketCoverage ?? 0).toFixed(2)} · shuttle coverage{" "}
-              {Number(result.summary.shuttleCoverage ?? 0).toFixed(2)}
+              {result.summary.quality.passed
+                ? "The video passed the automatic check, so the measurements below can be reviewed."
+                : "Some measurements were withheld because the video did not pass the automatic check."}
             </p>
-            <p className="muted">
-              Court: {result.summary.court.valid ? `valid (${result.summary.court.method})` : "invalid - footwork withheld"} · Events mode: {result.summary.events.mode}
-            </p>
+            <details className="install-details">
+              <summary>Technical details</summary>
+              <p className="muted">
+                Video model: {result.summary.pose?.adapter ?? "unknown"} · visible frames{" "}
+                {result.summary.pose?.detectedFrames ?? "-"}/{result.summary.pose?.totalFrames ?? "-"} · racket
+                coverage {Number(result.summary.racketCoverage ?? 0).toFixed(2)} · shuttle coverage{" "}
+                {Number(result.summary.shuttleCoverage ?? 0).toFixed(2)}
+              </p>
+              <p className="muted">
+                Court: {result.summary.court.valid ? `valid (${result.summary.court.method})` : "invalid - footwork withheld"} · event mode: {result.summary.events.mode}
+              </p>
+            </details>
           </section>
 
           <section className="panel">
-            <h2>Findings and evidence</h2>
+            <h2>What we found</h2>
             {result.summary.findings.length === 0 ? (
               <p className="muted">No deterministic findings were produced for this run.</p>
             ) : (
@@ -335,7 +407,7 @@ export default function AnalyzePage() {
           </section>
 
           <section className="panel">
-            <h2>Metrics</h2>
+            <h2>Measurements</h2>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -351,7 +423,10 @@ export default function AnalyzePage() {
                     <tr key={metric.metricId}>
                       <td className="metric-name">
                         <span>{metricLabel(metric.metricId)}</span>
-                        <small>{metric.metricId}</small>
+                        <details>
+                          <summary>Technical name</summary>
+                          <small>{metric.metricId}</small>
+                        </details>
                       </td>
                       <td>
                         {metric.withheld
@@ -378,7 +453,7 @@ export default function AnalyzePage() {
           </section>
 
           <section className="panel">
-            <h2>Detected events</h2>
+            <h2>Important moments</h2>
             <p className="muted">Mode: {result.summary.events.mode}. Event proposals are evidence, not certainty.</p>
             {result.summary.events.events.length === 0 ? (
               <p className="muted">No events were detected.</p>
@@ -398,33 +473,34 @@ export default function AnalyzePage() {
           </section>
 
           <section className="panel">
-            <h2>AI insight (BYOK optional)</h2>
-            <p className="muted">Explains computed findings only - never invents scores.</p>
-            <label>
-              Provider
-              <select className="d-select" value={byokProvider} onChange={(e) => setByokProvider(e.target.value)}>
-                <option value="openai">OpenAI</option>
-                <option value="openrouter">OpenRouter</option>
-              </select>
-            </label>
-            <label>
-              API key (stored on Local Agent only)
-              <input
-                className="d-input"
-                type="password"
-                value={byokKey}
-                onChange={(e) => setByokKey(e.target.value)}
-                placeholder="sk-…"
-              />
-            </label>
-            <div className="row">
+            <h2>Optional written explanation</h2>
+            <p className="muted">Get a plain-language explanation of the measured findings. It never invents scores.</p>
+            <button className="d-btn d-btn-primary" onClick={() => void loadInsight()}>
+              Explain these results
+            </button>
+            <details className="install-details">
+              <summary>Advanced: use your own AI provider key</summary>
+              <label>
+                Provider
+                <select className="d-select" value={byokProvider} onChange={(e) => setByokProvider(e.target.value)}>
+                  <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                </select>
+              </label>
+              <label>
+                Provider key (stored on this PC only)
+                <input
+                  className="d-input"
+                  type="password"
+                  value={byokKey}
+                  onChange={(e) => setByokKey(e.target.value)}
+                  placeholder="Paste key"
+                />
+              </label>
               <button className="d-btn d-btn-ghost" onClick={() => void saveByok()} disabled={!byokKey}>
-                Save key on agent
+                Save key on helper app
               </button>
-              <button className="d-btn d-btn-primary" onClick={() => void loadInsight()}>
-                Generate insight
-              </button>
-            </div>
+            </details>
             {insightStatus ? <p className="status" role="status">{insightStatus}</p> : null}
             {insight ? <pre className="insight-output">{insight}</pre> : null}
           </section>
