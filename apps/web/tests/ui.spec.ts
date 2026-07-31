@@ -58,6 +58,21 @@ test("home explains what remains available while agent is offline", async ({ pag
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
 });
 
+test("paired home points to choosing a video", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto("/");
+  await healthOk;
+
+  await expect(page.getByRole("link", { name: "Choose a video" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your next step" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Choose a video →/ })).toBeVisible();
+});
+
 test("pairing failure is announced inline and remains retryable", async ({ page }) => {
   await clearAgentStorage(page);
   await mockHealth(page);
@@ -270,6 +285,7 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
   await expect(page.getByText("Analysis ready for review", { exact: true })).toBeVisible();
   await expect(page.getByText("Contact point is stable", { exact: true })).toBeVisible();
   await expect(page.getByText("Withheld - Court validation failed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /See your progress →/ })).toBeVisible();
   await page.getByRole("button", { name: "Review evidence frame f12" }).click();
   await expect(page.locator("p[role='status']").filter({ hasText: "Selected evidence frame f12" })).toBeVisible();
 });

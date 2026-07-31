@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { METRIC_CATALOGUE, STROKE_LABELS, TECHNIQUE_STROKES } from "@bml/contracts";
+import { OnboardingSteps } from "@/components/OnboardingSteps";
 import {
   agentBaseUrl,
   agentErrorInfo,
@@ -320,6 +321,7 @@ export default function AnalyzePage() {
 
       {result ? (
         <>
+          <OnboardingSteps readiness={readiness} paired={paired} completed />
           <section className="panel">
             <h2>Your video review</h2>
             <p className="muted">The helper app serves this video locally. The original remains on this PC.</p>

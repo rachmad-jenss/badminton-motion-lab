@@ -5,8 +5,10 @@ import { getModules, publicCompletenessFromSeed } from "@/lib/modules";
 import {
   agentHealth,
   agentReadiness,
+  agentToken,
   type AgentHealthResult,
 } from "@/lib/agent";
+import { OnboardingSteps } from "@/components/OnboardingSteps";
 import Link from "next/link";
 
 function moduleStatusLabel(status: string): string {
@@ -17,14 +19,25 @@ export default function HomePage() {
   const modules = getModules();
   const completeness = publicCompletenessFromSeed();
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [paired, setPaired] = useState(false);
 
   useEffect(() => {
+    setPaired(Boolean(agentToken()));
     void agentHealth().then(setHealth);
   }, []);
 
   const technique = modules.filter((m) => m.kind === "technique_stroke");
   const footwork = modules.filter((m) => m.kind !== "technique_stroke");
   const readiness = agentReadiness(health);
+  const primaryHref = readiness === "ready" && paired ? "/analyze" : "/agent";
+  const primaryLabel =
+    readiness === "ready" && paired
+      ? "Choose a video"
+      : readiness === "not_ready"
+        ? "Finish setup"
+        : readiness === "checking"
+          ? "Check setup"
+          : "Set up on this PC";
 
   return (
     <main className="page-home">
@@ -35,7 +48,7 @@ export default function HomePage() {
           PC.
         </p>
         <div className="row hero-actions">
-          <Link className="d-btn d-btn-primary" href="/analyze">Start your first analysis</Link>
+          <Link className="d-btn d-btn-primary" href={primaryHref}>{primaryLabel}</Link>
           <Link className="d-btn d-btn-ghost" href="/capture-guide">How to record a good video</Link>
         </div>
       </header>
@@ -45,6 +58,8 @@ export default function HomePage() {
           Setup is not running yet. Start it to analyze and review a video on this PC. <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
+
+      <OnboardingSteps readiness={readiness} paired={paired} />
 
       {readiness === "not_ready" ? (
         <div className="notice" role="alert">

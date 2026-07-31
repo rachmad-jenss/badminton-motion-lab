@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   agentBaseUrl,
@@ -216,7 +217,11 @@ python main.py`}</pre>
         </div>
         <p className="muted">Current base: {agentBaseUrl()}</p>
         {error ? <p className="status error" role="alert">{error}</p> : null}
-        {status ? <p className="status success" role="status">{status} Next: open Analyze and choose a video.</p> : null}
+        {status ? (
+          <p className="status success" role="status">
+            {status} <Link href="/analyze">Choose a video →</Link>
+          </p>
+        ) : null}
       </section>
     </main>
   );
