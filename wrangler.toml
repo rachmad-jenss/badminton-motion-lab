@@ -1,2 +1,3 @@
 name = "badminton-motion-lab-web-preview"
+compatibility_date = "2026-08-01"
 pages_build_output_dir = "./apps/web/out"
