@@ -3,6 +3,8 @@ dist/
 .next/
 .next-dev/
 .next-test/
+.wrangler/
+apps/web/out/
 .turbo/
 *.tsbuildinfo
 *.pyc
