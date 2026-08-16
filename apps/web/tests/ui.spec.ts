@@ -437,4 +437,5 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
   await expect(page.getByRole("heading", { name: "Progress over time" })).toBeVisible();
   await expect(page.getByText("Could not load this metric.", { exact: true })).toBeVisible();
   await expect(page.getByText("internal secret", { exact: true })).not.toBeVisible();
+  await expect(page.locator("td").filter({ hasText: "Shuttle approach angle" }).first()).toBeVisible();
 });

@@ -15,12 +15,7 @@ import {
 } from "@/lib/agent";
 import { compareLatest, type SessionMetricPoint } from "@/lib/compare";
 
-const METRICS = [
-  "elbow_angle_contact",
-  "shoulder_abduction_contact",
-  "split_step_timing_to_contact",
-  "racket_speed_proxy_contact",
-] as const;
+const METRICS = METRIC_CATALOGUE.map((metric) => metric.id);
 
 function metricDefinition(id: string) {
   return METRIC_CATALOGUE.find((metric) => metric.id === id);
