@@ -8,6 +8,7 @@ import math
 import os
 import secrets
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -105,7 +106,17 @@ def capture_error_detail(message: str) -> dict[str, str]:
         "action": "Try another video and use the capture guide for a clear, full-body view.",
     }
 
-app = FastAPI(title="BML Local Agent", version=AGENT_VERSION)
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "captures").mkdir(exist_ok=True)
+    (DATA_DIR / "packages").mkdir(exist_ok=True)
+    await init_db(get_db_path(DATA_DIR))
+    byok.ensure()
+    await rotate_pairing_challenge()
+    yield
+
+app = FastAPI(title="BML Local Agent", version=AGENT_VERSION, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -247,16 +258,6 @@ async def require_bearer(
     if not row:
         raise HTTPException(401, "Invalid or expired agent token")
     return token
-
-
-@app.on_event("startup")
-async def startup() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    (DATA_DIR / "captures").mkdir(exist_ok=True)
-    (DATA_DIR / "packages").mkdir(exist_ok=True)
-    await init_db(get_db_path(DATA_DIR))
-    byok.ensure()
-    await rotate_pairing_challenge()
 
 
 async def rotate_pairing_challenge() -> None:
