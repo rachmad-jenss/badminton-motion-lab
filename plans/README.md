@@ -100,6 +100,17 @@ The existing readiness blocker remains separate: `readiness:integrity` is
 truthful while `complete=false`; no synthetic fixture may be used to make it
 green.
 
+## Domain readiness roadmap (2026-08-16)
+
+Decision/roadmap record from the approved grilling session. Defines the data
+strategy (ShuttleSet + own capture), evidence rules, two-gate launch posture
+(Beta <= 1 month; Public-ready = zero locked, no deadline), and phased
+execution. This plan authorizes nothing beyond itself.
+
+| Order | Plan | Status | Depends on |
+|------:|------|--------|------------|
+| 28 | [028-domain-readiness-roadmap](028-domain-readiness-roadmap.md) | IN PROGRESS | 018–022; verified gate set |
+
 The completion gate is the repository verification suite, the browser suite
 against the running website, a clean review of the intended diff, green PR CI,
 green post-merge `main`, and removal of only the merged feature branch.
