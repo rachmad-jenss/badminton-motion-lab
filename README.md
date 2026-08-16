@@ -109,11 +109,12 @@ git under `validation/domain-media/`). `npm run benchmark:fixtures` is a pipelin
 check only — since Plan 030 it does not write reports or the readiness seed;
 `npm run readiness:integrity` validates report/seed provenance.
 
-### 4. Supabase (optional for cloud summaries)
+### 4. Supabase (reserved, not yet wired)
 
-Apply `supabase/migrations/20260723100000_control_plane.sql` to your project. Copy `.env.example` → `.env.local`.
-
-Dense pose/racket/shuttle time series never go into Postgres.
+The `supabase/` migrations and the `.env.example` Supabase keys are reserved for a
+future cloud control plane (metadata only). The current static web app never calls
+Supabase; local analysis works without any Supabase setup. Dense pose/racket/shuttle
+time series never go into Postgres (ADR-013).
 
 ## Principles
 
