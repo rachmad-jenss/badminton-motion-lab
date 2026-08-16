@@ -29,6 +29,7 @@ coverage/
 tmp/
 output/
 *.pem
+validation/domain-media/
 .idea/
 .vscode/
 !docs/**
