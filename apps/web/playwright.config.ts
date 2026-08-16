@@ -13,8 +13,9 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    // Prefer production server in CI: next dev Fast Refresh races cause flaky health/theme tests.
-    command: process.env.CI ? "npx next start -p 3101" : "npm.cmd run dev:test -w @bml/web",
+    // Static export server in CI (next start does not work with output: "export");
+    // dev server locally keeps Fast Refresh for test iteration.
+    command: process.env.CI ? "node ../../scripts/serve-export.mjs" : "npm.cmd run dev:test -w @bml/web",
     url: "http://127.0.0.1:3101",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
