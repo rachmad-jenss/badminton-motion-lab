@@ -22,6 +22,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TECHNIQUE_STROKES, allModuleIds, moduleKind } from "./module-inventory.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -29,33 +30,6 @@ const AGENT = process.env.BML_AGENT_URL || "http://127.0.0.1:8787";
 const MANIFEST_PATH =
   process.env.BML_DOMAIN_MANIFEST || join(root, "validation", "domain-manifest.json");
 const CONTRACT_PATH = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
-
-const TECHNIQUE_STROKES = [
-  "serve",
-  "forehand",
-  "backhand",
-  "smash",
-  "clear",
-  "drop",
-  "drive",
-  "net_shot",
-  "lift",
-  "block",
-  "defensive_return",
-  "jump_smash",
-];
-
-function allModuleIds() {
-  const technique = TECHNIQUE_STROKES.map((s) => "technique:" + s);
-  const layers = TECHNIQUE_STROKES.map((s) => "footwork:layer:" + s);
-  return [...technique, "footwork:pure", ...layers];
-}
-
-function moduleKind(id) {
-  if (id === "footwork:pure") return "footwork_pure";
-  if (id.startsWith("footwork:layer:")) return "footwork_layer";
-  return "technique_stroke";
-}
 
 function fail(message) {
   console.error("Domain benchmark FAILED: " + message);
