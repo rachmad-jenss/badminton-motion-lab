@@ -186,6 +186,8 @@ async def init_db(db_path: Path) -> None:
               summary_json TEXT NOT NULL,
               created_at TEXT NOT NULL
             );
+            CREATE INDEX IF NOT EXISTS analysis_runs_created_idx
+              ON analysis_runs(created_at DESC);
             """
         )
         capture_columns = {

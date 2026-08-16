@@ -36,7 +36,7 @@ from adapters.racket import track_racket
 from adapters.shuttle import track_shuttle
 from pipeline.package import AnalysisPackageWriter
 from storage.auth import hash_secret, new_secret, now_epoch
-from storage.db import get_db_path, init_db
+from storage.db import cleanup_storage, get_db_path, init_db
 
 HOST = os.getenv("BML_AGENT_HOST", "127.0.0.1")
 PORT = int(os.getenv("BML_AGENT_PORT", "8787"))
@@ -776,6 +776,7 @@ async def analyze(
             ),
         )
         await db.commit()
+    await cleanup_storage(db_path)
 
     media_ticket = await create_media_ticket(body.capture_id)
 
