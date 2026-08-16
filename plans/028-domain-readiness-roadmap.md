@@ -201,5 +201,9 @@ Updated 2026-08-16 after explicit user approval to implement all plans.
 | 7 Public-ready v1: zero locked (24 modules) @ 5+ clips | NOT_RUN | Requires Phases 0, 3, 4, 6 |
 
 Gate verification for the completed code phases: full repository verify suite,
-browser tests, readiness integrity, and the empty-manifest domain smoke step —
-all green before merge. Implementation history: branch jenss/domain-readiness.
+browser tests, readiness integrity, and the empty-manifest domain smoke step -
+all green before merge. Implementation history: branch jenss/domain-readiness,
+PR #11 merged as b56fa769b1c70e13fa610507f9aeeb3446e33bb7 (2026-08-16). Review
+findings (evidence slot validation, clip dedupe, full-manifest provenance
+digest, CI media guard + integrity ordering, smoke-fixture completion rule)
+were addressed in a9ea321 and 8dba406 and all threads resolved before merge.

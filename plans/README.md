@@ -109,7 +109,7 @@ execution. This plan authorizes nothing beyond itself.
 
 | Order | Plan | Status | Depends on |
 |------:|------|--------|------------|
-| 28 | [028-domain-readiness-roadmap](028-domain-readiness-roadmap.md) | IN PROGRESS | 018–022; verified gate set |
+| 28 | [028-domain-readiness-roadmap](028-domain-readiness-roadmap.md) | IN PROGRESS (code phases merged, PR #11) | 018–022; verified gate set |
 
 The completion gate is the repository verification suite, the browser suite
 against the running website, a clean review of the intended diff, green PR CI,
