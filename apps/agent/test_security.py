@@ -131,6 +131,9 @@ def test_analyze_requires_bearer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 def test_default_analysis_window_covers_full_video():
     assert agent_main.resolve_frame_window(1800, None, None) == (300, 6, False)
     assert agent_main.resolve_frame_window(1800, 300, 1) == (300, 1, True)
+    # Pixel budget bounds high-resolution decode windows (anti-OOM)
+    assert agent_main.resolve_frame_window(300, None, None, width=3840, height=2160) == (33, 10, False)
+    assert agent_main.resolve_frame_window(1800, None, None, width=1280, height=720) == (300, 6, False)
 
 
 def test_media_ticket_supports_repeated_playback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
