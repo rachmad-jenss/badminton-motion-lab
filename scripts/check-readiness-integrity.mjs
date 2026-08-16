@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { allModuleIds } from "./module-inventory.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = join(root, "apps", "web", "src", "lib", "readiness.seed.json");
@@ -24,23 +25,7 @@ const fixturePath = join(root, "validation", "fixtures", "person_1280x720_30fps.
 const contractPath = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
 const manifestPath = join(root, "validation", "domain-manifest.json");
 
-const expectedModules = [
-  ...[
-    "serve",
-    "forehand",
-    "backhand",
-    "smash",
-    "clear",
-    "drop",
-    "drive",
-    "net_shot",
-    "lift",
-    "block",
-    "defensive_return",
-    "jump_smash",
-  ].flatMap((stroke) => ["technique:" + stroke, "footwork:layer:" + stroke]),
-  "footwork:pure",
-];
+const expectedModules = allModuleIds();
 
 function fail(message) {
   console.error("Readiness integrity FAILED: " + message);
@@ -104,6 +89,19 @@ const seedIds = Object.keys(seed.modules || {}).sort();
 const expectedIds = [...expectedModules].sort();
 if (JSON.stringify(seedIds) !== JSON.stringify(expectedIds)) {
   fail("seed modules do not match the contract inventory");
+}
+
+const seedSqlPath = join(root, "supabase", "seed.sql");
+if (existsSync(seedSqlPath)) {
+  const seedSql = readFileSync(seedSqlPath, "utf8");
+  const sqlModules = [
+    ...seedSql.matchAll(/\(\'((?:technique|footwork):[^\']+)\',\s*\'(?:locked|on)\'/g),
+  ]
+    .map((m) => m[1])
+    .sort();
+  if (JSON.stringify(sqlModules) !== JSON.stringify(expectedIds)) {
+    fail("supabase/seed.sql module list does not match the contract inventory");
+  }
 }
 
 const reports = new Map();

@@ -36,7 +36,7 @@ from adapters.racket import track_racket
 from adapters.shuttle import track_shuttle
 from pipeline.package import AnalysisPackageWriter
 from storage.auth import hash_secret, new_secret, now_epoch
-from storage.db import get_db_path, init_db
+from storage.db import cleanup_storage, get_db_path, init_db
 
 HOST = os.getenv("BML_AGENT_HOST", "127.0.0.1")
 PORT = int(os.getenv("BML_AGENT_PORT", "8787"))
@@ -51,6 +51,10 @@ MAX_ANALYSIS_FRAMES = int(os.getenv("BML_MAX_ANALYSIS_FRAMES", "600"))
 _DEFAULT_MAX_RAW = os.getenv("BML_MAX_FRAMES")
 DEFAULT_MAX_FRAMES = int(_DEFAULT_MAX_RAW) if _DEFAULT_MAX_RAW not in (None, "") else 300
 DEFAULT_STRIDE = int(os.getenv("BML_FRAME_STRIDE", "1"))
+
+# Total decoded pixel budget across the frame window (anti-OOM): at 720p this
+# matches the default 300-frame window (~830 MB of BGR arrays worst case).
+MAX_ANALYSIS_PIXELS = int(os.getenv("BML_MAX_ANALYSIS_PIXELS", str(1280 * 720 * 300)))
 MAX_CAPTURE_BYTES = int(os.getenv("BML_MAX_CAPTURE_BYTES", str(2 * 1024 * 1024 * 1024)))
 CAPTURE_WRITE_CHUNK_BYTES = 1024 * 1024
 PUBLIC_PATHS = {"/health", "/pair", "/docs", "/openapi.json", "/redoc"}
@@ -129,11 +133,18 @@ def resolve_frame_window(
     frame_count: int,
     requested_max_frames: int | None,
     requested_stride: int | None,
+    width: int = 0,
+    height: int = 0,
 ) -> tuple[int, int, bool]:
     max_frames = min(
         requested_max_frames if requested_max_frames is not None else DEFAULT_MAX_FRAMES,
         MAX_ANALYSIS_FRAMES,
     )
+    if width > 0 and height > 0:
+        # Clamp to at least one frame so over-budget media fails predictably
+        # (quality gate) instead of dividing by zero in the stride fallback.
+        pixel_max_frames = max(1, MAX_ANALYSIS_PIXELS // max(1, width * height))
+        max_frames = min(max_frames, pixel_max_frames)
     stride = requested_stride or DEFAULT_STRIDE
     if requested_max_frames is None and requested_stride is None and frame_count > max_frames:
         stride = max(stride, math.ceil(frame_count / max_frames))
@@ -532,6 +543,8 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
         frame_count,
         body.max_frames,
         body.frame_stride,
+        width=width,
+        height=height,
     )
 
     frames = decode_frames(video_path, max_frames=max_frames, stride=stride)
@@ -701,6 +714,7 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
             "maxFramesCap": max_frames,
             "stride": stride,
             "truncated": truncated,
+            "pixelBudget": MAX_ANALYSIS_PIXELS,
         },
     }
     return {
@@ -764,6 +778,7 @@ async def analyze(
             ),
         )
         await db.commit()
+    await cleanup_storage(db_path)
 
     media_ticket = await create_media_ticket(body.capture_id)
 

@@ -115,10 +115,31 @@ The completion gate is the repository verification suite, the browser suite
 against the running website, a clean review of the intended diff, green PR CI,
 green post-merge `main`, and removal of only the merged feature branch.
 
+## Improve round 2026-08-16 (plans 029-035)
+
+Audit of commit `aa1479a` (2026-08-16) — read-only survey of the agent pipeline, web
+app, scripts, CI, and docs. All 7 findings are planned below. Recommended execution
+order respects dependencies: 032 (shared inventory) lands before 030 (fixture-runner
+guard) because both touch the same scripts; the rest are independent.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [029-bound-analyze-memory](029-bound-analyze-memory.md) | P1 | DONE | none |
+| 2 | [031-pose-visibility-dead-code](031-pose-visibility-dead-code.md) | P2 | DONE | none |
+| 3 | [032-module-inventory-single-source](032-module-inventory-single-source.md) | P2 | DONE | none |
+| 4 | [030-fixture-runner-report-guard](030-fixture-runner-report-guard.md) | P1 | DONE | 032 |
+| 5 | [033-agent-retention-and-series-index](033-agent-retention-and-series-index.md) | P2 | DONE | none |
+| 6 | [034-ignore-test-artifacts](034-ignore-test-artifacts.md) | P2 | DONE | none |
+| 7 | [035-supabase-docs-honesty](035-supabase-docs-honesty.md) | P3 | DONE | none |
+
+Dependency notes: 030 must follow 032 so the fixture runner keeps using the shared
+inventory after its write-guard lands. 029 (pixel budget) is independent but P1 — it
+directly addresses the anti-OOM requirement.
+
 ## Verification
 
 ```bash
 npm run verify
 # typecheck + web build + agent pytest/smoke + no-synthetic reports
-npm run benchmark:fixtures   # requires live agent
+npm run benchmark:fixtures   # requires live agent (pipeline smoke only since Plan 030)
 ```

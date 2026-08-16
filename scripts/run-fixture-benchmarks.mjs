@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TECHNIQUE_STROKES, allModuleIds, moduleKind } from "./module-inventory.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -19,33 +20,6 @@ const FIXTURE_VIDEO =
   process.env.BML_FIXTURE_VIDEO ||
   join(root, "validation", "fixtures", "person_1280x720_30fps.mp4");
 const CONTRACT_PATH = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
-
-const TECHNIQUE_STROKES = [
-  "serve",
-  "forehand",
-  "backhand",
-  "smash",
-  "clear",
-  "drop",
-  "drive",
-  "net_shot",
-  "lift",
-  "block",
-  "defensive_return",
-  "jump_smash",
-];
-
-function allModuleIds() {
-  const technique = TECHNIQUE_STROKES.map((s) => `technique:${s}`);
-  const layers = TECHNIQUE_STROKES.map((s) => `footwork:layer:${s}`);
-  return [...technique, "footwork:pure", ...layers];
-}
-
-function moduleKind(id) {
-  if (id === "footwork:pure") return "footwork_pure";
-  if (id.startsWith("footwork:layer:")) return "footwork_layer";
-  return "technique_stroke";
-}
 
 const GATE = JSON.parse(
   readFileSync(join(root, "validation", "benchmark-configs", "default-gate.json"), "utf8"),
@@ -225,6 +199,14 @@ async function main() {
       `Quality ${summary.quality?.passed ? "passed" : "failed"}`,
     ],
   };
+
+  const writeReports = process.env.BML_FIXTURE_WRITE_REPORTS === "1";
+  if (!writeReports) {
+    console.log(
+      "Fixture pipeline smoke OK. Reports and readiness seed are owned by run-domain-benchmarks.mjs (Plan 028); set BML_FIXTURE_WRITE_REPORTS=1 to restore legacy report writes.",
+    );
+    return;
+  }
 
   const reportsDir = join(root, "validation", "reports");
   mkdirSync(reportsDir, { recursive: true });

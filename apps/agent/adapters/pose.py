@@ -119,8 +119,13 @@ def estimate_pose(
     }
 
 
-def body_visibility_ratio(pose: dict[str, Any], min_conf: float = 0.4) -> float:
-    """Fraction of frames with enough high-confidence core landmarks (full-body proxy)."""
+def body_visibility_ratio(pose: dict[str, Any]) -> float:
+    """Fraction of frames with all core full-body landmarks present.
+
+    Presence-based by design: MediaPipe visibility can be 0 on some builds,
+    so this ratio intentionally checks landmark presence only. Callers that
+    need confidence-gated checks should filter landmarks before calling.
+    """
     required = {
         "nose",
         "left_ankle",
@@ -134,12 +139,6 @@ def body_visibility_ratio(pose: dict[str, Any], min_conf: float = 0.4) -> float:
     total = 0
     for fr in pose.get("frames", []):
         total += 1
-        present = {
-            lm["name"]
-            for lm in fr.get("landmarks", [])
-            if lm.get("confidence", 0) >= min_conf or lm.get("name") in required
-        }
-        # Prefer confidence when available; visibility can be 0 on some builds — also accept presence
         names = {lm["name"] for lm in fr.get("landmarks", [])}
         if required.issubset(names):
             ok += 1

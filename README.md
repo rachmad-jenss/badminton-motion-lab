@@ -97,20 +97,24 @@ Pipeline (no synthetic defaults):
 
 Web UI: **http://localhost:3001** (pinned; port 3000 may be another app)
 
-### 3. Unlock modules via fixture benchmarks
+### 3. Unlock modules via domain fixture benchmarks (maintainer only)
 
 ```bash
-npm run benchmark:fixtures
-npm run readiness:check
+npm run test:domain          # real agent + validation/domain-media clips (Plan 028)
+npm run readiness:check      # strict public gate: zero locked modules
 ```
 
-This writes `validation/reports/*.json` and updates `apps/web/src/lib/readiness.seed.json` so the UI can show all modules `on` when gates pass.
+Domain clips and their truth live in `validation/domain-manifest.json` (media stays out of
+git under `validation/domain-media/`). `npm run benchmark:fixtures` is a pipeline smoke
+check only — since Plan 030 it does not write reports or the readiness seed;
+`npm run readiness:integrity` validates report/seed provenance.
 
-### 4. Supabase (optional for cloud summaries)
+### 4. Supabase (reserved, not yet wired)
 
-Apply `supabase/migrations/20260723100000_control_plane.sql` to your project. Copy `.env.example` → `.env.local`.
-
-Dense pose/racket/shuttle time series never go into Postgres.
+The `supabase/` migrations and the `.env.example` Supabase keys are reserved for a
+future cloud control plane (metadata only). The current static web app never calls
+Supabase; local analysis works without any Supabase setup. Dense pose/racket/shuttle
+time series never go into Postgres (ADR-013).
 
 ## Principles
 
