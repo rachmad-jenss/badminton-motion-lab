@@ -34,3 +34,7 @@ apps/web/out/
 .idea/
 .vscode/
 !docs/**
+.playwright-mcp/
+apps/web/test-results/
+apps/web/playwright-report/
+playwright-report/
