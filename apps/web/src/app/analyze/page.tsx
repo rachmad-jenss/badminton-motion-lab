@@ -186,6 +186,23 @@ export default function AnalyzePage() {
     }
   }
 
+  function downloadReport() {
+    if (!result) return;
+    const payload = {
+      analysisRunId: result.analysisRunId,
+      exportedAt: new Date().toISOString(),
+      summary: result.summary,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "bml-report-" + result.analysisRunId + ".json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
   const phaseLabel = {
     idle: "Ready to analyze",
     registering: selectedFile ? "Preparing your local video..." : "Registering local capture...",
@@ -407,7 +424,16 @@ export default function AnalyzePage() {
           </section>
 
           <section className="panel">
-            <h2>Measurements</h2>
+            <div className="row">
+              <h2>Measurements</h2>
+              <button
+                className="d-btn d-btn-ghost"
+                type="button"
+                onClick={() => void downloadReport()}
+              >
+                Download report (JSON)
+              </button>
+            </div>
             <div className="table-wrap">
               <table>
                 <thead>

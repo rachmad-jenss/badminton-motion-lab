@@ -290,6 +290,17 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
   await expect(page.getByRole("link", { name: /See your progress →/ })).toBeVisible();
   await page.getByRole("button", { name: "Review evidence frame f12" }).click();
   await expect(page.locator("p[role='status']").filter({ hasText: "Selected evidence frame f12" })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download report (JSON)" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^bml-report-.*\.json$/);
+  const reportStream = await download.createReadStream();
+  let reportText = "";
+  for await (const chunk of reportStream) reportText += chunk.toString();
+  const report = JSON.parse(reportText);
+  expect(report.analysisRunId).toBe("run-1");
+  expect(report.summary.metrics[0].metricId).toBe("elbow_angle_contact");
+  expect(report.agentMediaUrl).toBeUndefined();
 });
 
 test("analysis quality failure remains actionable", async ({ page }) => {
