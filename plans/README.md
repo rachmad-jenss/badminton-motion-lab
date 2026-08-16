@@ -1,4 +1,4 @@
-# Improvement plans — Badminton Motion Lab
+﻿# Improvement plans — Badminton Motion Lab
 
 **Planned at:** pre-git baseline · **2026-07-24**
 
@@ -135,6 +135,29 @@ guard) because both touch the same scripts; the rest are independent.
 Dependency notes: 030 must follow 032 so the fixture runner keeps using the shared
 inventory after its write-guard lands. 029 (pixel budget) is independent but P1 — it
 directly addresses the anti-OOM requirement.
+
+
+## Improve round 2026-08-17 (plans 036-040)
+
+Audit of commit `0046446` — all 5 findings planned below. Execution order: 037, 038, 039,
+040 (small, independent) then 036 (dependency upgrade) so each landing is verified before
+the Next 16 upgrade runs. Plan 036 intentionally lands last: its verification is the whole
+repository suite.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [037-remove-drifted-quality-thresholds](037-remove-drifted-quality-thresholds.md) | P2 | TODO | none |
+| 2 | [038-report-export-in-analyze](038-report-export-in-analyze.md) | P2 | TODO | none |
+| 3 | [039-progress-all-catalogue-metrics](039-progress-all-catalogue-metrics.md) | P3 | TODO | none |
+| 4 | [040-fastapi-lifespan](040-fastapi-lifespan.md) | P3 | TODO | none |
+| 5 | [036-upgrade-next-16](036-upgrade-next-16.md) | P1 | TODO | none (verification = full suite) |
+
+Findings considered and rejected this round: "lint is just tsc" (not worth adding ESLint to
+a strict-tsc static app); `docs/Background` duplication (~9.2 MB, zero runtime impact);
+agent /docs + openapi public (localhost-only by design); media_tickets.used_at never set
+(60 s TTL covers it); /metrics/series per-run parse (bounded, local scale). Direction
+options still open (not planned): ShuttleSet ingestion helper and own-capture truth CLI
+(Plan 028 phases 0/3 — data work, not code findings).
 
 ## Verification
 
