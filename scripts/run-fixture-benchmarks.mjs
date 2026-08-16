@@ -200,6 +200,14 @@ async function main() {
     ],
   };
 
+  const writeReports = process.env.BML_FIXTURE_WRITE_REPORTS === "1";
+  if (!writeReports) {
+    console.log(
+      "Fixture pipeline smoke OK. Reports and readiness seed are owned by run-domain-benchmarks.mjs (Plan 028); set BML_FIXTURE_WRITE_REPORTS=1 to restore legacy report writes.",
+    );
+    return;
+  }
+
   const reportsDir = join(root, "validation", "reports");
   mkdirSync(reportsDir, { recursive: true });
 
