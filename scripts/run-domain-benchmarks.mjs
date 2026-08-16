@@ -96,25 +96,62 @@ function loadManifest() {
     publicMinClips: manifest.policy?.publicMinClips ?? Number(process.env.BML_DOMAIN_PUBLIC_MIN_CLIPS || 5),
   };
   const moduleEvidence = manifest.moduleEvidence || {};
+  const clipById = new Map(manifest.clips.map((c) => [c.id, c]));
   for (const [moduleId, ev] of Object.entries(moduleEvidence)) {
     if (!allModuleIds().includes(moduleId)) {
       fail("moduleEvidence key " + moduleId + " is not in the module inventory");
     }
+    const stroke = moduleId.startsWith("footwork:layer:")
+      ? moduleId.slice("footwork:layer:".length)
+      : moduleId.startsWith("technique:")
+        ? moduleId.slice("technique:".length)
+        : null;
     for (const kind of ["eventClips", "poseClips"]) {
-      for (const clipId of ev[kind] || []) {
-        if (!ids.has(clipId)) fail("moduleEvidence " + moduleId + "." + kind + " references unknown clip " + clipId);
+      const list = ev[kind] || [];
+      if (new Set(list).size !== list.length) {
+        fail("moduleEvidence " + moduleId + "." + kind + " contains duplicate clip ids");
       }
+      for (const clipId of list) {
+        const clip = clipById.get(clipId);
+        if (!clip) fail("moduleEvidence " + moduleId + "." + kind + " references unknown clip " + clipId);
+        if (stroke && clip.truth.strokeId !== stroke) {
+          fail("moduleEvidence " + moduleId + "." + kind + " clip " + clipId + " is for stroke " + clip.truth.strokeId);
+        }
+        const expectedSource = kind === "eventClips" ? "shuttleset" : "own_capture";
+        if (clip.source !== expectedSource) {
+          fail("moduleEvidence " + moduleId + "." + kind + " clip " + clipId + " source must be " + expectedSource);
+        }
+      }
+    }
+    if (moduleId === "footwork:pure" && (ev.eventClips?.length || 0) > 0) {
+      fail("moduleEvidence footwork:pure must not declare eventClips");
     }
   }
   return { manifest, policy, moduleEvidence };
 }
 
-function manifestDigest(clips) {
-  const lines = clips
-    .map((c) => c.id + ":" + c.sha256.toUpperCase())
-    .sort()
-    .join("\n");
-  return createHash("sha256").update(lines).digest("hex").toUpperCase();
+function canonical(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  if (value && typeof value === "object") {
+    return (
+      "{" +
+      Object.keys(value)
+        .sort()
+        .map((k) => JSON.stringify(k) + ":" + canonical(value[k]))
+        .join(",") +
+      "}"
+    );
+  }
+  return JSON.stringify(value);
+}
+
+function manifestDigest(manifest) {
+  const digestInput = canonical({
+    policy: manifest.policy || {},
+    clips: manifest.clips.map((c) => ({ id: c.id, sha256: c.sha256, truth: c.truth })),
+    moduleEvidence: manifest.moduleEvidence || {},
+  });
+  return createHash("sha256").update(digestInput).digest("hex").toUpperCase();
 }
 
 const GATE = JSON.parse(
@@ -198,8 +235,10 @@ async function analyzeClip(clip, token) {
 function evaluateModule(moduleId, kind, results, policy) {
   const byId = new Map(results.map((r) => [r.clipId, r]));
   const ev = moduleEvidence[moduleId] || { eventClips: [], poseClips: [] };
-  const eventClips = ev.eventClips.map((id) => byId.get(id)).filter(Boolean);
-  const poseClips = ev.poseClips.map((id) => byId.get(id)).filter(Boolean);
+  const uniqueEvent = [...new Set(ev.eventClips)];
+  const uniquePose = [...new Set(ev.poseClips)];
+  const eventClips = uniqueEvent.map((id) => byId.get(id)).filter(Boolean);
+  const poseClips = uniquePose.map((id) => byId.get(id)).filter(Boolean);
   const notes = [];
   const meanConf = (clips) => {
     const confs = clips.map((c) => c.confidenceMean).filter((v) => typeof v === "number");
@@ -294,8 +333,8 @@ function evaluateModule(moduleId, kind, results, policy) {
   };
   return {
     evidence: {
-      eventClips: ev.eventClips,
-      poseClips: ev.poseClips,
+      eventClips: uniqueEvent,
+      poseClips: uniquePose,
       eventPass,
       posePass,
       policy: policyObj,
@@ -328,10 +367,22 @@ function evaluateModule(moduleId, kind, results, policy) {
 }
 
 async function main() {
+  const ciSmoke = process.argv.includes("--ci-smoke");
   const { manifest, policy, moduleEvidence } = loadManifest();
   if (!manifest.clips.length) {
     console.log("No domain clips in manifest; nothing to benchmark (honest locked state).");
     process.exit(0);
+  }
+  if (ciSmoke) {
+    const missing = manifest.clips.filter((c) => !existsSync(join(root, c.path)));
+    if (missing.length) {
+      console.log(
+        "CI smoke: domain media is not provisioned on this runner (" +
+          missing.length +
+          " clip(s) missing); skipping the real benchmark. Run it on the maintainer machine with media present.",
+      );
+      process.exit(0);
+    }
   }
 
   const health = await fetch(AGENT + "/health").then((r) => r.json()).catch(() => null);
@@ -375,7 +426,7 @@ async function main() {
   }
 
   const generatedAt = new Date().toISOString();
-  const digest = manifestDigest(manifest.clips);
+  const digest = manifestDigest(manifest);
   const reportsDir = join(root, "validation", "reports");
   mkdirSync(reportsDir, { recursive: true });
   const modules = {};
@@ -474,4 +525,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-

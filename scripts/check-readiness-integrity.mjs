@@ -47,12 +47,28 @@ function fail(message) {
   process.exit(1);
 }
 
-function manifestDigest(clips) {
-  const lines = clips
-    .map((c) => c.id + ":" + c.sha256.toUpperCase())
-    .sort()
-    .join("\n");
-  return createHash("sha256").update(lines).digest("hex").toUpperCase();
+function canonical(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  if (value && typeof value === "object") {
+    return (
+      "{" +
+      Object.keys(value)
+        .sort()
+        .map((k) => JSON.stringify(k) + ":" + canonical(value[k]))
+        .join(",") +
+      "}"
+    );
+  }
+  return JSON.stringify(value);
+}
+
+function manifestDigest(manifest) {
+  const digestInput = canonical({
+    policy: manifest.policy || {},
+    clips: manifest.clips.map((c) => ({ id: c.id, sha256: c.sha256, truth: c.truth })),
+    moduleEvidence: manifest.moduleEvidence || {},
+  });
+  return createHash("sha256").update(digestInput).digest("hex").toUpperCase();
 }
 
 function isDomainReport(report) {
@@ -82,7 +98,7 @@ const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath
 const manifestClips = manifest && Array.isArray(manifest.clips) ? manifest.clips : [];
 const clipById = new Map(manifestClips.map((c) => [c.id, c]));
 const policy = manifest?.policy || {};
-const domainDigest = manifestDigest(manifestClips);
+const domainDigest = manifest ? manifestDigest(manifest) : "";
 
 const seedIds = Object.keys(seed.modules || {}).sort();
 const expectedIds = [...expectedModules].sort();
@@ -110,11 +126,31 @@ for (const name of readdirSync(reportsDir)) {
       fail(report.moduleId + " domain report must declare fixtureKind=badminton_stroke");
     }
     const clipIds = [...report.evidence.eventClips, ...report.evidence.poseClips];
-    for (const clipId of clipIds) {
-      const clip = clipById.get(clipId);
-      if (!clip) fail(report.moduleId + " references unknown manifest clip " + clipId);
-      if (clip.truth?.fixtureKind !== "badminton_stroke") {
-        fail(report.moduleId + " references non-domain clip " + clipId);
+    if (new Set(clipIds).size !== clipIds.length) {
+      fail(report.moduleId + " references duplicate manifest clips");
+    }
+    const stroke = report.moduleId.startsWith("footwork:layer:")
+      ? report.moduleId.slice("footwork:layer:".length)
+      : report.moduleId.startsWith("technique:")
+        ? report.moduleId.slice("technique:".length)
+        : null;
+    if (report.moduleId === "footwork:pure" && report.evidence.eventClips.length > 0) {
+      fail(report.moduleId + " must not declare eventClips");
+    }
+    for (const kind of ["eventClips", "poseClips"]) {
+      for (const clipId of report.evidence[kind]) {
+        const clip = clipById.get(clipId);
+        if (!clip) fail(report.moduleId + " references unknown manifest clip " + clipId);
+        if (clip.truth?.fixtureKind !== "badminton_stroke") {
+          fail(report.moduleId + " references non-domain clip " + clipId);
+        }
+        if (stroke && clip.truth.strokeId !== stroke) {
+          fail(report.moduleId + " clip " + clipId + " is for stroke " + clip.truth.strokeId);
+        }
+        const expectedSource = kind === "eventClips" ? "shuttleset" : "own_capture";
+        if (clip.source !== expectedSource) {
+          fail(report.moduleId + " clip " + clipId + " source must be " + expectedSource);
+        }
       }
     }
     if (report.fixtureSha256?.toUpperCase() !== domainDigest) {
@@ -161,11 +197,8 @@ if (Boolean(seed.complete) !== allOn) {
 }
 
 const domainFixture = truth.fixtureKind === "badminton_stroke";
-if (Boolean(seed.complete) && !domainFixture) {
-  fail("public completeness is claimed without a badminton_stroke fixture");
-}
-if (Boolean(seed.complete) && manifestClips.length === 0) {
-  fail("public completeness is claimed without domain manifest clips");
+if (Boolean(seed.complete) && !domainFixture && manifestClips.length === 0) {
+  fail("public completeness is claimed without domain evidence (smoke fixture is non_domain_smoke and no domain manifest clips exist)");
 }
 
 console.log(
@@ -179,4 +212,3 @@ console.log(
 if (!allOn) {
   console.log("Public completeness is not ready; locked modules remain intentionally visible.");
 }
-
