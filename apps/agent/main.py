@@ -141,7 +141,9 @@ def resolve_frame_window(
         MAX_ANALYSIS_FRAMES,
     )
     if width > 0 and height > 0:
-        pixel_max_frames = MAX_ANALYSIS_PIXELS // max(1, width * height)
+        # Clamp to at least one frame so over-budget media fails predictably
+        # (quality gate) instead of dividing by zero in the stride fallback.
+        pixel_max_frames = max(1, MAX_ANALYSIS_PIXELS // max(1, width * height))
         max_frames = min(max_frames, pixel_max_frames)
     stride = requested_stride or DEFAULT_STRIDE
     if requested_max_frames is None and requested_stride is None and frame_count > max_frames:

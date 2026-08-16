@@ -134,6 +134,9 @@ def test_default_analysis_window_covers_full_video():
     # Pixel budget bounds high-resolution decode windows (anti-OOM)
     assert agent_main.resolve_frame_window(300, None, None, width=3840, height=2160) == (33, 10, False)
     assert agent_main.resolve_frame_window(1800, None, None, width=1280, height=720) == (300, 6, False)
+    # Over-budget frames clamp to a single frame instead of dividing by zero
+    assert agent_main.resolve_frame_window(300, None, None, width=22000, height=13000) == (1, 300, False)
+    assert agent_main.resolve_frame_window(300, 300, 1, width=22000, height=13000) == (1, 1, True)
 
 
 def test_media_ticket_supports_repeated_playback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
