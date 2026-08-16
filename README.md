@@ -19,6 +19,23 @@ Public stranger-ready build requires **zero locked modules**:
 
 **Launch OS:** Windows only (macOS later). Marketing must say so.
 
+## Roadmap
+
+- **Beta v1 (≤ 1 month)**: current verified build, BYOK insights labeled
+  experimental, opt-in data contribution (report-only; video never leaves the
+  PC), and honest locked badges. Evidence target: 11 priority modules — clear,
+  smash, serve, forehand, backhand (technique + footwork layer each) plus
+  footwork pure — at 3 clips each.
+- **Public-ready v1**: zero locked modules (24/24) at 5+ clips each. No fixed
+  date; module order is the 5 priority strokes first, then the remaining 7.
+- **Evidence rule (Plan 028)**: a module unlocks only when BOTH kinds pass —
+  event/contact evidence from ShuttleSet broadcast clips AND pose-metric
+  evidence from own-capture clips recorded with
+  `docs/capture-protocols/side-ish-full-body-v1.md`. See
+  `validation/DATASET_ATTRIBUTION.md` for dataset attribution and license notes.
+  Media stays out of git (`validation/domain-media/`); only manifests, hashes,
+  and reports are committed.
+
 ## Monorepo
 
 ```

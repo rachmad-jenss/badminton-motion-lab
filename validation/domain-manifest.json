@@ -1,0 +1,10 @@
+{
+  "manifestVersion": 1,
+  "policy": {
+    "minEventClips": 3,
+    "minPoseClips": 3,
+    "publicMinClips": 5
+  },
+  "clips": [],
+  "moduleEvidence": {}
+}

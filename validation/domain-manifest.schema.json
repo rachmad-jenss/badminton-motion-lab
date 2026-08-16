@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Domain evidence manifest",
+  "description": "Declares domain-valid (badminton_stroke) clips and the per-module evidence mapping used by scripts/run-domain-benchmarks.mjs. Media files themselves stay out of git (validation/domain-media/); only manifest + hashes are committed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifestVersion", "policy", "clips", "moduleEvidence"],
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minEventClips", "minPoseClips", "publicMinClips"],
+      "properties": {
+        "minEventClips": { "type": "integer", "minimum": 1 },
+        "minPoseClips": { "type": "integer", "minimum": 1 },
+        "publicMinClips": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "clips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "path", "sha256", "fps", "truth"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "source": { "enum": ["shuttleset", "own_capture"] },
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" },
+          "fps": { "type": "number", "minimum": 1 },
+          "truth": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fixtureKind", "strokeId", "contactFrameTruth", "courtCorners"],
+            "properties": {
+              "fixtureKind": { "const": "badminton_stroke" },
+              "strokeId": {
+                "enum": ["serve", "forehand", "backhand", "smash", "clear", "drop", "drive", "net_shot", "lift", "block", "defensive_return", "jump_smash"]
+              },
+              "hand": { "enum": ["forehand", "backhand", "around_head", "unknown"] },
+              "contactFrameTruth": { "type": ["integer", "null"], "minimum": 0 },
+              "courtCorners": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["x", "y"],
+                  "properties": {
+                    "x": { "type": "number" },
+                    "y": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "moduleEvidence": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventClips", "poseClips"],
+        "properties": {
+          "eventClips": { "type": "array", "items": { "type": "string" } },
+          "poseClips": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

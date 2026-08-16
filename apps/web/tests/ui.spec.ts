@@ -285,6 +285,8 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
   await expect(page.getByText("Analysis ready for review", { exact: true })).toBeVisible();
   await expect(page.getByText("Contact point is stable", { exact: true })).toBeVisible();
   await expect(page.getByText("Withheld - Court validation failed", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Optional written explanation/ })).toBeVisible();
+  await expect(page.getByText("Experimental", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: /See your progress →/ })).toBeVisible();
   await page.getByRole("button", { name: "Review evidence frame f12" }).click();
   await expect(page.locator("p[role='status']").filter({ hasText: "Selected evidence frame f12" })).toBeVisible();

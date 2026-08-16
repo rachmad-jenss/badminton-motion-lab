@@ -121,7 +121,10 @@ jobs:
           BML_BENCH_MAX_FRAMES: "60"
           BML_BENCH_STRIDE: "3"
 
-      - name: Validate readiness provenance
+      - name: Domain benchmark smoke (skips when media is not provisioned)
+        run: npm run test:domain -- --ci-smoke
+
+      - name: Validate readiness provenance (after domain benchmark)
         run: npm run readiness:integrity
 
       - name: Stop test agent
