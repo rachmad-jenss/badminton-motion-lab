@@ -30,6 +30,7 @@ tmp/
 output/
 *.pem
 validation/domain-media/
+apps/web/out/
 .idea/
 .vscode/
 !docs/**
