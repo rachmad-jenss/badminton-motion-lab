@@ -473,7 +473,9 @@ export default function AnalyzePage() {
           </section>
 
           <section className="panel">
-            <h2>Optional written explanation</h2>
+            <h2>
+              Optional written explanation <span className="status-badge">Experimental</span>
+            </h2>
             <p className="muted">Get a plain-language explanation of the measured findings. It never invents scores.</p>
             <button className="d-btn d-btn-primary" onClick={() => void loadInsight()}>
               Explain these results

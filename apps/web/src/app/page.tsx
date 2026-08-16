@@ -58,6 +58,12 @@ export default function HomePage() {
           Setup is not running yet. Start it to analyze and review a video on this PC. <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
+      {!completeness.complete ? (
+        <div className="notice beta-notice" role="note">
+          Beta — some modules are still locked while real-evidence benchmarks are in progress.{" "}
+          <Link href="/contribute">See how you can help →</Link>
+        </div>
+      ) : null}
 
       <OnboardingSteps readiness={readiness} paired={paired} />
 
