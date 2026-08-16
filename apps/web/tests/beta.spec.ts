@@ -20,7 +20,9 @@ test("contribute page explains local-first opt-in and attribution", async ({ pag
 
 test("label page is reachable from contribute without a paired browser", async ({ page }) => {
   await page.goto("/contribute");
-  await page.waitForLoadState("networkidle");
-  await page.getByRole("link", { name: /Label a capture/ }).click();
+  const link = page.getByRole("link", { name: /Label a capture/ });
+  await expect(link).toBeVisible();
+  await page.waitForTimeout(1000); // let Next dev hydration settle before clicking
+  await link.click();
   await expect(page).toHaveURL(/\/label$/, { timeout: 15_000 });
 });
