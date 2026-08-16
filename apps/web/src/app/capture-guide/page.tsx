@@ -46,7 +46,7 @@ export default function CaptureGuidePage() {
           <summary>Technical requirements</summary>
           <ul className="muted">
             <li>At least 1280 × 720 resolution and 30 frames per second.</li>
-            <li>Side angle within roughly 35 degrees of a true side view.</li>
+            <li>Side angle: aim for roughly a true side view (recommended, not automatically checked).</li>
             <li>Lighting between the automatic brightness limits.</li>
           </ul>
         </details>
