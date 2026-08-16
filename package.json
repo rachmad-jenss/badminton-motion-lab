@@ -15,6 +15,7 @@
     "test": "npm run typecheck",
     "test:web": "npm run test:web -w @bml/web",
     "test:agent": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-agent-tests.ps1",
+    "test:domain": "node scripts/run-domain-benchmarks.mjs",
     "verify": "npm run typecheck && npm run build -w @bml/web && npm run test:agent && npm run test:web && node scripts/check-no-synthetic-reports.mjs",
     "contracts:build": "npm run build -w @bml/contracts",
     "readiness:check": "node scripts/check-public-readiness.mjs",

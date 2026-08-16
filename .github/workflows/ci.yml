@@ -124,6 +124,9 @@ jobs:
       - name: Validate readiness provenance
         run: npm run readiness:integrity
 
+      - name: Domain benchmark smoke (empty manifest is a no-op)
+        run: npm run test:domain
+
       - name: Stop test agent
         if: always()
         shell: powershell
