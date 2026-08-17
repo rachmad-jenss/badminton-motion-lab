@@ -1,4 +1,4 @@
-﻿# Improvement plans — Badminton Motion Lab
+# Improvement plans — Badminton Motion Lab
 
 **Planned at:** pre-git baseline · **2026-07-24**
 
@@ -146,11 +146,11 @@ repository suite.
 
 | Order | Plan | Priority | Status | Depends on |
 |------:|------|----------|--------|------------|
-| 1 | [037-remove-drifted-quality-thresholds](037-remove-drifted-quality-thresholds.md) | P2 | TODO | none |
-| 2 | [038-report-export-in-analyze](038-report-export-in-analyze.md) | P2 | TODO | none |
-| 3 | [039-progress-all-catalogue-metrics](039-progress-all-catalogue-metrics.md) | P3 | TODO | none |
-| 4 | [040-fastapi-lifespan](040-fastapi-lifespan.md) | P3 | TODO | none |
-| 5 | [036-upgrade-next-16](036-upgrade-next-16.md) | P1 | TODO | none (verification = full suite) |
+| 1 | [037-remove-drifted-quality-thresholds](037-remove-drifted-quality-thresholds.md) | P2 | DONE | none |
+| 2 | [038-report-export-in-analyze](038-report-export-in-analyze.md) | P2 | DONE | none |
+| 3 | [039-progress-all-catalogue-metrics](039-progress-all-catalogue-metrics.md) | P3 | DONE | none |
+| 4 | [040-fastapi-lifespan](040-fastapi-lifespan.md) | P3 | DONE | none |
+| 5 | [036-upgrade-next-16](036-upgrade-next-16.md) | P1 | DONE | none (verification = full suite) |
 
 Findings considered and rejected this round: "lint is just tsc" (not worth adding ESLint to
 a strict-tsc static app); `docs/Background` duplication (~9.2 MB, zero runtime impact);
