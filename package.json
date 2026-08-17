@@ -23,6 +23,6 @@
     "benchmark:fixtures": "node scripts/run-fixture-benchmarks.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9.0"
   }
 }

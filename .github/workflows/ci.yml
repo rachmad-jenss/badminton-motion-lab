@@ -37,7 +37,7 @@ jobs:
           $pythonVersion = & python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
           if ([version]$pythonVersion -lt [version]'3.11') { throw "Python 3.11+ is required; found $pythonVersion" }
           $nodeVersion = (& node --version).TrimStart('v')
-          if ([version]$nodeVersion -lt [version]'20.0') { throw "Node 20+ is required; found $nodeVersion" }
+          if ([version]$nodeVersion -lt [version]'20.9') { throw "Node 20.9+ is required (Next 16 engine); found $nodeVersion" }
           python --version
           node --version
           npm --version
