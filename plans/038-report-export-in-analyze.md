@@ -52,7 +52,7 @@ agent endpoints; any change to the summary payload shape.
 In `analyze/page.tsx`, add a `downloadReport()` function near `loadInsight()`:
 
 - Build the payload: `{ analysisRunId: result.analysisRunId, exportedAt: new Date().toISOString(), summary: result.summary }` — **do not include `agentMediaUrl`** (it embeds a media ticket).
-- Use the label-page pattern: `new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })`, object URL, anchor with `download = `bml-report-${result.analysisRunId}.json``, click, remove, revoke.
+- Use the label-page pattern: `new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })`, object URL, anchor with `download = "bml-report-${result.analysisRunId}.json"`, click, remove, revoke.
 - Wire a button labeled **"Download report (JSON)"** (`className="d-btn d-btn-ghost"`) in the "Measurements" panel header row next to the `<h2>Measurements</h2>` (wrap h2 + button in a row div consistent with other headers).
 
 ### Step 2: Extend the browser test

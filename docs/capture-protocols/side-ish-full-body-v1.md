@@ -15,7 +15,7 @@
 - Scene structure: mean edge ratio ≥ 0.002 (blur / low-texture rejection)
 - Full-body landmark presence on ≥ 50% of sampled frames (body_visibility_ratio ≥ 0.5)
 
-Failed checks → analysis rejected before perception (Honest Uncertainty).
+Failed checks → analysis rejected before downstream analysis (Honest Uncertainty). Pose estimation runs first so the gate can judge body visibility, but no metrics or findings are produced for rejected captures.
 Yaw (±35°) is recommended guidance only and is not measured by the current gate.
 
 ## Footwork
