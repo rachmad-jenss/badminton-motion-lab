@@ -12,6 +12,7 @@
 - Min 1280×720 resolution
 - Min 30 fps
 - Mean luma between 40 and 220
+- Scene structure: mean edge ratio ≥ 0.002 (blur / low-texture rejection)
 - Full-body landmark presence on ≥ 50% of sampled frames (body_visibility_ratio ≥ 0.5)
 
 Failed checks → analysis rejected before perception (Honest Uncertainty).

@@ -70,7 +70,7 @@ Remove the `CAPTURE_QUALITY_THRESHOLDS` block from
 In `docs/capture-protocols/side-ish-full-body-v1.md`, change the yaw bullet to
 state it is **recommended guidance, not currently gate-enforced**, and add one
 line noting the enforced checks are: min 1280×720, min 30 fps, mean luma
-40–220, and full-body landmark presence on ≥50% of frames. Keep the
+40–220, mean edge ratio ≥ 0.002, and full-body landmark presence on ≥50% of frames. Keep the
 "Failed checks → analysis rejected before perception" line accurate (it refers
 to the enforced checks).
 
