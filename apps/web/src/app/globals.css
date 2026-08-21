@@ -83,6 +83,14 @@
   --radius-card: var(--radius-box, 1.1rem);
   --motion-fast: 180ms;
   --motion-medium: 520ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+html[data-theme-switching] *,
+html[data-theme-switching] *::before,
+html[data-theme-switching] *::after {
+  transition: none !important;
 }
 
 * {
@@ -203,7 +211,12 @@ video:focus-visible {
   background-size: cover;
   filter: saturate(0.86) contrast(1.05);
   transform: scale(1.03);
-  animation: backdrop-in 700ms ease both;
+  animation: backdrop-in 300ms var(--ease-out) both;
+}
+
+.shell-backdrop-static {
+  opacity: 1;
+  transform: scale(1.03);
 }
 
 .shell-overlay {
@@ -226,9 +239,9 @@ video:focus-visible {
 .app-header {
   position: fixed;
   z-index: 10;
-  top: 1rem;
-  right: max(var(--page-gutter), 1rem);
-  left: max(var(--page-gutter), 1rem);
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(var(--page-gutter), 1rem, env(safe-area-inset-right));
+  left: max(var(--page-gutter), 1rem, env(safe-area-inset-left));
   padding: 0.55rem 0.75rem;
   border: 1px solid color-mix(in srgb, var(--token-ink) 18%, transparent);
   border-radius: var(--radius-pill);
@@ -287,6 +300,7 @@ nav.app-nav {
 .nav-link {
   display: inline-flex;
   align-items: center;
+  touch-action: manipulation;
   min-height: 2.35rem;
   padding: 0.45rem 0.8rem;
   border: 1px solid transparent;
@@ -295,13 +309,19 @@ nav.app-nav {
   font-family: var(--font-ui);
   font-size: 0.84rem;
   white-space: nowrap;
-  transition: color var(--motion-fast) ease, background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) ease;
+  transition: color var(--motion-fast) ease, background var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
 }
 
-.nav-link:hover {
-  color: var(--token-ink);
-  background: color-mix(in srgb, var(--token-ink) 8%, transparent);
-  transform: translateY(-1px);
+.nav-link:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover {
+    color: var(--token-ink);
+    background: color-mix(in srgb, var(--token-ink) 8%, transparent);
+    transform: translateY(-1px);
+  }
 }
 
 .nav-link.active {
@@ -334,6 +354,7 @@ nav.app-nav {
 
 .icon-button {
   display: inline-grid;
+  touch-action: manipulation;
   width: 2.75rem;
   height: 2.75rem;
   min-width: 2.75rem;
@@ -353,6 +374,10 @@ nav.app-nav {
 .icon-menu[open] .icon-button {
   border-color: var(--shell-accent-strong);
   background: color-mix(in srgb, var(--token-ink) 10%, transparent);
+}
+
+.icon-button:active {
+  transform: scale(0.97);
 }
 
 .control-icon {
@@ -394,6 +419,7 @@ nav.app-nav {
 .menu-option {
   display: flex;
   align-items: center;
+  touch-action: manipulation;
   gap: 0.6rem;
   width: 100%;
   min-height: 2.25rem;
@@ -405,6 +431,10 @@ nav.app-nav {
   font-size: 0.78rem;
   text-align: left;
   cursor: pointer;
+}
+
+.menu-option:active {
+  transform: scale(0.97);
 }
 
 .menu-option:hover,
@@ -567,16 +597,28 @@ h3 {
 
 .d-btn {
   min-height: 2.8rem;
+  touch-action: manipulation;
   padding: 0.72rem 1.1rem;
   border-radius: var(--radius-pill);
   font-family: var(--font-ui);
   font-weight: 600;
-  transition: transform var(--motion-fast) ease, background var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+  transition: transform var(--motion-fast) var(--ease-out), background var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
 }
 
-.d-btn:hover {
-  box-shadow: var(--token-shadow);
-  transform: translateY(-2px);
+.d-btn:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .d-btn:hover {
+    box-shadow: var(--token-shadow);
+    transform: translateY(-2px);
+  }
+
+  .d-btn-ghost:hover {
+    border-color: color-mix(in srgb, var(--token-ink) 66%, transparent);
+    background: color-mix(in srgb, var(--token-ink) 12%, transparent);
+  }
 }
 
 .d-btn-primary {
@@ -589,11 +631,6 @@ h3 {
   border: 1px solid var(--token-border-strong);
   background: var(--token-glass-soft);
   color: var(--token-ink);
-}
-
-.d-btn-ghost:hover {
-  border-color: color-mix(in srgb, var(--token-ink) 66%, transparent);
-  background: color-mix(in srgb, var(--token-ink) 12%, transparent);
 }
 
 .panel {
@@ -670,6 +707,7 @@ h3 {
 
 .module {
   display: flex;
+  touch-action: manipulation;
   min-height: 126px;
   flex-direction: column;
   gap: 0.55rem;
@@ -679,13 +717,15 @@ h3 {
   background: var(--shell-surface);
   box-shadow: 0 0.7rem 2rem color-mix(in srgb, var(--color-base-content) 8%, transparent);
   backdrop-filter: blur(12px);
-  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease, transform var(--motion-fast) ease;
+  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
 }
 
-.module:hover {
-  border-color: color-mix(in srgb, var(--shell-accent) 55%, transparent);
-  background: color-mix(in srgb, var(--shell-surface) 78%, var(--token-ink) 10%);
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .module:hover {
+    border-color: color-mix(in srgb, var(--shell-accent) 55%, transparent);
+    background: color-mix(in srgb, var(--shell-surface) 78%, var(--token-ink) 10%);
+    transform: translateY(-2px);
+  }
 }
 
 .module h3 {
@@ -847,18 +887,21 @@ td {
 
 .trend-bar {
   width: 48px;
+  touch-action: manipulation;
   height: var(--bar-height);
   margin: 0 auto;
   border-radius: var(--radius-pill) var(--radius-pill) 0.3rem 0.3rem;
   background: var(--shell-accent);
   opacity: 0.72;
-  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) ease;
+  transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
 }
 
-.trend-point:hover .trend-bar {
-  opacity: 1;
-  transform: scaleY(1.04);
-  transform-origin: bottom;
+@media (hover: hover) and (pointer: fine) {
+  .trend-point:hover .trend-bar {
+    opacity: 1;
+    transform: scaleY(1.04);
+    transform-origin: bottom;
+  }
 }
 
 .trend-label {
@@ -870,6 +913,49 @@ td {
   max-height: 420px;
   border-radius: var(--radius-card);
   background: var(--color-base-300);
+}
+
+.label-video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: var(--radius-card);
+  background: var(--color-base-300);
+}
+
+.form-row {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 32rem;
+  margin-bottom: 1rem;
+}
+
+.form-row label {
+  margin-bottom: 0;
+}
+
+.corner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.8rem;
+}
+
+.corner-grid .form-row {
+  margin-bottom: 0;
+}
+
+.advanced-details {
+  margin-top: 0.85rem;
+}
+
+.advanced-details summary {
+  cursor: pointer;
+  color: var(--token-ink-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.beta-notice {
+  border-left-color: var(--color-warning);
 }
 
 #pair {
@@ -913,6 +999,11 @@ pre {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fade-in-soft {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .hero > * {
   animation: rise-in var(--motion-medium) ease both;
 }
@@ -921,6 +1012,27 @@ pre {
 .hero > *:nth-child(3) { animation-delay: 120ms; }
 .hero > *:nth-child(4) { animation-delay: 180ms; }
 .hero > *:nth-child(5) { animation-delay: 240ms; }
+
+.page-tool .hero > * {
+  animation-duration: 280ms;
+}
+
+.result-reveal {
+  animation: rise-in 240ms var(--ease-out) both;
+}
+
+.phase-swap {
+  display: inline-block;
+  animation: fade-in-soft 150ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .icon-menu-panel {
+    transform-origin: top right;
+    transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+    @starting-style { opacity: 0; transform: scale(0.96); }
+  }
+}
 
 @media (max-width: 900px) {
   .app-header-inner {
@@ -941,7 +1053,7 @@ pre {
   }
 
   .app-header {
-    top: 0.7rem;
+    top: max(0.7rem, env(safe-area-inset-top));
     right: 0.7rem;
     left: 0.7rem;
     padding-top: 0.7rem;
@@ -1021,12 +1133,32 @@ pre {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  html {
     scroll-behavior: auto !important;
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
+  }
+
+  .hero > *,
+  .shell-backdrop {
+    animation: fade-in-soft 200ms ease both;
+    animation-delay: 0ms !important;
+  }
+
+  .nav-link,
+  .d-btn,
+  .module,
+  .trend-bar,
+  .icon-menu-panel {
+    transition-duration: 120ms;
+  }
+
+  .nav-link:hover,
+  .d-btn:hover,
+  .module:hover,
+  .trend-point:hover .trend-bar,
+  .d-btn:active,
+  .nav-link:active,
+  .menu-option:active,
+  .icon-button:active {
+    transform: none;
   }
 }
