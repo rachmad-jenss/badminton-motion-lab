@@ -77,6 +77,65 @@ def test_shoulder_abduction_is_withheld_without_racket_side_evidence():
     assert metric["value"] is None
 
 
+def test_trunk_lean_is_withheld_without_hip_landmarks():
+    pose = {
+        "frames": [
+            {
+                "frameIndex": 0,
+                "landmarks": [
+                    {"name": "left_shoulder", "x": 0.4, "y": 0.3, "confidence": 0.9},
+                    {"name": "left_elbow", "x": 0.2, "y": 0.3, "confidence": 0.9},
+                    {"name": "left_wrist", "x": 0.1, "y": 0.2, "confidence": 0.9},
+                    {"name": "left_ankle", "x": 0.4, "y": 0.9, "confidence": 0.9},
+                    {"name": "right_ankle", "x": 0.6, "y": 0.9, "confidence": 0.9},
+                ],
+            }
+        ]
+    }
+    metrics = compute_metrics(
+        modules=["technique:clear"],
+        pose=pose,
+        racket={"points": []},
+        shuttle={"points": []},
+        events={"events": [{"type": "contact", "frameIndex": 0}]},
+        court={"valid": False},
+        fps=30.0,
+    )
+    metric = next(item for item in metrics if item["metricId"] == "trunk_lean_contact")
+    assert metric["withheld"] is True
+    assert metric["value"] is None
+
+
+def test_wrist_height_ratio_is_withheld_without_wrist_landmark():
+    pose = {
+        "frames": [
+            {
+                "frameIndex": 0,
+                "landmarks": [
+                    {"name": "left_shoulder", "x": 0.4, "y": 0.3, "confidence": 0.9},
+                    {"name": "left_elbow", "x": 0.2, "y": 0.3, "confidence": 0.9},
+                    {"name": "left_hip", "x": 0.4, "y": 0.7, "confidence": 0.9},
+                    {"name": "right_hip", "x": 0.6, "y": 0.7, "confidence": 0.9},
+                    {"name": "left_ankle", "x": 0.4, "y": 0.9, "confidence": 0.9},
+                    {"name": "right_ankle", "x": 0.6, "y": 0.9, "confidence": 0.9},
+                ],
+            }
+        ]
+    }
+    metrics = compute_metrics(
+        modules=["technique:clear"],
+        pose=pose,
+        racket={"points": []},
+        shuttle={"points": []},
+        events={"events": [{"type": "contact", "frameIndex": 0}]},
+        court={"valid": False},
+        fps=30.0,
+    )
+    metric = next(item for item in metrics if item["metricId"] == "wrist_height_ratio_contact")
+    assert metric["withheld"] is True
+    assert metric["value"] is None
+
+
 def test_byok_output_accepts_only_known_citations_and_metrics():
     valid = _validate_provider_response(
         json.dumps(
