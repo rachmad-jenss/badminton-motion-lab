@@ -100,6 +100,6 @@ test("labeling rejects degenerate court corners before export", async ({ page })
   await page.getByLabel("Capture ID").fill("cap-1");
   await page.getByRole("button", { name: "Download truth JSON" }).click();
 
-  await expect(page.getByRole("alert")).toContainText("Court corners must be unique");
+  await expect(page.getByRole("alert").first()).toContainText("Court corners must be unique");
 });
 
