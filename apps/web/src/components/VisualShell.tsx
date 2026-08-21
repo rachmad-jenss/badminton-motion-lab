@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import {
   BACKGROUND_PRESETS,
   DEFAULT_BACKGROUND_ID,
   getBackgroundPreset,
+  type BackgroundPreset,
 } from "@/lib/backgrounds";
 
 type ShellStyle = CSSProperties & Record<`--${string}`, string>;
@@ -17,6 +18,15 @@ type ThemeIcon = "system" | "light" | "dark";
 const BACKGROUND_STORAGE_KEY = "bml.backgroundPreset";
 const THEME_STORAGE_KEY = "bml.themeMode";
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function suppressTransitions() {
+  const root = document.documentElement;
+  root.dataset.themeSwitching = "true";
+  void root.offsetWidth; // force reflow so the rule is active
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => delete root.dataset.themeSwitching);
+  });
+}
 
 function ThemeGlyph({ mode }: { mode: ThemeIcon }) {
   if (mode === "light") {
@@ -57,7 +67,9 @@ function BackgroundGlyph() {
 export function VisualShell({ children }: { children: ReactNode }) {
   const [backgroundId, setBackgroundId] = useState(DEFAULT_BACKGROUND_ID);
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [prevPresetId, setPrevPresetId] = useState<string | null>(null);
   const preset = getBackgroundPreset(backgroundId);
+  const crossfadeTimer = useRef<number | null>(null);
 
   useIsomorphicLayoutEffect(() => {
     const saved = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
@@ -83,28 +95,52 @@ export function VisualShell({ children }: { children: ReactNode }) {
   }, [themeMode]);
 
   function changeBackground(nextId: string) {
+    suppressTransitions();
+    if (nextId !== backgroundId) {
+      setPrevPresetId(backgroundId);
+    }
     setBackgroundId(nextId);
     window.localStorage.setItem(BACKGROUND_STORAGE_KEY, nextId);
   }
 
   function changeTheme(nextTheme: ThemeMode) {
+    suppressTransitions();
     setThemeMode(nextTheme);
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
   }
 
-  const shellStyle = {
-    "--shell-image": `url("${preset.image}")`,
-    "--shell-overlay": preset.overlay,
-    "--shell-overlay-light": preset.overlayLight,
-    "--shell-accent": preset.accent,
-    "--shell-accent-strong": preset.accentStrong,
-    "--shell-surface-dark": preset.surface,
-    "--shell-surface-light": preset.surfaceLight,
-    "--shell-position": preset.position,
-  } as ShellStyle;
+  useEffect(() => {
+    if (!prevPresetId) return;
+    crossfadeTimer.current = window.setTimeout(() => setPrevPresetId(null), 350);
+    return () => {
+      if (crossfadeTimer.current != null) window.clearTimeout(crossfadeTimer.current);
+    };
+  }, [prevPresetId]);
+
+  function shellVars(target: BackgroundPreset) {
+    return {
+      "--shell-image": `url("${target.image}")`,
+      "--shell-overlay": target.overlay,
+      "--shell-overlay-light": target.overlayLight,
+      "--shell-accent": target.accent,
+      "--shell-accent-strong": target.accentStrong,
+      "--shell-surface-dark": target.surface,
+      "--shell-surface-light": target.surfaceLight,
+      "--shell-position": target.position,
+    } as ShellStyle;
+  }
+
+  const shellStyle = shellVars(preset);
 
   return (
     <div className="visual-shell" data-content-side={preset.contentSide} style={shellStyle}>
+      {prevPresetId ? (
+        <div
+          className="shell-backdrop shell-backdrop-static"
+          aria-hidden="true"
+          style={shellVars(getBackgroundPreset(prevPresetId))}
+        />
+      ) : null}
       <div key={preset.id} className="shell-backdrop" aria-hidden="true" />
       <div className="shell-overlay" aria-hidden="true" />
 
