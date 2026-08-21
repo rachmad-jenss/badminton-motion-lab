@@ -338,7 +338,7 @@ export default function AnalyzePage() {
           </button>
           <Link className="d-btn d-btn-ghost" href="/capture-guide">How to record a good video</Link>
         </div>
-        <p className="status" role="status"><span className="phase">{phaseLabel}</span></p>
+        <p className="status" role="status"><span key={phase} className="phase-swap phase">{phaseLabel}</span></p>
         {error ? (
           <div className="status error" role="alert">
             <p>{error}</p>
@@ -361,8 +361,10 @@ export default function AnalyzePage() {
 
       {result ? (
         <>
-          <OnboardingSteps readiness={readiness} paired={paired} completed={phase === "ready"} />
-          <section className="panel">
+          <div className="result-reveal">
+            <OnboardingSteps readiness={readiness} paired={paired} completed={phase === "ready"} />
+          </div>
+          <section className="panel result-reveal" style={{ animationDelay: "60ms" }}>
             <h2>Your video review</h2>
             <p className="muted">The helper app serves this video locally. The original remains on this PC.</p>
             <video
@@ -379,7 +381,7 @@ export default function AnalyzePage() {
             ) : null}
           </section>
 
-          <section className="panel">
+          <section className="panel result-reveal" style={{ animationDelay: "120ms" }}>
             <h2>Video check</h2>
             <p className="muted">
               {result.summary.quality.passed
@@ -400,7 +402,7 @@ export default function AnalyzePage() {
             </details>
           </section>
 
-          <section className="panel">
+          <section className="panel result-reveal" style={{ animationDelay: "180ms" }}>
             <h2>What we found</h2>
             {result.summary.findings.length === 0 ? (
               <p className="muted">No deterministic findings were produced for this run.</p>
@@ -423,7 +425,7 @@ export default function AnalyzePage() {
             )}
           </section>
 
-          <section className="panel">
+          <section className="panel result-reveal" style={{ animationDelay: "240ms" }}>
             <div className="row">
               <h2>Measurements</h2>
               <button
@@ -478,7 +480,7 @@ export default function AnalyzePage() {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel result-reveal" style={{ animationDelay: "300ms" }}>
             <h2>Important moments</h2>
             <p className="muted">Mode: {result.summary.events.mode}. Event proposals are evidence, not certainty.</p>
             {result.summary.events.events.length === 0 ? (
@@ -498,7 +500,7 @@ export default function AnalyzePage() {
             )}
           </section>
 
-          <section className="panel">
+          <section className="panel result-reveal" style={{ animationDelay: "360ms" }}>
             <h2>
               Optional written explanation <span className="status-badge">Experimental</span>
             </h2>

@@ -159,6 +159,28 @@ agent /docs + openapi public (localhost-only by design); media_tickets.used_at n
 options still open (not planned): ShuttleSet ingestion helper and own-capture truth CLI
 (Plan 028 phases 0/3 — data work, not code findings).
 
+## UI/UX + motion polish (2026-08-21, plans 041-047)
+
+Design-system + skills audit of commit `2a659f2` (better-ui, emil-design-eng,
+apple-design, mobile-native-feel, improve-animations,
+find-animation-opportunities). Execution order below; 046 depends on 043/044
+selectors existing, 047 depends on 043 tokens.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [041-fix-theme-switch-smear](041-fix-theme-switch-smear.md) | P1 | DONE | none |
+| 2 | [042-label-page-missing-styles](042-label-page-missing-styles.md) | P1 | DONE | none |
+| 3 | [043-motion-tokens-and-hero-duration](043-motion-tokens-and-hero-duration.md) | P2 | DONE | none |
+| 4 | [044-touch-pointer-hardening](044-touch-pointer-hardening.md) | P1 | DONE | none |
+| 5 | [045-popover-entry-and-backdrop-crossfade](045-popover-entry-and-backdrop-crossfade.md) | P2 | DONE | 043 |
+| 6 | [046-reduced-motion-refinement](046-reduced-motion-refinement.md) | P2 | DONE | 043, 044 |
+| 7 | [047-analyze-results-reveal](047-analyze-results-reveal.md) | P3 | DONE | 043 |
+
+Rejected this round: route-transition animations (core navigation),
+trend-bar decorative motion (functional data), theme-icon crossfade
+(frequent action), extra hover lifts (already sufficient), lab-list stagger
+(near-correct already).
+
 ## Verification
 
 ```bash
