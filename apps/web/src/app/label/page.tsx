@@ -88,7 +88,11 @@ export default function LabelPage() {
   }
 
   function exportTruth() {
-    const validation = validateCourtCorners(corners, { width: 1280, height: 720 });
+    const video = videoRef.current;
+    const validation = validateCourtCorners(corners, {
+      width: video?.videoWidth || 1280,
+      height: video?.videoHeight || 720,
+    });
     if (!validation.valid) {
       setCornerError(validation.reason);
       return;
@@ -116,7 +120,11 @@ export default function LabelPage() {
   }
 
   async function copyTruth() {
-    const validation = validateCourtCorners(corners, { width: 1280, height: 720 });
+    const video = videoRef.current;
+    const validation = validateCourtCorners(corners, {
+      width: video?.videoWidth || 1280,
+      height: video?.videoHeight || 720,
+    });
     if (!validation.valid) {
       setCornerError(validation.reason);
       return;
