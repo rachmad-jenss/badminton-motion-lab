@@ -89,3 +89,17 @@ test("labeling exports badminton_stroke ground truth JSON", async ({ page }) => 
   expect(truth.courtCorners[1]).toEqual({ x: 1180, y: 200 });
 });
 
+test("labeling rejects degenerate court corners before export", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("bml.agentToken", "paired-token");
+  });
+  await mockHealth(page);
+
+  await page.goto("/label");
+
+  await page.getByLabel("Capture ID").fill("cap-1");
+  await page.getByRole("button", { name: "Download truth JSON" }).click();
+
+  await expect(page.getByRole("alert").first()).toContainText("Court corners must be unique");
+});
+

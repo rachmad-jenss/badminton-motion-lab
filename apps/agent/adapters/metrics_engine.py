@@ -91,6 +91,15 @@ def compute_metrics(
         mid_x = (lh["x"] + rh["x"]) / 2
         trunk = math.degrees(math.atan2(sh["x"] - mid_x, rh["y"] - sh["y"] + 1e-6))
         add("trunk_lean_contact", trunk, "degrees", 0.75)
+    else:
+        add(
+            "trunk_lean_contact",
+            None,
+            "degrees",
+            0.0,
+            withheld=True,
+            limitation="Missing racket-side shoulder or hip landmarks",
+        )
 
     same_side_hip = _landmark(fr, f"{racket_side}_hip") if racket_side else None
     if sh and el and same_side_hip:
@@ -129,6 +138,15 @@ def compute_metrics(
             0.0,
             withheld=True,
             limitation="Missing shoulder landmark",
+        )
+    else:
+        add(
+            "wrist_height_ratio_contact",
+            None,
+            "ratio",
+            0.0,
+            withheld=True,
+            limitation="Missing wrist or ankle landmarks",
         )
 
     pts = racket.get("points", [])

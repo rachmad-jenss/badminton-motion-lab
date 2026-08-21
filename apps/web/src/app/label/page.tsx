@@ -15,6 +15,7 @@ import {
   frameFromTime,
   labelingTruthJson,
   safeTruthFilename,
+  validateCourtCorners,
   type CourtCorner,
   type LabelingHand,
 } from "@/lib/labeling";
@@ -38,6 +39,7 @@ export default function LabelPage() {
   const [ticketUrl, setTicketUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [cornerError, setCornerError] = useState<string | null>(null);
 
   useEffect(() => {
     void agentHealth().then(setHealth);
@@ -86,6 +88,16 @@ export default function LabelPage() {
   }
 
   function exportTruth() {
+    const video = videoRef.current;
+    const validation = validateCourtCorners(corners, {
+      width: video?.videoWidth || 1280,
+      height: video?.videoHeight || 720,
+    });
+    if (!validation.valid) {
+      setCornerError(validation.reason);
+      return;
+    }
+    setCornerError(null);
     const truth = buildLabelingTruth({
       id: captureId.trim(),
       fps,
@@ -108,6 +120,16 @@ export default function LabelPage() {
   }
 
   async function copyTruth() {
+    const video = videoRef.current;
+    const validation = validateCourtCorners(corners, {
+      width: video?.videoWidth || 1280,
+      height: video?.videoHeight || 720,
+    });
+    if (!validation.valid) {
+      setCornerError(validation.reason);
+      return;
+    }
+    setCornerError(null);
     const truth = buildLabelingTruth({
       id: captureId.trim(),
       fps,
@@ -248,6 +270,11 @@ export default function LabelPage() {
             </div>
           ))}
         </div>
+        {cornerError ? (
+          <div className="notice" role="alert">
+            {cornerError}
+          </div>
+        ) : null}
       </section>
 
       <section className="panel">
