@@ -29,6 +29,11 @@ function suppressTransitions() {
 }
 
 function closeMenuWithAnimation(details: HTMLDetailsElement) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    details.removeAttribute("open");
+    return;
+  }
+
   const panel = details.querySelector(".icon-menu-panel");
   if (!panel) {
     details.removeAttribute("open");
@@ -93,8 +98,8 @@ export function VisualShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
       const target = event.target as Element | null;
-      if (!target || target.closest("details.icon-menu[open]")) return;
       document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
+        if (target && menu.contains(target)) return;
         closeMenuWithAnimation(menu);
       });
     }
