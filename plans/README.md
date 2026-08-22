@@ -197,6 +197,14 @@ audit at commit `18b7980`. All independent; recommended order below.
 | 6 | [053-input-font-size-guard](053-input-font-size-guard.md) | P3 | DONE | none |
 | 7 | [054-menu-exit-animation](054-menu-exit-animation.md) | P3 | DONE | none |
 
+## UI polish round 3 (2026-08-22, plan 055)
+
+Accessibility and interaction polish from the design-system audit at commit `0d9066d`.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [055-menu-close-escape-outside](055-menu-close-escape-outside.md) | P2 | DONE | none |
+
 ## Verification
 
 ```bash

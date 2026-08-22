@@ -29,6 +29,11 @@ function suppressTransitions() {
 }
 
 function closeMenuWithAnimation(details: HTMLDetailsElement) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    details.removeAttribute("open");
+    return;
+  }
+
   const panel = details.querySelector(".icon-menu-panel");
   if (!panel) {
     details.removeAttribute("open");
@@ -89,6 +94,32 @@ export function VisualShell({ children }: { children: ReactNode }) {
   const [prevPresetId, setPrevPresetId] = useState<string | null>(null);
   const preset = getBackgroundPreset(backgroundId);
   const crossfadeTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Element | null;
+      document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
+        if (target && menu.contains(target)) return;
+        closeMenuWithAnimation(menu);
+      });
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
+        event.preventDefault();
+        menu.querySelector<HTMLElement>(".icon-button")?.focus();
+        closeMenuWithAnimation(menu);
+      });
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   useIsomorphicLayoutEffect(() => {
     const saved = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
