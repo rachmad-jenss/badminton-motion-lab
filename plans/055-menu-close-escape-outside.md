@@ -1,5 +1,5 @@
 # 055 - Menu close on Escape and outside click
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 0d9066d
 - **Severity**: P2
 - **Category**: Accessibility / Apple interaction contract
