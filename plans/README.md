@@ -181,6 +181,22 @@ trend-bar decorative motion (functional data), theme-icon crossfade
 (frequent action), extra hover lifts (already sufficient), lab-list stagger
 (near-correct already).
 
+## UI polish round 2 (2026-08-21, plans 048-054)
+
+Follow-up to plans 041-047. Seven low/medium findings from the design-system,
+better-ui, apple-design, mobile-native-feel, and find-animation-opportunities
+audit at commit `18b7980`. All independent; recommended order below.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [048-wire-error-notice](048-wire-error-notice.md) | P2 | DONE | none |
+| 2 | [049-concentric-radius-and-touch-target](049-concentric-radius-and-touch-target.md) | P3 | DONE | none |
+| 3 | [050-motion-token-reveal](050-motion-token-reveal.md) | P3 | DONE | none |
+| 4 | [051-details-accordion-animation](051-details-accordion-animation.md) | P3 | DONE | none |
+| 5 | [052-notice-entrance-fade](052-notice-entrance-fade.md) | P3 | DONE | none |
+| 6 | [053-input-font-size-guard](053-input-font-size-guard.md) | P3 | DONE | none |
+| 7 | [054-menu-exit-animation](054-menu-exit-animation.md) | P3 | DONE | none |
+
 ## Verification
 
 ```bash
