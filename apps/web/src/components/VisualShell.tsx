@@ -28,6 +28,19 @@ function suppressTransitions() {
   });
 }
 
+function closeMenuWithAnimation(details: HTMLDetailsElement) {
+  const panel = details.querySelector(".icon-menu-panel");
+  if (!panel) {
+    details.removeAttribute("open");
+    return;
+  }
+  panel.classList.add("closing");
+  window.setTimeout(() => {
+    panel.classList.remove("closing");
+    details.removeAttribute("open");
+  }, 120);
+}
+
 function ThemeGlyph({ mode }: { mode: ThemeIcon }) {
   if (mode === "light") {
     return (
@@ -170,7 +183,8 @@ export function VisualShell({ children }: { children: ReactNode }) {
                     className={`menu-option${themeMode === option ? " selected" : ""}`}
                     onClick={(event) => {
                       changeTheme(option);
-                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      const menu = event.currentTarget.closest("details");
+                      if (menu) closeMenuWithAnimation(menu);
                     }}
                   >
                     <ThemeGlyph mode={option} />
@@ -195,7 +209,8 @@ export function VisualShell({ children }: { children: ReactNode }) {
                     className={`menu-option${preset.id === option.id ? " selected" : ""}`}
                     onClick={(event) => {
                       changeBackground(option.id);
-                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      const menu = event.currentTarget.closest("details");
+                      if (menu) closeMenuWithAnimation(menu);
                     }}
                   >
                     <span className="background-swatch" style={{ backgroundImage: `url("${option.image}")` }} aria-hidden="true" />
