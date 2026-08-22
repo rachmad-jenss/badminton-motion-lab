@@ -239,7 +239,7 @@ export default function AnalyzePage() {
       </header>
 
       {readiness !== "ready" || !paired ? (
-        <div className="notice" role={readiness === "checking" ? "status" : "alert"}>
+        <div className={`notice${readiness === "checking" ? "" : " error-notice"}`} role={readiness === "checking" ? "status" : "alert"}>
           {readiness === "checking"
             ? "Checking setup before analysis..."
             : !poseReady

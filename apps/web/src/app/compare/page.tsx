@@ -119,7 +119,7 @@ export default function ComparePage() {
       {error ? <div className="notice" role="status">{error} <Link href="/agent">Open setup →</Link></div> : null}
       {loading ? <p className="muted" role="status">Loading session series…</p> : null}
       {Object.keys(seriesErrors).length > 0 ? (
-        <div className="notice" role="alert">
+        <div className="notice error-notice" role="alert">
           Some metrics could not be loaded. Available metrics remain visible below.
         </div>
       ) : null}
