@@ -203,7 +203,7 @@ Accessibility and interaction polish from the design-system audit at commit `0d9
 
 | Order | Plan | Priority | Status | Depends on |
 |------:|------|----------|--------|------------|
-| 1 | [055-menu-close-escape-outside](055-menu-close-escape-outside.md) | P2 | DONE | none |
+| 1 | [055-menu-close-escape-outside](055-menu-close-escape-outside.md) | P2 | MERGED (PR #19, main CI 32574135282 green) | none |
 
 ## Verification
 
