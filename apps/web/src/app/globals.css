@@ -898,6 +898,16 @@ td {
   transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .trend-bar {
+    @starting-style {
+      block-size: 0;
+    }
+
+    transition: opacity var(--motion-fast) ease, transform var(--motion-fast) var(--ease-out), block-size 240ms var(--ease-out);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .trend-point:hover .trend-bar {
     opacity: 1;
