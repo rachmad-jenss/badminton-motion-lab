@@ -805,6 +805,16 @@ label {
   color: var(--token-ink-muted);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .status {
+    @starting-style {
+      opacity: 0;
+    }
+
+    transition: opacity 120ms ease-out;
+  }
+}
+
 .status.success,
 .phase,
 .check-ok,
