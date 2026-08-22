@@ -34,11 +34,17 @@ function closeMenuWithAnimation(details: HTMLDetailsElement) {
     details.removeAttribute("open");
     return;
   }
-  panel.classList.add("closing");
-  window.setTimeout(() => {
-    panel.classList.remove("closing");
-    details.removeAttribute("open");
-  }, 120);
+  // Wait for theme-switch transition suppression to clear (two rAF frames)
+  // so the closing class can animate instead of being overridden.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      panel.classList.add("closing");
+      window.setTimeout(() => {
+        panel.classList.remove("closing");
+        details.removeAttribute("open");
+      }, 120);
+    });
+  });
 }
 
 function ThemeGlyph({ mode }: { mode: ThemeIcon }) {

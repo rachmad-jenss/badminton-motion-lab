@@ -1048,13 +1048,21 @@ pre {
   .install-details,
   .advanced-details {
     interpolate-size: allow-keywords;
+    block-size: auto;
   }
 
   .install-details::details-content,
   .advanced-details::details-content {
+    block-size: 0;
+    overflow: clip;
     transition:
-      height 180ms var(--ease-out),
+      block-size 180ms var(--ease-out),
       content-visibility 180ms allow-discrete;
+  }
+
+  .install-details[open]::details-content,
+  .advanced-details[open]::details-content {
+    block-size: auto;
   }
 }
 
