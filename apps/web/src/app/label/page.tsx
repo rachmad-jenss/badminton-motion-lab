@@ -271,7 +271,7 @@ export default function LabelPage() {
           ))}
         </div>
         {cornerError ? (
-          <div className="notice" role="alert">
+          <div className="notice error-notice" role="alert">
             {cornerError}
           </div>
         ) : null}
