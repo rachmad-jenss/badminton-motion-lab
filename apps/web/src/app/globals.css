@@ -1095,6 +1095,7 @@ pre {
     grid-column: 1 / -1;
     grid-row: 2;
     justify-content: flex-start;
+    mask-image: linear-gradient(to right, transparent, #000 0.75rem, #000 calc(100% - 0.75rem), transparent);
     width: 100%;
     overflow-x: auto;
   }
