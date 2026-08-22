@@ -90,6 +90,32 @@ export function VisualShell({ children }: { children: ReactNode }) {
   const preset = getBackgroundPreset(backgroundId);
   const crossfadeTimer = useRef<number | null>(null);
 
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Element | null;
+      if (!target || target.closest("details.icon-menu[open]")) return;
+      document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
+        closeMenuWithAnimation(menu);
+      });
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
+        event.preventDefault();
+        menu.querySelector<HTMLElement>(".icon-button")?.focus();
+        closeMenuWithAnimation(menu);
+      });
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   useIsomorphicLayoutEffect(() => {
     const saved = window.localStorage.getItem(BACKGROUND_STORAGE_KEY);
     if (saved) setBackgroundId(getBackgroundPreset(saved).id);
