@@ -187,6 +187,33 @@ def test_register_capture_offloads_media_inspection(tmp_path: Path, monkeypatch:
     assert calls == ["fake_inspect"]
 
 
+def test_analyze_maps_memory_exhaustion_to_structured_response(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    data = tmp_path / "agent-data"
+    data.mkdir()
+    media_root = tmp_path / "media"
+    media_root.mkdir()
+    media = media_root / "clip.mp4"
+    media.write_bytes(b"test media")
+    metadata = {"width": 1280, "height": 720, "fps": 30, "frameCount": 1, "bytes": 10, "durationMs": 33}
+    monkeypatch.setenv("BML_MEDIA_ROOTS", str(media_root))
+    monkeypatch.setattr(agent_main, "DATA_DIR", data)
+    monkeypatch.setattr(agent_main, "byok", ByokStore(data / "secrets"))
+    monkeypatch.setattr(agent_main, "_inspect_capture_sync", lambda _path: ("a" * 64, dict(metadata)))
+
+    def fail_analysis(*_args, **_kwargs):
+        raise MemoryError("allocation failed")
+
+    monkeypatch.setattr(agent_main, "_run_analyze_sync", fail_analysis)
+    with TestClient(agent_main.app) as client:
+        health = client.get("/health").json()
+        token = client.post("/pair", json={"pairing_code": health["pairingCode"]}).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        capture = client.post("/captures/register", json={"path": str(media)}, headers=headers).json()
+        response = client.post("/analyze", json={"capture_id": capture["captureId"]}, headers=headers)
+        assert response.status_code == 503
+        assert response.json()["detail"]["code"] == "analysis_memory_limit"
+
+
 def test_agent_host_requires_loopback_without_explicit_opt_in(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("BML_ALLOW_NON_LOOPBACK_HOST", raising=False)
     assert agent_main.validate_agent_host("127.0.0.1") == "127.0.0.1"

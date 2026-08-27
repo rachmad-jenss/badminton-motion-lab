@@ -826,6 +826,15 @@ async def analyze(
         raise HTTPException(400, capture_error_detail(str(e))) from e
     except QualityGateRejected as e:
         raise HTTPException(422, e.detail) from e
+    except MemoryError as e:
+        raise HTTPException(
+            503,
+            {
+                "code": "analysis_memory_limit",
+                "message": "This video needs more memory than the Local Agent can safely use.",
+                "action": "Close other video-heavy apps, choose a shorter clip, or lower the video resolution.",
+            },
+        ) from e
 
     async with aiosqlite.connect(db_path) as db:
         await db.execute(
