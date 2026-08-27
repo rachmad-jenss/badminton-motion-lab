@@ -5,6 +5,27 @@ export function agentBaseUrl(): string {
   return process.env.NEXT_PUBLIC_AGENT_DEFAULT_URL || "http://127.0.0.1:8787";
 }
 
+const LEGACY_AGENT_TOKEN_KEY = "bml.agentToken";
+const AGENT_TOKEN_PREFIX = "bml.agentToken:";
+
+export function normalizeAgentUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    url.hash = "";
+    url.search = "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return trimmed.replace(/\/+$/, "");
+  }
+}
+
+function agentTokenStorageKey(baseUrl: string): string {
+  const normalized = normalizeAgentUrl(baseUrl);
+  return normalized ? `${AGENT_TOKEN_PREFIX}${normalized}` : "";
+}
+
 export type AgentHealthPayload = {
   ok?: boolean;
   agentVersion?: string;
@@ -58,13 +79,24 @@ export class AgentRequestError extends Error {
   }
 }
 
-export function agentToken(): string | null {
+export function agentToken(baseUrl = agentBaseUrl()): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("bml.agentToken");
+  const key = agentTokenStorageKey(baseUrl);
+  return key ? localStorage.getItem(key) : null;
 }
 
-export function setAgentToken(token: string): void {
-  localStorage.setItem("bml.agentToken", token);
+export function setAgentToken(token: string, baseUrl = agentBaseUrl()): void {
+  const key = agentTokenStorageKey(baseUrl);
+  if (!key) return;
+  localStorage.setItem(key, token);
+  localStorage.removeItem(LEGACY_AGENT_TOKEN_KEY);
+}
+
+export function clearAgentToken(baseUrl = agentBaseUrl()): void {
+  if (typeof window === "undefined") return;
+  const key = agentTokenStorageKey(baseUrl);
+  if (key) localStorage.removeItem(key);
+  localStorage.removeItem(LEGACY_AGENT_TOKEN_KEY);
 }
 
 export function mediaUrlWithToken(pathOrUrl: string): string {

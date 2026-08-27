@@ -22,6 +22,14 @@ def _insert_fixture_rows(db_path: Path) -> None:
             [("challenge-expired", "expired", 99, None), ("challenge-live", "live", 101, None)],
         )
         db.executemany(
+            "INSERT INTO devices (id, name, token, created_at, token_hash, expires_at, revoked_at) VALUES (?, ?, '', ?, ?, ?, ?)",
+            [
+                ("device-expired", "expired", "2026-01-01", "expired-hash", 99, None),
+                ("device-revoked", "revoked", "2026-01-01", "revoked-hash", 101, 50),
+                ("device-live", "live", "2026-01-01", "live-hash", 101, None),
+            ],
+        )
+        db.executemany(
             "INSERT INTO media_tickets (token_hash, capture_id, expires_at, used_at) VALUES (?, ?, ?, ?)",
             [("ticket-expired", "capture-stale", 99, None), ("ticket-live", "capture-newest", 101, None)],
         )
@@ -86,12 +94,14 @@ def test_cleanup_expires_rows_and_preserves_retained_evidence(tmp_path: Path):
 
     assert deleted == {
         "pairing_challenges": 1,
+        "devices": 2,
         "media_tickets": 1,
         "analysis_runs": 1,
         "captures": 1,
         "media_files": 0,
     }
     with sqlite3.connect(db_path) as db:
+        assert db.execute("SELECT id FROM devices ORDER BY id").fetchall() == [("device-live",)]
         assert db.execute("SELECT id FROM pairing_challenges").fetchall() == [("challenge-live",)]
         assert db.execute("SELECT token_hash FROM media_tickets").fetchall() == [("ticket-live",)]
         assert db.execute("SELECT id FROM analysis_runs ORDER BY id").fetchall() == [
@@ -113,6 +123,7 @@ def test_cleanup_is_idempotent_and_rejects_empty_retention(tmp_path: Path):
     _run(cleanup_storage(db_path, now=100, capture_retention=1, analysis_retention=2))
     assert _run(cleanup_storage(db_path, now=100, capture_retention=1, analysis_retention=2)) == {
         "pairing_challenges": 0,
+        "devices": 0,
         "media_tickets": 0,
         "analysis_runs": 0,
         "captures": 0,

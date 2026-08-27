@@ -214,7 +214,7 @@ serving path after media behavior is stable.
 
 | Order | Plan | Priority | Status | Depends on |
 |------:|------|----------|--------|------------|
-| 1 | [056-agent-credential-boundary](056-agent-credential-boundary.md) | P1 | TODO | none |
+| 1 | [056-agent-credential-boundary](056-agent-credential-boundary.md) | P1 | DONE | none |
 | 2 | [057-labeling-capture-integrity](057-labeling-capture-integrity.md) | P1 | TODO | 056 |
 | 3 | [058-analysis-resource-safety](058-analysis-resource-safety.md) | P1 | TODO | none |
 | 4 | [059-pure-footwork-frame-accuracy](059-pure-footwork-frame-accuracy.md) | P1 | TODO | 058 |

@@ -31,7 +31,7 @@ test("labeling requires pairing before exposing the tool", async ({ page }) => {
 
 test("labeling exports badminton_stroke ground truth JSON", async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("bml.agentToken", "paired-token");
+    localStorage.setItem("bml.agentToken:http://127.0.0.1:8787", "paired-token");
   });
   await mockHealth(page);
   await page.route(`${AGENT_URL}/media-tickets`, async (route) => {
@@ -91,7 +91,7 @@ test("labeling exports badminton_stroke ground truth JSON", async ({ page }) => 
 
 test("labeling rejects degenerate court corners before export", async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem("bml.agentToken", "paired-token");
+    localStorage.setItem("bml.agentToken:http://127.0.0.1:8787", "paired-token");
   });
   await mockHealth(page);
 

@@ -139,6 +139,17 @@ def test_default_analysis_window_covers_full_video():
     assert agent_main.resolve_frame_window(300, 300, 1, width=22000, height=13000) == (1, 1, True)
 
 
+def test_agent_host_requires_loopback_without_explicit_opt_in(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("BML_ALLOW_NON_LOOPBACK_HOST", raising=False)
+    assert agent_main.validate_agent_host("127.0.0.1") == "127.0.0.1"
+    assert agent_main.validate_agent_host("localhost") == "localhost"
+    with pytest.raises(RuntimeError, match="loopback"):
+        agent_main.validate_agent_host("0.0.0.0")
+
+    monkeypatch.setenv("BML_ALLOW_NON_LOOPBACK_HOST", "1")
+    assert agent_main.validate_agent_host("0.0.0.0") == "0.0.0.0"
+
+
 def test_media_ticket_supports_repeated_playback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     data = tmp_path / "agent-data"
     capture_dir = data / "captures"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import math
 import os
@@ -39,7 +40,32 @@ from pipeline.package import AnalysisPackageWriter
 from storage.auth import hash_secret, new_secret, now_epoch
 from storage.db import cleanup_storage, get_db_path, init_db
 
-HOST = os.getenv("BML_AGENT_HOST", "127.0.0.1")
+
+
+def validate_agent_host(host: str) -> str:
+    normalized = host.strip().lower()
+    is_loopback = normalized == "localhost"
+    if not is_loopback:
+        try:
+            is_loopback = ipaddress.ip_address(normalized).is_loopback
+        except ValueError:
+            is_loopback = False
+    if is_loopback:
+        return host
+    if os.getenv("BML_ALLOW_NON_LOOPBACK_HOST") == "1":
+        print(
+            "WARNING: BML_ALLOW_NON_LOOPBACK_HOST=1 exposes the local agent beyond loopback; "
+            "use only on a trusted network.",
+            flush=True,
+        )
+        return host
+    raise RuntimeError(
+        "BML_AGENT_HOST must be a loopback address (127.0.0.1, ::1, or localhost); "
+        "set BML_ALLOW_NON_LOOPBACK_HOST=1 only for an intentional unsafe bind"
+    )
+
+
+HOST = validate_agent_host(os.getenv("BML_AGENT_HOST", "127.0.0.1"))
 PORT = int(os.getenv("BML_AGENT_PORT", "8787"))
 DATA_DIR = Path(os.getenv("BML_AGENT_DATA_DIR", str(Path(__file__).resolve().parent / "data")))
 PIPELINE_VERSION = "0.2.2"

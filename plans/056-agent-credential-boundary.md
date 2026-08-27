@@ -16,6 +16,7 @@
 - **Depends on**: none
 - **Category**: security
 - **Planned at**: commit `d6066d2`, 2026-08-27
+- **Implementation status**: DONE on branch `jenss/improve-all-findings`
 
 ## Why this matters
 
@@ -46,6 +47,7 @@ The existing tests use `apps/web/tests/ui.spec.ts` for browser storage/pairing b
 - `apps/web/src/lib/agent.ts`
 - `apps/web/src/app/agent/page.tsx`
 - `apps/web/tests/ui.spec.ts`
+- `apps/web/tests/labeling.spec.ts`
 - `apps/agent/main.py`
 - `apps/agent/storage/db.py`
 - `apps/agent/test_security.py`
