@@ -17,7 +17,7 @@ from adapters.media import MediaError
 from adapters.metrics_engine import compute_metrics
 from adapters.paths import assert_allowed_media_path
 from adapters.racket import track_racket
-from pipeline.package import AnalysisPackageWriter
+from pipeline.package import AnalysisPackageWriter, validate_analysis_manifest
 import main as agent_main
 
 
@@ -408,3 +408,49 @@ def test_analysis_manifest_matches_contract_step_shape(tmp_path: Path):
         "a" * 64,
         steps["pose"]["outputHashes"][0],
     ]
+
+
+def test_analysis_manifest_marks_degraded_shuttle_stage_failed(tmp_path: Path):
+    writer = AnalysisPackageWriter(tmp_path / "packages" / "run-shuttle-error")
+    package = writer.write(
+        analysis_run_id="run-shuttle-error",
+        capture_id="capture-1",
+        fingerprint="a" * 64,
+        meta={"width": 1280, "height": 720, "fps": 30, "durationMs": 1000},
+        modules=["technique:clear"],
+        quality={"passed": True, "checks": [], "captureProfile": "test"},
+        court={"valid": True},
+        pose={},
+        racket={},
+        shuttle={"error": "No shuttle motion blobs detected"},
+        events={},
+        metrics=[],
+        findings=[],
+        pipeline_version="0.2.2",
+    )
+    shuttle_step = next(step for step in package["manifest"]["steps"] if step["stepId"] == "shuttle")
+    assert shuttle_step["status"] == "failed"
+    assert shuttle_step["error"] == "No shuttle motion blobs detected"
+
+
+def test_analysis_manifest_rejects_unknown_step_status(tmp_path: Path):
+    writer = AnalysisPackageWriter(tmp_path / "packages" / "run-status")
+    package = writer.write(
+        analysis_run_id="run-status",
+        capture_id="capture-1",
+        fingerprint="a" * 64,
+        meta={"width": 1280, "height": 720, "fps": 30, "durationMs": 1000},
+        modules=["technique:clear"],
+        quality={"passed": True, "checks": [], "captureProfile": "test"},
+        court={"valid": True},
+        pose={},
+        racket={},
+        shuttle={},
+        events={},
+        metrics=[],
+        findings=[],
+        pipeline_version="0.2.2",
+    )
+    package["manifest"]["steps"][0]["status"] = "unknown"
+    with pytest.raises(ValueError, match="schema validation failed"):
+        validate_analysis_manifest(package["manifest"])

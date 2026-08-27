@@ -218,7 +218,7 @@ serving path after media behavior is stable.
 | 2 | [057-labeling-capture-integrity](057-labeling-capture-integrity.md) | P1 | DONE | 056 |
 | 3 | [058-analysis-resource-safety](058-analysis-resource-safety.md) | P1 | DONE | none |
 | 4 | [059-pure-footwork-frame-accuracy](059-pure-footwork-frame-accuracy.md) | P1 | DONE | 058 |
-| 5 | [060-manifest-degraded-stage](060-manifest-degraded-stage.md) | P1 | TODO | 058 |
+| 5 | [060-manifest-degraded-stage](060-manifest-degraded-stage.md) | P1 | DONE | 058 |
 | 6 | [061-release-reproducibility-and-serve](061-release-reproducibility-and-serve.md) | P1 | TODO | 058 |
 
 The six plans cover the ten actionable findings from the 2026-08-27 audit,
