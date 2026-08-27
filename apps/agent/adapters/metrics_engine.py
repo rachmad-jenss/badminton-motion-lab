@@ -43,16 +43,29 @@ def compute_metrics(
 ) -> list[dict[str, Any]]:
     frames = pose.get("frames", [])
     by_idx = index_frames_by_frame_index(frames)
+    wants_pure = "footwork:pure" in modules
     contact = _preferred_event(events, "contact")
     split = _preferred_event(events, "split_step")
     first_step = _preferred_event(events, "first_step")
     base = _preferred_event(events, "base_return")
 
     out: list[dict[str, Any]] = []
-    if not contact or not by_idx:
+    if not by_idx:
         return out
+    if not contact:
+        return _compute_pure_metrics(
+            modules=modules,
+            frames=frames,
+            events=events,
+            court=court,
+            fps=fps,
+        ) if wants_pure else out
 
-    fr = get_frame(by_idx, int(contact["frameIndex"]))
+    fr = get_frame(
+        by_idx,
+        int(contact["frameIndex"]),
+        allow_nearest=contact.get("source") not in {"manual", "corrected"},
+    )
     if not fr:
         return out
 
@@ -337,6 +350,96 @@ def compute_metrics(
         splits = [e for e in events.get("events", []) if e["type"] == "split_step"]
         add("split_step_count", float(len(splits)), "count", 0.8 if splits else 0.4)
 
+    return out
+
+
+def _compute_pure_metrics(
+    *,
+    modules: list[str],
+    frames: list[dict[str, Any]],
+    events: dict[str, Any],
+    court: dict[str, Any],
+    fps: float,
+) -> list[dict[str, Any]]:
+    by_idx = index_frames_by_frame_index(frames)
+    split = _preferred_event(events, "split_step")
+    first_step = _preferred_event(events, "first_step")
+    base = _preferred_event(events, "base_return")
+    anchor = split or first_step or base or {"frameIndex": min(by_idx)}
+    evidence_frame = int(anchor["frameIndex"])
+    out: list[dict[str, Any]] = []
+
+    def add(metric_id: str, value: float | None, unit: str, confidence: float, *, limitation: str | None = None) -> None:
+        withheld = value is None
+        out.append(
+            {
+                "metricId": metric_id,
+                "value": None if withheld else value,
+                "unit": unit,
+                "confidence": confidence,
+                "withheld": withheld,
+                "limitation": limitation,
+                "evidenceFrameIndex": evidence_frame,
+                "repIndex": 0,
+                "version": "1.0.0",
+                "moduleIds": modules,
+            }
+        )
+
+    splits = [event for event in events.get("events", []) if event.get("type") == "split_step"]
+    add("split_step_count", float(len(splits)), "count", 0.8 if splits else 0.4)
+    if split and first_step and int(first_step["frameIndex"]) >= int(split["frameIndex"]):
+        add(
+            "first_step_latency",
+            float(first_step["frameIndex"] - split["frameIndex"]) / max(fps, 1e-6),
+            "seconds",
+            0.75,
+        )
+    else:
+        add(
+            "first_step_latency",
+            None,
+            "seconds",
+            0.0,
+            limitation="No valid split_step and first_step pair",
+        )
+
+    H = court.get("homography") if court.get("valid") else None
+    if not H:
+        add("court_coverage_area", None, "meters", 0.0, limitation="Court calibration invalid — Footwork withheld")
+        add("path_efficiency", None, "ratio", 0.0, limitation="Court calibration invalid — Footwork withheld")
+        return out
+
+    path_pts: list[tuple[float, float]] = []
+    for frame in frames:
+        landmarks = {landmark["name"]: landmark for landmark in frame.get("landmarks", [])}
+        left = landmarks.get("left_ankle")
+        right = landmarks.get("right_ankle")
+        if not left or not right:
+            continue
+        mx, my = (left["x"] + right["x"]) / 2, (left["y"] + right["y"]) / 2
+        path_pts.append(_apply_homography(H, mx, my))
+    if len(path_pts) < 2:
+        add("court_coverage_area", None, "meters", 0.0, limitation="Insufficient ankle path")
+        add("path_efficiency", None, "ratio", 0.0, limitation="Insufficient ankle path")
+        return out
+    lengths = [
+        math.hypot(path_pts[index][0] - path_pts[index - 1][0], path_pts[index][1] - path_pts[index - 1][1])
+        for index in range(1, len(path_pts))
+    ]
+    path_length = float(sum(lengths))
+    xs = [point[0] for point in path_pts]
+    ys = [point[1] for point in path_pts]
+    coverage = max(0.0, (max(xs) - min(xs)) * (max(ys) - min(ys)))
+    straight = math.hypot(path_pts[-1][0] - path_pts[0][0], path_pts[-1][1] - path_pts[0][1])
+    add("court_coverage_area", coverage, "meters", 0.65)
+    add(
+        "path_efficiency",
+        (straight / path_length) if path_length > 1e-6 else None,
+        "ratio",
+        0.7,
+        limitation="Degenerate path" if path_length <= 1e-6 else None,
+    )
     return out
 
 

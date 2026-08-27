@@ -12,9 +12,13 @@ def index_frames_by_frame_index(frames: list[dict[str, Any]]) -> dict[int, dict[
 def get_frame(
     by_index: dict[int, dict[str, Any]],
     frame_index: int,
+    *,
+    allow_nearest: bool = True,
 ) -> dict[str, Any] | None:
     if frame_index in by_index:
         return by_index[frame_index]
+    if not allow_nearest:
+        return None
     # nearest available frame
     if not by_index:
         return None

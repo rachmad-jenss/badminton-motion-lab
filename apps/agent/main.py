@@ -678,6 +678,11 @@ def _run_analyze_sync(
 
     shuttle, shuttle_timing = _timed_stage(shuttle_stage)
 
+    modules = body.modules or [
+        f"technique:{body.stroke_hint or 'clear'}",
+        f"footwork:layer:{body.stroke_hint or 'clear'}",
+    ]
+
     events, events_timing = _timed_stage(
         lambda: propose_events(
             pose_frames=pose["frames"],
@@ -688,13 +693,9 @@ def _run_analyze_sync(
             manual_events=body.manual_events,
             source_frame_count=frame_count,
             source_duration_ms=float(meta["durationMs"]),
+            pure_footwork="footwork:pure" in modules,
         )
     )
-
-    modules = body.modules or [
-        f"technique:{body.stroke_hint or 'clear'}",
-        f"footwork:layer:{body.stroke_hint or 'clear'}",
-    ]
 
     def metrics_stage() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         metrics = compute_metrics(

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from adapters.byok import ByokStore, run_insight
 from adapters.events import propose_events
 from adapters.media import MediaError
+from adapters.metrics_engine import compute_metrics
 from adapters.paths import assert_allowed_media_path
 from adapters.racket import track_racket
 from pipeline.package import AnalysisPackageWriter
@@ -299,6 +300,76 @@ def test_manual_event_can_target_unsampled_source_frame():
     )
     contact = next(event for event in events["events"] if event["type"] == "contact")
     assert contact["frameIndex"] == 40
+
+
+def _pose_only_footwork_frames() -> list[dict]:
+    return [
+        {
+            "frameIndex": index,
+            "timeMs": index * 33.3,
+            "landmarks": [
+                {"name": "left_ankle", "x": 0.2 + index * 0.02, "y": 0.8, "confidence": 0.9},
+                {"name": "right_ankle", "x": 0.4 + index * 0.02, "y": 0.8, "confidence": 0.9},
+            ],
+        }
+        for index in range(12)
+    ]
+
+
+def test_pure_footwork_proposes_events_without_racket_or_contact():
+    events = propose_events(
+        pose_frames=_pose_only_footwork_frames(),
+        racket_track=[],
+        shuttle_track=[],
+        fps=30,
+        stroke_hint="drill",
+        pure_footwork=True,
+        source_frame_count=12,
+        source_duration_ms=400.0,
+    )
+    types = {event["type"] for event in events["events"]}
+    assert events["mode"] == "auto"
+    assert {"split_step", "first_step", "base_return"}.issubset(types)
+    assert not any(event["type"] == "contact" for event in events["events"])
+
+    metrics = compute_metrics(
+        modules=["footwork:pure"],
+        pose={"frames": _pose_only_footwork_frames()},
+        racket={},
+        shuttle={},
+        events=events,
+        court={"valid": True, "homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]},
+        fps=30,
+    )
+    assert {metric["metricId"] for metric in metrics} >= {
+        "split_step_count",
+        "first_step_latency",
+        "court_coverage_area",
+        "path_efficiency",
+    }
+
+
+def test_corrected_contact_outside_sampled_pose_window_is_not_measured():
+    metrics = compute_metrics(
+        modules=["technique:clear"],
+        pose={"frames": _pose_only_footwork_frames()},
+        racket={"points": [{"frameIndex": 10, "x": 0.5, "y": 0.5}]},
+        shuttle={},
+        events={
+            "events": [
+                {
+                    "type": "contact",
+                    "frameIndex": 40,
+                    "timeMs": 1333.0,
+                    "confidence": 1.0,
+                    "source": "corrected",
+                }
+            ]
+        },
+        court={"valid": False},
+        fps=30,
+    )
+    assert metrics == []
 
 
 def test_analysis_manifest_matches_contract_step_shape(tmp_path: Path):

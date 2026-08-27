@@ -21,6 +21,7 @@ def propose_events(
     manual_events: list[dict[str, Any]] | None = None,
     source_frame_count: int | None = None,
     source_duration_ms: float | None = None,
+    pure_footwork: bool = False,
 ) -> dict[str, Any]:
     """Auto-propose rep bounds + contact; fall back to manual when confidence low."""
     by_idx = index_frames_by_frame_index(pose_frames)
@@ -36,6 +37,14 @@ def propose_events(
             manual_events,
             frame_count=source_frame_count or max(by_idx) + 1,
             duration_ms=last_time_ms,
+        )
+
+    if pure_footwork and not racket_track:
+        return _propose_pure_footwork_events(
+            by_idx=by_idx,
+            fps=fps,
+            stroke_hint=stroke_hint,
+            manual_events=manual_events,
         )
 
     best_i = 0
@@ -133,6 +142,98 @@ def propose_events(
         "minConfidence": MIN_PROPOSAL_CONFIDENCE,
         "events": proposed,
         "reps": reps,
+    }
+
+
+def _propose_pure_footwork_events(
+    *,
+    by_idx: dict[int, dict[str, Any]],
+    fps: float,
+    stroke_hint: str,
+    manual_events: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    frame_indices = sorted(by_idx)
+
+    def _tm(frame_index: int) -> float:
+        frame = get_frame(by_idx, frame_index)
+        return float(frame["timeMs"]) if frame else float(frame_index) / max(fps, 1e-6) * 1000.0
+
+    def _midpoint(frame: dict[str, Any]) -> tuple[float, float] | None:
+        landmarks = {landmark["name"]: landmark for landmark in frame.get("landmarks", [])}
+        left = landmarks.get("left_ankle")
+        right = landmarks.get("right_ankle")
+        if not left or not right:
+            return None
+        return ((left["x"] + right["x"]) / 2, (left["y"] + right["y"]) / 2)
+
+    proposed: list[dict[str, Any]] = []
+    mode = "auto"
+    if manual_events:
+        mode = "manual"
+        proposed = [{**event, "source": "corrected"} for event in manual_events]
+    else:
+        trajectory = [
+            (frame_index, midpoint)
+            for frame_index in frame_indices
+            if (midpoint := _midpoint(by_idx[frame_index])) is not None
+        ]
+        movements = [
+            (math.hypot(cur[1][0] - prev[1][0], cur[1][1] - prev[1][1]), cur[0])
+            for prev, cur in zip(trajectory, trajectory[1:])
+        ]
+        if not movements:
+            return {
+                "mode": "manual_required",
+                "strokeHint": stroke_hint,
+                "minConfidence": MIN_PROPOSAL_CONFIDENCE,
+                "events": [],
+                "reps": [],
+                "reason": "Insufficient ankle landmarks for pure footwork proposal",
+            }
+        movement, first_step = max(movements, key=lambda item: item[0])
+        if movement < 0.01:
+            return {
+                "mode": "manual_required",
+                "strokeHint": stroke_hint,
+                "minConfidence": MIN_PROPOSAL_CONFIDENCE,
+                "events": [],
+                "reps": [],
+                "reason": "Foot displacement is below the proposal gate — manual marking required",
+            }
+        confidence = min(0.9, max(MIN_PROPOSAL_CONFIDENCE, 0.55 + movement * 2.0))
+        first_frame = frame_indices[0]
+        last_frame = frame_indices[-1]
+        split_step = max(first_frame, first_step - max(int(fps * 0.2), 1))
+        rep_start = max(first_frame, split_step - max(int(fps * 0.3), 1))
+        base_return = min(last_frame, first_step + max(int(fps * 0.6), 1))
+        rep_end = min(last_frame, base_return + max(int(fps * 0.2), 1))
+        proposed = [
+            {"type": "rep_start", "frameIndex": rep_start, "timeMs": _tm(rep_start), "confidence": confidence, "source": "model", "repIndex": 0},
+            {"type": "split_step", "frameIndex": split_step, "timeMs": _tm(split_step), "confidence": confidence, "source": "model", "repIndex": 0},
+            {"type": "first_step", "frameIndex": first_step, "timeMs": _tm(first_step), "confidence": confidence, "source": "model", "repIndex": 0},
+            {"type": "base_return", "frameIndex": base_return, "timeMs": _tm(base_return), "confidence": confidence, "source": "model", "repIndex": 0},
+            {"type": "rep_end", "frameIndex": rep_end, "timeMs": _tm(rep_end), "confidence": confidence, "source": "model", "repIndex": 0},
+        ]
+
+    first_frame = frame_indices[0]
+    last_frame = frame_indices[-1]
+    start_frame = _event_frame(proposed, "rep_start", first_frame)
+    end_frame = _event_frame(proposed, "rep_end", last_frame)
+    contact = next((event for event in reversed(proposed) if event.get("type") == "contact"), None)
+    anchor = contact["frameIndex"] if contact else _event_frame(proposed, "first_step", first_frame)
+    return {
+        "mode": mode,
+        "strokeHint": stroke_hint,
+        "minConfidence": MIN_PROPOSAL_CONFIDENCE,
+        "events": proposed,
+        "reps": [
+            {
+                "repIndex": 0,
+                "startFrame": start_frame,
+                "contactFrame": int(anchor) if contact else None,
+                "endFrame": end_frame,
+            }
+        ],
     }
 
 
