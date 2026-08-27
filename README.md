@@ -60,6 +60,16 @@ npm run dev:web
 
 Open http://localhost:3001
 
+### Static production preview
+
+```bash
+npm run build
+npm run serve:web
+```
+
+Open http://127.0.0.1:3101. The static preview server serves the exported
+`apps/web/out` directory; `next start` is not compatible with this export mode.
+
 ## Local Agent (real CV pipeline)
 
 Requires **FFmpeg/ffprobe** on PATH and MediaPipe pose model at
@@ -82,7 +92,7 @@ video on this PC. It is a development bootstrap, not a signed installer.
 cd apps/agent
 python -m venv .venv
 .\.venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.lock.txt
 python main.py
 ```
 

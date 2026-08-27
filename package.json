@@ -10,6 +10,7 @@
   "scripts": {
     "build": "npm run build -w @bml/contracts && npm run build -w @bml/web",
     "dev:web": "npm run dev -w @bml/web",
+    "serve:web": "npm run start -w @bml/web",
     "lint": "npm run lint -w @bml/web",
     "typecheck": "npm run build -w @bml/contracts && npm run test -w @bml/contracts && npm run test -w @bml/web",
     "test": "npm run typecheck",
@@ -17,6 +18,7 @@
     "test:agent": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-agent-tests.ps1",
     "test:domain": "node scripts/run-domain-benchmarks.mjs",
     "test:hash": "node scripts/test-stream-sha256.mjs",
+    "test:runtime-contract": "node scripts/test-runtime-contract.mjs",
     "verify": "npm run typecheck && npm run build -w @bml/web && npm run test:agent && npm run test:web && node scripts/check-no-synthetic-reports.mjs",
     "contracts:build": "npm run build -w @bml/contracts",
     "readiness:check": "node scripts/check-public-readiness.mjs",

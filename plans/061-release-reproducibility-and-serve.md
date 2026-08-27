@@ -16,6 +16,7 @@
 - **Depends on**: plans/058-analysis-resource-safety.md
 - **Category**: migration
 - **Planned at**: commit `d6066d2`, 2026-08-27
+- **Implementation status**: DONE on branch `jenss/improve-all-findings`
 
 ## Why this matters
 
@@ -51,6 +52,8 @@ The web is configured as a Next static export but its workspace `start` script s
 - `infra/windows/install-agent.ps1`
 - `.github/workflows/ci.yml`
 - `README.md`
+- `.env.example`
+- `scripts/test-runtime-contract.mjs`
 - `plans/README.md`
 
 **Out of scope**:

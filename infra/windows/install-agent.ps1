@@ -58,7 +58,7 @@ if ([version]$pythonVersion -lt [version]'3.11') {
   throw "Python 3.11+ is required; found $pythonVersion. Install a newer Python and run install-agent.cmd again."
 }
 
-if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue) -or -not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
   if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     throw "FFmpeg/ffprobe is required. Install FFmpeg, add it to PATH, and run install-agent.cmd again."
   }
@@ -69,8 +69,8 @@ if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
     throw "FFmpeg installation failed with exit code $installExitCode. Resolve the winget error, then run install-agent.cmd again."
   }
   Refresh-Path
-  if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
-    throw "FFmpeg was installed but ffprobe is not on PATH yet. Close this window, open a new one, and run install-agent.cmd again."
+  if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue) -or -not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+    throw "FFmpeg was installed but ffmpeg/ffprobe are not on PATH yet. Close this window, open a new one, and run install-agent.cmd again."
   }
 }
 
@@ -82,7 +82,7 @@ if (-not (Test-Path ".venv")) {
 Write-Host "[4/5] Installing Local Agent dependencies..."
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+& .\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 New-Item -ItemType Directory -Force -Path models | Out-Null
