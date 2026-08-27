@@ -812,7 +812,7 @@ async def analyze(
         async with ANALYSIS_SEMAPHORE:
             current_fingerprint, current_meta = await asyncio.to_thread(_inspect_capture_sync, video_path)
             if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
-                raise MediaError("Capture changed after registration; register the file again")
+                raise HTTPException(409, "Capture changed after registration; register the file again")
             result = await asyncio.to_thread(
                 _run_analyze_sync,
                 body,

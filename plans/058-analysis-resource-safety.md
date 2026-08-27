@@ -17,6 +17,7 @@
 - **Category**: perf
 - **Planned at**: commit `d6066d2`, 2026-08-27
 - **Implementation status**: DONE on branch `jenss/improve-all-findings`
+- **Verification follow-up**: provenance compatibility correction committed separately after the first full-suite run.
 
 ## Why this matters
 
@@ -48,6 +49,7 @@ The agent already uses chunked hashing in `apps/agent/adapters/media.py:27-35`, 
 - `apps/agent/main.py`
 - `apps/agent/adapters/media.py`
 - `apps/agent/test_security.py`
+- `apps/agent/test_integrity.py`
 - `scripts/stream-sha256.mjs` (create)
 - `scripts/test-stream-sha256.mjs` (create)
 - `scripts/run-domain-benchmarks.mjs`
