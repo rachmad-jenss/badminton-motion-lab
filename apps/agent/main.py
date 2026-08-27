@@ -502,6 +502,18 @@ async def create_media_ticket(capture_id: str) -> str:
     now = now_epoch()
     db_path = get_db_path(DATA_DIR)
     async with aiosqlite.connect(db_path) as db:
+        cur = await db.execute("SELECT path FROM captures WHERE id = ?", (capture_id,))
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Capture not found")
+        try:
+            path = assert_allowed_media_path(Path(row[0]), data_dir=DATA_DIR)
+        except MediaError as exc:
+            if "file not found" in str(exc).lower():
+                raise HTTPException(410, "Local media missing") from exc
+            raise HTTPException(403, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(410, "Local media missing")
         await db.execute(
             "INSERT INTO media_tickets (token_hash, capture_id, expires_at) VALUES (?, ?, ?)",
             (hash_secret(ticket), capture_id, now + MEDIA_TICKET_TTL_SECONDS),
@@ -515,11 +527,12 @@ async def issue_media_ticket(
     body: MediaTicketRequest,
     _token: str = Depends(require_bearer),
 ) -> dict[str, Any]:
-    ticket = await create_media_ticket(body.capture_id)
+    capture_id = body.capture_id.strip()
+    ticket = await create_media_ticket(capture_id)
     return {
-        "captureId": body.capture_id,
+        "captureId": capture_id,
         "expiresAt": now_epoch() + MEDIA_TICKET_TTL_SECONDS,
-        "url": f"http://{HOST}:{PORT}/media/{body.capture_id}?{urlencode({'ticket': ticket})}",
+        "url": f"http://{HOST}:{PORT}/media/{capture_id}?{urlencode({'ticket': ticket})}",
     }
 
 

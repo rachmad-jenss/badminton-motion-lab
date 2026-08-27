@@ -16,6 +16,7 @@
 - **Depends on**: plans/056-agent-credential-boundary.md
 - **Category**: bug
 - **Planned at**: commit `d6066d2`, 2026-08-27
+- **Implementation status**: DONE on branch `jenss/improve-all-findings`
 
 ## Why this matters
 

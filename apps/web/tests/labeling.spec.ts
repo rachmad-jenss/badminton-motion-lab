@@ -95,11 +95,64 @@ test("labeling rejects degenerate court corners before export", async ({ page })
   });
   await mockHealth(page);
 
+  await page.route(`${AGENT_URL}/media-tickets`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        captureId: "cap-1",
+        expiresAt: 4_000_000_000,
+        url: `${AGENT_URL}/media/cap-1?ticket=t1`,
+      }),
+    });
+  });
+
   await page.goto("/label");
 
   await page.getByLabel("Capture ID").fill("cap-1");
+  await page.getByRole("button", { name: "Load preview" }).click();
+  await expect(page.locator("video")).toHaveAttribute("src", /media\/cap-1/);
   await page.getByRole("button", { name: "Download truth JSON" }).click();
 
   await expect(page.getByRole("alert").first()).toContainText("Court corners must be unique");
+});
+
+test("labeling refuses to export a preview under a different capture ID", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("bml.agentToken:http://127.0.0.1:8787", "paired-token");
+  });
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/media-tickets`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        captureId: "cap-a",
+        expiresAt: 4_000_000_000,
+        url: `${AGENT_URL}/media/cap-a?ticket=t1`,
+      }),
+    });
+  });
+  await page.route(`${AGENT_URL}/media/cap-a*`, async (route) => {
+    await route.fulfill({ status: 200, contentType: "video/mp4", body: Buffer.from("fake-video") });
+  });
+
+  await page.goto("/label");
+  await page.getByLabel("Capture ID").fill("cap-a");
+  await page.getByRole("button", { name: "Load preview" }).click();
+  await expect(page.locator("video")).toHaveAttribute("src", /media\/cap-a/);
+
+  for (const [label, value] of [
+    ["Corner 1 X", "100"], ["Corner 1 Y", "200"],
+    ["Corner 2 X", "1180"], ["Corner 2 Y", "200"],
+    ["Corner 3 X", "1200"], ["Corner 3 Y", "700"],
+    ["Corner 4 X", "80"], ["Corner 4 Y", "700"],
+  ] as const) {
+    await page.getByLabel(label).fill(value);
+  }
+
+  await page.getByLabel("Capture ID").fill("cap-b");
+  await page.getByRole("button", { name: "Download truth JSON" }).click();
+  await expect(page.getByRole("status").last()).toContainText("Load a preview for the current capture");
 });
 

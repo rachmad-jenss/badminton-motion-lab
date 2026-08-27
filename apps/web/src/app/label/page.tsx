@@ -37,6 +37,7 @@ export default function LabelPage() {
   const [strokeId, setStrokeId] = useState("clear");
   const [hand, setHand] = useState<LabelingHand>("unknown");
   const [ticketUrl, setTicketUrl] = useState<string | null>(null);
+  const [loadedCaptureId, setLoadedCaptureId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [cornerError, setCornerError] = useState<string | null>(null);
@@ -49,6 +50,14 @@ export default function LabelPage() {
   const techniques = getModules().filter((m) => m.kind === "technique_stroke");
   const frame = frameFromTime(timeSeconds, fps);
 
+  function clearPreview() {
+    setTicketUrl(null);
+    setLoadedCaptureId(null);
+    setContactFrame(null);
+    setTimeSeconds(0);
+    setCornerError(null);
+  }
+
   function updateCorner(index: number, axis: "x" | "y", value: string) {
     const parsed = Number(value);
     const next = corners.map((c, i) => (i === index ? { ...c, [axis]: Number.isFinite(parsed) ? parsed : 0 } : c));
@@ -57,15 +66,21 @@ export default function LabelPage() {
 
   async function loadPreview() {
     setStatus(null);
-    if (!captureId.trim()) {
+    const requestedCaptureId = captureId.trim();
+    clearPreview();
+    if (!requestedCaptureId) {
       setStatus("Enter a capture ID first.");
       return;
     }
     try {
       const res = await agentPost<{ captureId: string; expiresAt: number; url: string }>(
         "/media-tickets",
-        { capture_id: captureId.trim() },
+        { capture_id: requestedCaptureId },
       );
+      if (res.captureId !== requestedCaptureId) {
+        throw new Error("The Local Agent returned a different capture preview.");
+      }
+      setLoadedCaptureId(res.captureId);
       setTicketUrl(res.url);
       setStatus("Preview loaded from the Local Agent.");
     } catch (e) {
@@ -88,6 +103,11 @@ export default function LabelPage() {
   }
 
   function exportTruth() {
+    const requestedCaptureId = captureId.trim();
+    if (!ticketUrl || loadedCaptureId !== requestedCaptureId) {
+      setStatus("Load a preview for the current capture before exporting.");
+      return;
+    }
     const video = videoRef.current;
     const validation = validateCourtCorners(corners, {
       width: video?.videoWidth || 1280,
@@ -99,7 +119,7 @@ export default function LabelPage() {
     }
     setCornerError(null);
     const truth = buildLabelingTruth({
-      id: captureId.trim(),
+      id: requestedCaptureId,
       fps,
       contactFrameTruth: contactFrame,
       courtCorners: corners,
@@ -120,6 +140,11 @@ export default function LabelPage() {
   }
 
   async function copyTruth() {
+    const requestedCaptureId = captureId.trim();
+    if (!ticketUrl || loadedCaptureId !== requestedCaptureId) {
+      setStatus("Load a preview for the current capture before exporting.");
+      return;
+    }
     const video = videoRef.current;
     const validation = validateCourtCorners(corners, {
       width: video?.videoWidth || 1280,
@@ -131,7 +156,7 @@ export default function LabelPage() {
     }
     setCornerError(null);
     const truth = buildLabelingTruth({
-      id: captureId.trim(),
+      id: requestedCaptureId,
       fps,
       contactFrameTruth: contactFrame,
       courtCorners: corners,
@@ -173,7 +198,11 @@ export default function LabelPage() {
             id="capture-id"
             className="d-input"
             value={captureId}
-            onChange={(e) => setCaptureId(e.target.value)}
+            onChange={(e) => {
+              const nextCaptureId = e.target.value;
+              setCaptureId(nextCaptureId);
+              if (loadedCaptureId && loadedCaptureId !== nextCaptureId.trim()) clearPreview();
+            }}
             placeholder="Capture ID from the agent run"
           />
           <button className="d-btn d-btn-primary" onClick={() => void loadPreview()}>
@@ -192,7 +221,18 @@ export default function LabelPage() {
             onChange={(e) => setFps(Math.max(1, Number(e.target.value) || 30))}
           />
         </div>
-        {ticketUrl ? <video ref={videoRef} controls src={ticketUrl} className="label-video" /> : null}
+        {ticketUrl ? (
+          <video
+            ref={videoRef}
+            controls
+            src={ticketUrl}
+            className="label-video"
+            onError={() => {
+              clearPreview();
+              setStatus("The media preview expired or is unavailable. Load it again.");
+            }}
+          />
+        ) : null}
       </section>
 
       <section className="panel">

@@ -177,6 +177,26 @@ def test_media_ticket_supports_repeated_playback(tmp_path: Path, monkeypatch: py
         assert client.get(ticket).status_code == 200
 
 
+def test_media_ticket_rejects_unknown_capture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    data = tmp_path / "agent-data"
+    data.mkdir()
+    monkeypatch.setattr(agent_main, "DATA_DIR", data)
+    monkeypatch.setattr(agent_main, "byok", ByokStore(data / "secrets"))
+
+    with TestClient(agent_main.app) as client:
+        health = client.get("/health").json()
+        pair = client.post("/pair", json={"pairing_code": health["pairingCode"]})
+        token = pair.json()["token"]
+        response = client.post(
+            "/media-tickets",
+            json={"capture_id": "does-not-exist"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+        with sqlite3.connect(data / "agent.sqlite3") as db:
+            assert db.execute("SELECT COUNT(*) FROM media_tickets").fetchone() == (0,)
+
+
 def test_manual_contact_replaces_model_event_and_reaches_racket_metric():
     pose_frames = [
         {
