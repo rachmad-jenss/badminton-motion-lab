@@ -132,11 +132,58 @@ def test_default_analysis_window_covers_full_video():
     assert agent_main.resolve_frame_window(1800, None, None) == (300, 6, False)
     assert agent_main.resolve_frame_window(1800, 300, 1) == (300, 1, True)
     # Pixel budget bounds high-resolution decode windows (anti-OOM)
-    assert agent_main.resolve_frame_window(300, None, None, width=3840, height=2160) == (33, 10, False)
-    assert agent_main.resolve_frame_window(1800, None, None, width=1280, height=720) == (300, 6, False)
+    assert agent_main.resolve_frame_window(300, None, None, width=3840, height=2160) == (16, 19, False)
+    assert agent_main.resolve_frame_window(1800, None, None, width=1280, height=720) == (145, 13, False)
     # Over-budget frames clamp to a single frame instead of dividing by zero
     assert agent_main.resolve_frame_window(300, None, None, width=22000, height=13000) == (1, 300, False)
     assert agent_main.resolve_frame_window(300, 300, 1, width=22000, height=13000) == (1, 1, True)
+
+
+def test_analysis_window_obeys_conservative_byte_budget():
+    assert agent_main.MAX_ANALYSIS_BYTES <= 384 * 1024 * 1024
+    frame_bytes = 1280 * 720 * 3
+    expected_frames = agent_main.MAX_ANALYSIS_BYTES // frame_bytes
+    assert expected_frames >= 1
+    assert agent_main.resolve_frame_window(600, None, None, width=1280, height=720) == (
+        expected_frames,
+        5,
+        False,
+    )
+
+
+def test_register_capture_offloads_media_inspection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    data = tmp_path / "agent-data"
+    data.mkdir()
+    media_root = tmp_path / "media"
+    media_root.mkdir()
+    media = media_root / "clip.mp4"
+    media.write_bytes(b"test media")
+    monkeypatch.setenv("BML_MEDIA_ROOTS", str(media_root))
+    monkeypatch.setattr(agent_main, "DATA_DIR", data)
+    monkeypatch.setattr(agent_main, "byok", ByokStore(data / "secrets"))
+    calls: list[str] = []
+
+    def fake_inspect(path: Path):
+        assert path == media.resolve()
+        return "a" * 64, {"width": 1280, "height": 720, "fps": 30, "frameCount": 1, "bytes": 10, "durationMs": 33}
+
+    async def fake_to_thread(function, *args, **kwargs):
+        calls.append(function.__name__)
+        return function(*args, **kwargs)
+
+    monkeypatch.setattr(agent_main, "_inspect_capture_sync", fake_inspect)
+    monkeypatch.setattr(agent_main.asyncio, "to_thread", fake_to_thread)
+
+    with TestClient(agent_main.app) as client:
+        health = client.get("/health").json()
+        pair = client.post("/pair", json={"pairing_code": health["pairingCode"]})
+        response = client.post(
+            "/captures/register",
+            json={"path": str(media)},
+            headers={"Authorization": f"Bearer {pair.json()['token']}"},
+        )
+        assert response.status_code == 200
+    assert calls == ["fake_inspect"]
 
 
 def test_agent_host_requires_loopback_without_explicit_opt_in(monkeypatch: pytest.MonkeyPatch):

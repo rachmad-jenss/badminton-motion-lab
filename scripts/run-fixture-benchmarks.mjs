@@ -12,6 +12,7 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TECHNIQUE_STROKES, allModuleIds, moduleKind } from "./module-inventory.mjs";
+import { sha256File } from "./stream-sha256.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -117,7 +118,7 @@ async function main() {
     console.error(`Pipeline version provenance mismatch: health=${health.pipelineVersion} contract=${contractVersion}`);
     process.exit(1);
   }
-  const fixtureSha256 = createHash("sha256").update(readFileSync(FIXTURE_VIDEO)).digest("hex").toUpperCase();
+  const fixtureSha256 = await sha256File(FIXTURE_VIDEO);
 
   const pair = await agentJson("/pair", {
     method: "POST",

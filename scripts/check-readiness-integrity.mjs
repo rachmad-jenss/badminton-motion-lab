@@ -16,6 +16,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { allModuleIds } from "./module-inventory.mjs";
+import { sha256File } from "./stream-sha256.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = join(root, "apps", "web", "src", "lib", "readiness.seed.json");
@@ -76,7 +77,7 @@ if (seed.pipelineVersion !== contractVersion) {
   fail("seed pipelineVersion=" + seed.pipelineVersion + " contract=" + contractVersion);
 }
 if (!truth?.sha256 || !existsSync(fixturePath)) fail("fixture hash provenance is missing");
-const fixtureSha256 = createHash("sha256").update(readFileSync(fixturePath)).digest("hex").toUpperCase();
+const fixtureSha256 = await sha256File(fixturePath);
 if (truth.sha256.toUpperCase() !== fixtureSha256) fail("fixture truth hash does not match the media file");
 
 const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")) : null;

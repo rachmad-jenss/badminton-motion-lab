@@ -79,9 +79,10 @@ _DEFAULT_MAX_RAW = os.getenv("BML_MAX_FRAMES")
 DEFAULT_MAX_FRAMES = int(_DEFAULT_MAX_RAW) if _DEFAULT_MAX_RAW not in (None, "") else 300
 DEFAULT_STRIDE = int(os.getenv("BML_FRAME_STRIDE", "1"))
 
-# Total decoded pixel budget across the frame window (anti-OOM): at 720p this
-# matches the default 300-frame window (~830 MB of BGR arrays worst case).
+# Total decoded pixel budget across the frame window (anti-OOM). The separate
+# byte budget below is the conservative cap for the in-memory BGR frame list.
 MAX_ANALYSIS_PIXELS = int(os.getenv("BML_MAX_ANALYSIS_PIXELS", str(1280 * 720 * 300)))
+MAX_ANALYSIS_BYTES = int(os.getenv("BML_MAX_ANALYSIS_BYTES", str(384 * 1024 * 1024)))
 MAX_CAPTURE_BYTES = int(os.getenv("BML_MAX_CAPTURE_BYTES", str(2 * 1024 * 1024 * 1024)))
 CAPTURE_WRITE_CHUNK_BYTES = 1024 * 1024
 PUBLIC_PATHS = {"/health", "/pair", "/docs", "/openapi.json", "/redoc"}
@@ -182,6 +183,8 @@ def resolve_frame_window(
         # (quality gate) instead of dividing by zero in the stride fallback.
         pixel_max_frames = max(1, MAX_ANALYSIS_PIXELS // max(1, width * height))
         max_frames = min(max_frames, pixel_max_frames)
+        byte_max_frames = max(1, MAX_ANALYSIS_BYTES // max(1, width * height * 3))
+        max_frames = min(max_frames, byte_max_frames)
     stride = requested_stride or DEFAULT_STRIDE
     if requested_max_frames is None and requested_stride is None and frame_count > max_frames:
         stride = max(stride, math.ceil(frame_count / max_frames))
@@ -377,8 +380,7 @@ async def _register_capture_path(
     title: str | None = None,
 ) -> dict[str, Any]:
     try:
-        meta = probe_media(path)
-        fp = fingerprint_file(path)
+        fp, meta = await asyncio.to_thread(_inspect_capture_sync, path)
     except MediaError as e:
         raise HTTPException(400, capture_error_detail(str(e))) from e
     meta["path"] = str(path.resolve())
@@ -565,13 +567,28 @@ def _timed_stage(callback: Any) -> tuple[Any, tuple[str, str]]:
     return result, (started_at, utc_now())
 
 
-def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, metadata_json: str) -> dict[str, Any]:
+def _inspect_capture_sync(path: Path) -> tuple[str, dict[str, Any]]:
+    meta = probe_media(path)
+    return fingerprint_file(path), meta
+
+
+def _run_analyze_sync(
+    body: AnalyzeRequest,
+    path_str: str,
+    fingerprint: str,
+    metadata_json: str,
+    *,
+    inspected_fingerprint: str | None = None,
+    inspected_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     video_path = Path(path_str)
     stored_meta = json.loads(metadata_json)
-    fresh_fingerprint = fingerprint_file(video_path)
+    fresh_fingerprint = (
+        inspected_fingerprint if inspected_fingerprint is not None else fingerprint_file(video_path)
+    )
     if fresh_fingerprint != fingerprint:
         raise MediaError("Capture bytes changed after registration; register the file again")
-    meta = probe_media(video_path)
+    meta = dict(inspected_metadata) if inspected_metadata is not None else probe_media(video_path)
     if not _capture_metadata_matches(stored_meta, meta):
         raise MediaError("Capture metadata changed after registration; register the file again")
     meta["fingerprint"] = fresh_fingerprint
@@ -755,6 +772,7 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
             "stride": stride,
             "truncated": truncated,
             "pixelBudget": MAX_ANALYSIS_PIXELS,
+            "memoryBudgetBytes": MAX_ANALYSIS_BYTES,
         },
     }
     return {
@@ -786,17 +804,22 @@ async def analyze(
 
     try:
         stored_meta = json.loads(metadata_json)
-        current_fingerprint = fingerprint_file(video_path)
-        current_meta = probe_media(video_path)
-    except (MediaError, json.JSONDecodeError) as exc:
+    except json.JSONDecodeError as exc:
         raise HTTPException(409, "Capture provenance could not be revalidated; register the file again") from exc
-    if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
-        raise HTTPException(409, "Capture changed after registration; register the file again")
 
     try:
         async with ANALYSIS_SEMAPHORE:
+            current_fingerprint, current_meta = await asyncio.to_thread(_inspect_capture_sync, video_path)
+            if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
+                raise MediaError("Capture changed after registration; register the file again")
             result = await asyncio.to_thread(
-                _run_analyze_sync, body, path_str, fingerprint, metadata_json
+                _run_analyze_sync,
+                body,
+                path_str,
+                fingerprint,
+                metadata_json,
+                inspected_fingerprint=current_fingerprint,
+                inspected_metadata=current_meta,
             )
     except MediaError as e:
         raise HTTPException(400, capture_error_detail(str(e))) from e

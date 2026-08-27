@@ -16,6 +16,7 @@
 - **Depends on**: none
 - **Category**: perf
 - **Planned at**: commit `d6066d2`, 2026-08-27
+- **Implementation status**: DONE on branch `jenss/improve-all-findings`
 
 ## Why this matters
 
@@ -48,9 +49,11 @@ The agent already uses chunked hashing in `apps/agent/adapters/media.py:27-35`, 
 - `apps/agent/adapters/media.py`
 - `apps/agent/test_security.py`
 - `scripts/stream-sha256.mjs` (create)
+- `scripts/test-stream-sha256.mjs` (create)
 - `scripts/run-domain-benchmarks.mjs`
 - `scripts/run-fixture-benchmarks.mjs`
 - `scripts/check-readiness-integrity.mjs`
+- `package.json`
 
 **Out of scope**:
 
