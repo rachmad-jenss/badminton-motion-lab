@@ -41,7 +41,9 @@ jobs:
           python --version
           node --version
           npm --version
-          ffprobe -version | Select-Object -First 1
+          $ffprobeVersion = @(& ffprobe -version 2>&1)
+          if ($LASTEXITCODE -ne 0) { throw "ffprobe failed its version check" }
+          $ffprobeVersion | Select-Object -First 1
 
       - name: npm ci
         run: npm ci
