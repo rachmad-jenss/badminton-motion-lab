@@ -39,7 +39,7 @@ def propose_events(
             duration_ms=last_time_ms,
         )
 
-    if pure_footwork and not racket_track:
+    if pure_footwork:
         return _propose_pure_footwork_events(
             by_idx=by_idx,
             fps=fps,

@@ -376,6 +376,24 @@ def test_pure_footwork_proposes_events_without_racket_or_contact():
     }
 
 
+def test_pure_footwork_ignores_wrist_proxy_track():
+    events = propose_events(
+        pose_frames=_pose_only_footwork_frames(),
+        racket_track=[{"frameIndex": 0, "x": 0.3, "y": 0.4}],
+        shuttle_track=[],
+        fps=30,
+        stroke_hint="drill",
+        pure_footwork=True,
+        source_frame_count=12,
+        source_duration_ms=400.0,
+    )
+
+    types = {event["type"] for event in events["events"]}
+    assert events["mode"] == "auto"
+    assert {"split_step", "first_step", "base_return"}.issubset(types)
+    assert "contact" not in types
+
+
 def test_corrected_contact_outside_sampled_pose_window_is_not_measured():
     metrics = compute_metrics(
         modules=["technique:clear"],
