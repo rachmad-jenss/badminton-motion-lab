@@ -205,6 +205,29 @@ Accessibility and interaction polish from the design-system audit at commit `0d9
 |------:|------|----------|--------|------------|
 | 1 | [055-menu-close-escape-outside](055-menu-close-escape-outside.md) | P2 | MERGED (PR #19, main CI 32574135282 green) | none |
 
+## Complete findings hardening (2026-08-27, plans 056-061)
+
+Implementation order below is intentionally serial and bounded for Windows
+memory safety. Plans 057, 059, and 060 depend on the shared agent/resource
+contracts established earlier; plan 061 closes the fresh-setup and static
+serving path after media behavior is stable.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [056-agent-credential-boundary](056-agent-credential-boundary.md) | P1 | DONE | none |
+| 2 | [057-labeling-capture-integrity](057-labeling-capture-integrity.md) | P1 | DONE | 056 |
+| 3 | [058-analysis-resource-safety](058-analysis-resource-safety.md) | P1 | DONE | none |
+| 4 | [059-pure-footwork-frame-accuracy](059-pure-footwork-frame-accuracy.md) | P1 | DONE | 058 |
+| 5 | [060-manifest-degraded-stage](060-manifest-degraded-stage.md) | P1 | DONE | 058 |
+| 6 | [061-release-reproducibility-and-serve](061-release-reproducibility-and-serve.md) | P1 | DONE | 058 |
+
+The six plans cover the ten actionable findings from the 2026-08-27 audit,
+including the lower-priority invalid-ticket, device-retention, manual-frame,
+and streaming-hash cases. Public readiness remains a separate data gate:
+`validation/domain-manifest.json` must contain real, rights-cleared
+ShuttleSet/own-capture evidence before any module is unlocked. No synthetic
+clip or truth data is in scope for these plans.
+
 ## Verification
 
 ```bash

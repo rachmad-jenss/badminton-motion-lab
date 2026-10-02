@@ -50,11 +50,12 @@
         "properties": {
           "stepId": { "type": "string" },
           "version": { "type": "string" },
-          "status": { "type": "string" },
+          "status": { "enum": ["ok", "skipped", "failed"] },
           "startedAt": { "type": "string" },
           "finishedAt": { "type": "string" },
           "inputHashes": { "type": "array", "items": { "type": "string" } },
-          "outputHashes": { "type": "array", "items": { "type": "string" } }
+          "outputHashes": { "type": "array", "items": { "type": "string" } },
+          "error": { "type": "string" }
         }
       }
     },

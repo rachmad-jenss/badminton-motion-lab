@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const AGENT_URL = "http://127.0.0.1:8787";
 const HEALTH_URL = /http:\/\/127\.0\.0\.1:8787\/health\/?$/;
+const AGENT_TOKEN_KEY = "bml.agentToken:http://127.0.0.1:8787";
 
 async function mockHealth(page: Page, overrides: Record<string, unknown> = {}) {
   await page.route(HEALTH_URL, async (route) => {
@@ -26,12 +27,13 @@ async function clearAgentStorage(page: Page) {
   await page.addInitScript(() => {
     localStorage.removeItem("bml.agentUrl");
     localStorage.removeItem("bml.agentToken");
+    localStorage.removeItem("bml.agentToken:http://127.0.0.1:8787");
   });
 }
 
 async function seedPairedBrowser(page: Page) {
   await page.addInitScript(() => {
-    localStorage.setItem("bml.agentToken", "paired-token");
+    localStorage.setItem("bml.agentToken:http://127.0.0.1:8787", "paired-token");
   });
 }
 
@@ -209,6 +211,18 @@ test("changing the Agent URL clears stale pairing readiness", async ({ page }) =
 
   await expect(page.getByLabel("Pairing code")).toHaveValue("");
   await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
+});
+
+test("changing the Agent URL removes the old URL-scoped token", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  await gotoWithAgentReady(page, "/agent", "Ready to analyze");
+  await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
+
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
+  await expect(page.evaluate((key) => localStorage.getItem(key), AGENT_TOKEN_KEY)).resolves.toBe(null);
+  await expect(page.evaluate(() => localStorage.getItem("bml.agentToken:http://127.0.0.1:9999"))).resolves.toBe(null);
 });
 
 test("analysis success exposes findings, evidence, and withheld metrics", async ({ page }) => {

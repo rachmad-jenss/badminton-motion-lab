@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import math
 import os
@@ -39,7 +40,32 @@ from pipeline.package import AnalysisPackageWriter
 from storage.auth import hash_secret, new_secret, now_epoch
 from storage.db import cleanup_storage, get_db_path, init_db
 
-HOST = os.getenv("BML_AGENT_HOST", "127.0.0.1")
+
+
+def validate_agent_host(host: str) -> str:
+    normalized = host.strip().lower()
+    is_loopback = normalized == "localhost"
+    if not is_loopback:
+        try:
+            is_loopback = ipaddress.ip_address(normalized).is_loopback
+        except ValueError:
+            is_loopback = False
+    if is_loopback:
+        return host
+    if os.getenv("BML_ALLOW_NON_LOOPBACK_HOST") == "1":
+        print(
+            "WARNING: BML_ALLOW_NON_LOOPBACK_HOST=1 exposes the local agent beyond loopback; "
+            "use only on a trusted network.",
+            flush=True,
+        )
+        return host
+    raise RuntimeError(
+        "BML_AGENT_HOST must be a loopback address (127.0.0.1, ::1, or localhost); "
+        "set BML_ALLOW_NON_LOOPBACK_HOST=1 only for an intentional unsafe bind"
+    )
+
+
+HOST = validate_agent_host(os.getenv("BML_AGENT_HOST", "127.0.0.1"))
 PORT = int(os.getenv("BML_AGENT_PORT", "8787"))
 DATA_DIR = Path(os.getenv("BML_AGENT_DATA_DIR", str(Path(__file__).resolve().parent / "data")))
 PIPELINE_VERSION = "0.2.2"
@@ -53,9 +79,10 @@ _DEFAULT_MAX_RAW = os.getenv("BML_MAX_FRAMES")
 DEFAULT_MAX_FRAMES = int(_DEFAULT_MAX_RAW) if _DEFAULT_MAX_RAW not in (None, "") else 300
 DEFAULT_STRIDE = int(os.getenv("BML_FRAME_STRIDE", "1"))
 
-# Total decoded pixel budget across the frame window (anti-OOM): at 720p this
-# matches the default 300-frame window (~830 MB of BGR arrays worst case).
+# Total decoded pixel budget across the frame window (anti-OOM). The separate
+# byte budget below is the conservative cap for the in-memory BGR frame list.
 MAX_ANALYSIS_PIXELS = int(os.getenv("BML_MAX_ANALYSIS_PIXELS", str(1280 * 720 * 300)))
+MAX_ANALYSIS_BYTES = int(os.getenv("BML_MAX_ANALYSIS_BYTES", str(384 * 1024 * 1024)))
 MAX_CAPTURE_BYTES = int(os.getenv("BML_MAX_CAPTURE_BYTES", str(2 * 1024 * 1024 * 1024)))
 CAPTURE_WRITE_CHUNK_BYTES = 1024 * 1024
 PUBLIC_PATHS = {"/health", "/pair", "/docs", "/openapi.json", "/redoc"}
@@ -156,6 +183,8 @@ def resolve_frame_window(
         # (quality gate) instead of dividing by zero in the stride fallback.
         pixel_max_frames = max(1, MAX_ANALYSIS_PIXELS // max(1, width * height))
         max_frames = min(max_frames, pixel_max_frames)
+        byte_max_frames = max(1, MAX_ANALYSIS_BYTES // max(1, width * height * 3))
+        max_frames = min(max_frames, byte_max_frames)
     stride = requested_stride or DEFAULT_STRIDE
     if requested_max_frames is None and requested_stride is None and frame_count > max_frames:
         stride = max(stride, math.ceil(frame_count / max_frames))
@@ -351,8 +380,7 @@ async def _register_capture_path(
     title: str | None = None,
 ) -> dict[str, Any]:
     try:
-        meta = probe_media(path)
-        fp = fingerprint_file(path)
+        fp, meta = await asyncio.to_thread(_inspect_capture_sync, path)
     except MediaError as e:
         raise HTTPException(400, capture_error_detail(str(e))) from e
     meta["path"] = str(path.resolve())
@@ -476,6 +504,18 @@ async def create_media_ticket(capture_id: str) -> str:
     now = now_epoch()
     db_path = get_db_path(DATA_DIR)
     async with aiosqlite.connect(db_path) as db:
+        cur = await db.execute("SELECT path FROM captures WHERE id = ?", (capture_id,))
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Capture not found")
+        try:
+            path = assert_allowed_media_path(Path(row[0]), data_dir=DATA_DIR)
+        except MediaError as exc:
+            if "file not found" in str(exc).lower():
+                raise HTTPException(410, "Local media missing") from exc
+            raise HTTPException(403, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(410, "Local media missing")
         await db.execute(
             "INSERT INTO media_tickets (token_hash, capture_id, expires_at) VALUES (?, ?, ?)",
             (hash_secret(ticket), capture_id, now + MEDIA_TICKET_TTL_SECONDS),
@@ -489,11 +529,12 @@ async def issue_media_ticket(
     body: MediaTicketRequest,
     _token: str = Depends(require_bearer),
 ) -> dict[str, Any]:
-    ticket = await create_media_ticket(body.capture_id)
+    capture_id = body.capture_id.strip()
+    ticket = await create_media_ticket(capture_id)
     return {
-        "captureId": body.capture_id,
+        "captureId": capture_id,
         "expiresAt": now_epoch() + MEDIA_TICKET_TTL_SECONDS,
-        "url": f"http://{HOST}:{PORT}/media/{body.capture_id}?{urlencode({'ticket': ticket})}",
+        "url": f"http://{HOST}:{PORT}/media/{capture_id}?{urlencode({'ticket': ticket})}",
     }
 
 
@@ -526,13 +567,28 @@ def _timed_stage(callback: Any) -> tuple[Any, tuple[str, str]]:
     return result, (started_at, utc_now())
 
 
-def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, metadata_json: str) -> dict[str, Any]:
+def _inspect_capture_sync(path: Path) -> tuple[str, dict[str, Any]]:
+    meta = probe_media(path)
+    return fingerprint_file(path), meta
+
+
+def _run_analyze_sync(
+    body: AnalyzeRequest,
+    path_str: str,
+    fingerprint: str,
+    metadata_json: str,
+    *,
+    inspected_fingerprint: str | None = None,
+    inspected_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     video_path = Path(path_str)
     stored_meta = json.loads(metadata_json)
-    fresh_fingerprint = fingerprint_file(video_path)
+    fresh_fingerprint = (
+        inspected_fingerprint if inspected_fingerprint is not None else fingerprint_file(video_path)
+    )
     if fresh_fingerprint != fingerprint:
         raise MediaError("Capture bytes changed after registration; register the file again")
-    meta = probe_media(video_path)
+    meta = dict(inspected_metadata) if inspected_metadata is not None else probe_media(video_path)
     if not _capture_metadata_matches(stored_meta, meta):
         raise MediaError("Capture metadata changed after registration; register the file again")
     meta["fingerprint"] = fresh_fingerprint
@@ -622,6 +678,11 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
 
     shuttle, shuttle_timing = _timed_stage(shuttle_stage)
 
+    modules = body.modules or [
+        f"technique:{body.stroke_hint or 'clear'}",
+        f"footwork:layer:{body.stroke_hint or 'clear'}",
+    ]
+
     events, events_timing = _timed_stage(
         lambda: propose_events(
             pose_frames=pose["frames"],
@@ -632,13 +693,9 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
             manual_events=body.manual_events,
             source_frame_count=frame_count,
             source_duration_ms=float(meta["durationMs"]),
+            pure_footwork="footwork:pure" in modules,
         )
     )
-
-    modules = body.modules or [
-        f"technique:{body.stroke_hint or 'clear'}",
-        f"footwork:layer:{body.stroke_hint or 'clear'}",
-    ]
 
     def metrics_stage() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         metrics = compute_metrics(
@@ -716,6 +773,7 @@ def _run_analyze_sync(body: AnalyzeRequest, path_str: str, fingerprint: str, met
             "stride": stride,
             "truncated": truncated,
             "pixelBudget": MAX_ANALYSIS_PIXELS,
+            "memoryBudgetBytes": MAX_ANALYSIS_BYTES,
         },
     }
     return {
@@ -747,22 +805,36 @@ async def analyze(
 
     try:
         stored_meta = json.loads(metadata_json)
-        current_fingerprint = fingerprint_file(video_path)
-        current_meta = probe_media(video_path)
-    except (MediaError, json.JSONDecodeError) as exc:
+    except json.JSONDecodeError as exc:
         raise HTTPException(409, "Capture provenance could not be revalidated; register the file again") from exc
-    if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
-        raise HTTPException(409, "Capture changed after registration; register the file again")
 
     try:
         async with ANALYSIS_SEMAPHORE:
+            current_fingerprint, current_meta = await asyncio.to_thread(_inspect_capture_sync, video_path)
+            if current_fingerprint != fingerprint or not _capture_metadata_matches(stored_meta, current_meta):
+                raise HTTPException(409, "Capture changed after registration; register the file again")
             result = await asyncio.to_thread(
-                _run_analyze_sync, body, path_str, fingerprint, metadata_json
+                _run_analyze_sync,
+                body,
+                path_str,
+                fingerprint,
+                metadata_json,
+                inspected_fingerprint=current_fingerprint,
+                inspected_metadata=current_meta,
             )
     except MediaError as e:
         raise HTTPException(400, capture_error_detail(str(e))) from e
     except QualityGateRejected as e:
         raise HTTPException(422, e.detail) from e
+    except MemoryError as e:
+        raise HTTPException(
+            503,
+            {
+                "code": "analysis_memory_limit",
+                "message": "This video needs more memory than the Local Agent can safely use.",
+                "action": "Close other video-heavy apps, choose a shorter clip, or lower the video resolution.",
+            },
+        ) from e
 
     async with aiosqlite.connect(db_path) as db:
         await db.execute(

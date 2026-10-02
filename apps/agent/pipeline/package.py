@@ -68,13 +68,14 @@ class AnalysisPackageWriter:
             version: str,
             status: str,
             output_names: list[str] | None = None,
+            error: str | None = None,
         ) -> dict[str, Any]:
             started_at, finished_at = step_timings.get(step_id, (created_at, created_at))
             input_hashes = [
                 fingerprint if name == "sourceMedia" else artifacts[name]["sha256"]
                 for name in step_input_artifacts.get(step_id, ["sourceMedia"])
             ]
-            return {
+            record = {
                 "stepId": step_id,
                 "version": version,
                 "status": status,
@@ -83,6 +84,9 @@ class AnalysisPackageWriter:
                 "inputHashes": input_hashes,
                 "outputHashes": [artifacts[name]["sha256"] for name in (output_names or [])],
             }
+            if error:
+                record["error"] = error[:500]
+            return record
 
         manifest = {
             "packageVersion": "1.0.0",
@@ -104,7 +108,13 @@ class AnalysisPackageWriter:
                 step("quality_gate", "1.0.0", "ok", ["quality"]),
                 step("court", "1.0.0", "ok" if court.get("valid") else "skipped", ["court"]),
                 step("racket", "baseline-1.0.0", "ok", ["racket"]),
-                step("shuttle", "baseline-1.0.0", "ok", ["shuttle"]),
+                step(
+                    "shuttle",
+                    "baseline-1.0.0",
+                    "failed" if shuttle.get("error") else "ok",
+                    ["shuttle"],
+                    str(shuttle.get("error")) if shuttle.get("error") else None,
+                ),
                 step("events", "baseline-1.0.0", "ok", ["events"]),
                 step("metrics", "1.0.0", "ok", ["metrics", "findings"]),
             ],

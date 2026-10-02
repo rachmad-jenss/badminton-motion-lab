@@ -55,6 +55,7 @@ async def cleanup_storage(
         raise ValueError("retention limits must be at least 1")
 
     deleted = {
+        "devices": 0,
         "pairing_challenges": 0,
         "media_tickets": 0,
         "analysis_runs": 0,
@@ -62,6 +63,13 @@ async def cleanup_storage(
         "media_files": 0,
     }
     async with aiosqlite.connect(db_path) as db:
+        cur = await db.execute(
+            """DELETE FROM devices
+               WHERE expires_at <= ? OR revoked_at IS NOT NULL""",
+            (now,),
+        )
+        deleted["devices"] = max(cur.rowcount, 0)
+
         cur = await db.execute(
             """DELETE FROM pairing_challenges
                WHERE expires_at <= ? OR used_at IS NOT NULL""",

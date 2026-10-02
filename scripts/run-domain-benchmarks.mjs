@@ -23,6 +23,7 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TECHNIQUE_STROKES, allModuleIds, moduleKind } from "./module-inventory.mjs";
+import { sha256File } from "./stream-sha256.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -160,7 +161,7 @@ async function analyzeClip(clip, token) {
   if (!existsSync(abs)) {
     fail("domain clip media missing: " + clip.path + " (keep media in gitignored validation/domain-media/)");
   }
-  const sha = createHash("sha256").update(readFileSync(abs)).digest("hex").toUpperCase();
+  const sha = await sha256File(abs);
   if (sha !== clip.sha256.toUpperCase()) {
     fail("domain clip hash mismatch for " + clip.id + "; update the manifest sha256");
   }

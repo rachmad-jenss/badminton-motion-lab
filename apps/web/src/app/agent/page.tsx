@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   agentBaseUrl,
+  clearAgentToken,
   agentErrorMessage,
   agentHealth,
   agentPost,
@@ -22,6 +23,7 @@ export default function AgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [pairing, setPairing] = useState(false);
+  const [forgetting, setForgetting] = useState(false);
   const [paired, setPaired] = useState(false);
   const [urlReady, setUrlReady] = useState(false);
   const urlRef = useRef(url);
@@ -87,8 +89,8 @@ export default function AgentPage() {
         pairing_code: code,
         device_name: "Windows Local Agent",
       });
-      setAgentToken(res.token);
-      setPaired(Boolean(agentToken()));
+      setAgentToken(res.token, urlRef.current);
+      setPaired(Boolean(agentToken(urlRef.current)));
       await refreshHealth();
       setStatus("Paired locally. Keep the agent running while reviewing video.");
     } catch (e) {
@@ -99,6 +101,24 @@ export default function AgentPage() {
       );
     } finally {
       setPairing(false);
+    }
+  }
+
+  async function forgetPairing() {
+    setForgetting(true);
+    setError(null);
+    setStatus("");
+    try {
+      if (agentToken(urlRef.current)) await agentPost("/auth/revoke", {});
+      setStatus("Browser pairing forgotten. Pair again before analyzing.");
+    } catch (e) {
+      if (!(e instanceof AgentRequestError && e.status === 401)) {
+        setError(agentErrorMessage(e, "The agent could not revoke this pairing."));
+      }
+    } finally {
+      clearAgentToken(urlRef.current);
+      setPaired(false);
+      setForgetting(false);
     }
   }
 
@@ -194,6 +214,12 @@ python main.py`}</pre>
             value={url}
             onChange={(e) => {
               const nextUrl = e.target.value;
+              const previousUrl = urlRef.current;
+              if (nextUrl.trim() !== previousUrl.trim()) {
+                clearAgentToken(previousUrl);
+                clearAgentToken(nextUrl);
+                setPaired(false);
+              }
               urlRef.current = nextUrl;
               healthRequestRef.current += 1;
               setUrl(nextUrl);
@@ -221,6 +247,11 @@ python main.py`}</pre>
           >
             Refresh health
           </button>
+          {paired ? (
+            <button className="d-btn d-btn-ghost" onClick={() => void forgetPairing()} disabled={forgetting}>
+              {forgetting ? "Forgetting…" : "Forget browser pairing"}
+            </button>
+          ) : null}
         </div>
         <p className="muted">Current base: {agentBaseUrl()}</p>
         {error ? <p className="status error" role="alert">{error}</p> : null}

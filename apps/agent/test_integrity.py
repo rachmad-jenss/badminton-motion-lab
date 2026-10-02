@@ -225,7 +225,7 @@ def test_capture_register_analyze_run_and_media_ticket_lifecycle(tmp_path: Path,
     monkeypatch.setattr(agent_main, "probe_media", lambda _path: dict(meta))
     monkeypatch.setattr(agent_main, "fingerprint_file", lambda _path: "a" * 64)
 
-    def fake_analyze(body, path_str, fingerprint, metadata_json):
+    def fake_analyze(body, path_str, fingerprint, metadata_json, **_kwargs):
         run_id = "run-lifecycle"
         package = AnalysisPackageWriter(data / "packages" / run_id).write(
             analysis_run_id=run_id,

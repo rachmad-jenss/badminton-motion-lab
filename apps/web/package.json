@@ -6,7 +6,7 @@
     "dev": "next dev -p 3001",
     "dev:test": "set NEXT_DIST_DIR=.next-test&& next dev -p 3101",
     "build": "next build",
-    "start": "next start",
+    "start": "node ../../scripts/serve-export.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json --noEmit",
     "test:web": "playwright test"
