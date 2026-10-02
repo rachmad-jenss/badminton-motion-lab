@@ -29,6 +29,7 @@ const EMPTY_CORNERS: CourtCorner[] = [
 
 export default function LabelPage() {
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [paired, setPaired] = useState(false);
   const [captureId, setCaptureId] = useState("");
   const [fps, setFps] = useState(30);
   const [timeSeconds, setTimeSeconds] = useState(0);
@@ -43,10 +44,10 @@ export default function LabelPage() {
   const [cornerError, setCornerError] = useState<string | null>(null);
 
   useEffect(() => {
+    setPaired(Boolean(agentToken()));
     void agentHealth().then(setHealth);
   }, []);
 
-  const paired = Boolean(agentToken());
   const techniques = getModules().filter((m) => m.kind === "technique_stroke");
   const frame = frameFromTime(timeSeconds, fps);
 
@@ -135,7 +136,7 @@ export default function LabelPage() {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     setStatus("Truth JSON downloaded. Save it under validation/domain-media/ and add the clip to the manifest.");
   }
 
