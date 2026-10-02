@@ -77,6 +77,30 @@
 - [ ] **Step 3: Run `npm run test:training-sources`.**
 - [ ] **Step 4: Run the existing targeted checks (`npm run lint`, `npm run typecheck`, and `npm run readiness:integrity`) without downloading datasets.**
 
+### Task 3a: Source adapter and checkpoint contract
+
+**Files:**
+- Create: `scripts/training-adapters.mjs`
+- Create: `scripts/training-adapters.test.mjs`
+- Modify: `scripts/check-training-sources.mjs`
+- Modify: `scripts/check-readiness-integrity.mjs`
+- Modify: `docs/training/README.md`
+
+**Interfaces:**
+- `normalizeTrainingRecord(sourceId, rawRecord, options)` returns a bounded
+  `bml-training-record-v1` record with provenance and a train/validation split.
+- `TRAINING_CHECKPOINT_CONTRACT` defines required outputs and reserves held-out
+  evaluation for own-capture data.
+
+- [ ] **Step 1: Write and run failing adapter tests** for all selected sources,
+  held-out rejection, and checkpoint outputs.
+- [ ] **Step 2: Implement source-specific normalization** without reading video
+  or loading a full dataset.
+- [ ] **Step 3: Make the source validator fail closed** for unknown license,
+  media-policy, and adapter values.
+- [ ] **Step 4: Make readiness integrity reuse the same source-policy validator.**
+- [ ] **Step 5: Run adapter, source, and readiness tests.**
+
 ### Task 4: Final review and handoff
 
 **Files:**
@@ -86,3 +110,11 @@
 - [ ] **Step 2: Run the full bounded project verification command.**
 - [ ] **Step 3: Confirm no media/checkpoint files entered Git and the public readiness gate remains honest.**
 - [ ] **Step 4: Record any remaining limitation: actual model training still requires the user to provision each source locally under its terms.**
+
+## Execution ledger
+
+- **Ruling:** expand the registry-only implementation with source-specific
+  record adapters, an input/checkpoint contract, and shared readiness validation
+  after final review found those requirements partial — the user asked to use
+  the selected projects, and the cost is a small metadata/normalization layer;
+  no dataset download or model training is introduced.

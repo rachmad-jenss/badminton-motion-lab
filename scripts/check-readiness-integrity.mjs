@@ -17,6 +17,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { allModuleIds } from "./module-inventory.mjs";
 import { sha256File } from "./stream-sha256.mjs";
+import { loadTrainingSourceManifest } from "./check-training-sources.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = join(root, "apps", "web", "src", "lib", "readiness.seed.json");
@@ -25,6 +26,7 @@ const truthPath = join(root, "validation", "fixtures", "person_1280x720_30fps.tr
 const fixturePath = join(root, "validation", "fixtures", "person_1280x720_30fps.mp4");
 const contractPath = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
 const manifestPath = join(root, "validation", "domain-manifest.json");
+const trainingSourceManifestPath = join(root, "validation", "training-sources.json");
 
 const expectedModules = allModuleIds();
 
@@ -63,6 +65,14 @@ function isDomainReport(report) {
     Array.isArray(report.evidence.eventClips) &&
     Array.isArray(report.evidence.poseClips)
   );
+}
+
+const trainingSources = loadTrainingSourceManifest(trainingSourceManifestPath);
+if (trainingSources.errors.length > 0) {
+  fail("training source manifest is invalid: " + trainingSources.errors.join(" | "));
+}
+if (trainingSources.sources.some((source) => source.publicEvidence)) {
+  fail("third-party training sources cannot be public readiness evidence");
 }
 
 if (!existsSync(seedPath)) fail("missing readiness.seed.json");

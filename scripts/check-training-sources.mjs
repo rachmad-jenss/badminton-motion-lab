@@ -1,11 +1,19 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SOURCE_ADAPTER_CONTRACTS } from "./training-adapters.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const root = resolve(dirname(scriptPath), "..");
 const defaultManifestPath = join(root, "validation", "training-sources.json");
 const requiredSourceIds = ["bfmd", "bst", "shuttleset", "shuttleset22", "racketvision"];
+const codeLicenses = new Set(["MIT", "not_declared"]);
+const dataLicenses = new Set([
+  "non_commercial_academic_only",
+  "upstream_dataset_specific",
+  "MIT_annotations_broadcast_media_restricted",
+  "MIT_listing_provenance_review",
+]);
 const mediaPolicies = new Set(["no_redistribution", "provenance_review_required"]);
 
 export function validateTrainingSourceManifest(manifest) {
@@ -63,6 +71,18 @@ export function validateTrainingSourceManifest(manifest) {
         errors.push(id + " requires a non-empty " + field);
       }
     }
+    if (typeof source.codeLicense === "string" && !codeLicenses.has(source.codeLicense)) {
+      errors.push(id + " has unsupported codeLicense: " + source.codeLicense);
+    }
+    if (typeof source.dataLicense === "string" && !dataLicenses.has(source.dataLicense)) {
+      errors.push(id + " has unsupported dataLicense: " + source.dataLicense);
+    }
+    if (typeof source.mediaPolicy === "string" && !mediaPolicies.has(source.mediaPolicy)) {
+      errors.push(id + " has unsupported mediaPolicy: " + source.mediaPolicy);
+    }
+    if (SOURCE_ADAPTER_CONTRACTS[id] && source.adapter !== SOURCE_ADAPTER_CONTRACTS[id].adapter) {
+      errors.push(id + ".adapter must be " + SOURCE_ADAPTER_CONTRACTS[id].adapter);
+    }
     for (const field of ["repositoryUrl", "datasetUrl"]) {
       if (typeof source[field] !== "string" || !source[field].startsWith("https://")) {
         errors.push(id + " requires an https " + field);
@@ -74,8 +94,8 @@ export function validateTrainingSourceManifest(manifest) {
     if (typeof source.publicEvidence !== "boolean") {
       errors.push(id + ".publicEvidence must be boolean");
     }
-    if (source.publicEvidence === true && mediaPolicies.has(source.mediaPolicy)) {
-      errors.push(id + " cannot be marked publicEvidence with mediaPolicy=" + source.mediaPolicy);
+    if (source.publicEvidence === true) {
+      errors.push(id + " cannot be marked publicEvidence under own_capture_only");
     }
     if (typeof source.localRoot === "string" && policy?.localRoot === "validation/training-sources") {
       const expectedLocalRoot = "validation/training-sources/" + id;

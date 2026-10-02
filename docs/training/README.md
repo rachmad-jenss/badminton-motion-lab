@@ -31,6 +31,20 @@ safe local roots. It intentionally does not download, decode, or load a full
 match. Any future trainer must process one rally/window at a time, cap frames
 and resolution, and keep concurrency at one by default.
 
+The source-specific record normalizers live in
+[`scripts/training-adapters.mjs`](../../scripts/training-adapters.mjs). They
+map BFMD, BST, ShuttleSet/ShuttleSet22, and RacketVision annotation records to
+the bounded `bml-training-record-v1` shape. The
+[`TRAINING_CHECKPOINT_CONTRACT`](../../scripts/training-adapters.mjs) defines
+the required model outputs and reserves held-out evaluation for own-capture
+data.
+
+Run the adapter contract tests with:
+
+```powershell
+npm run test:training-adapters
+```
+
 ## Model roles
 
 - Start stroke classification with the MIT-licensed BST implementation and
@@ -42,6 +56,6 @@ and resolution, and keep concurrency at one by default.
 - Validate the resulting BML pipeline on held-out own-capture clips. Training
   sources do not automatically unlock public readiness.
 
-This repository change wires the source contract and license boundary. It does
-not pretend that model weights have been trained when the source data has not
-been provisioned locally.
+This repository change wires source contracts, normalization, and the license
+boundary. It does not pretend that model weights have been trained when the
+source data has not been provisioned locally.

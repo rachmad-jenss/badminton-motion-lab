@@ -53,3 +53,21 @@ test("rejects restricted media marked as public evidence", () => {
 
   assert.match(result.errors.join("\n"), /cannot be marked publicEvidence/);
 });
+
+test("rejects an unrecognized code license", () => {
+  const manifest = copyManifest();
+  manifest.sources[0].codeLicense = "GPL-3.0";
+
+  const result = validateTrainingSourceManifest(manifest);
+
+  assert.match(result.errors.join("\n"), /unsupported codeLicense/);
+});
+
+test("rejects an unrecognized media policy", () => {
+  const manifest = copyManifest();
+  manifest.sources[0].mediaPolicy = "maybe_redistributable";
+
+  const result = validateTrainingSourceManifest(manifest);
+
+  assert.match(result.errors.join("\n"), /unsupported mediaPolicy/);
+});
