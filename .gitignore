@@ -30,6 +30,8 @@ tmp/
 output/
 *.pem
 validation/domain-media/
+validation/training-sources/
+validation/training-derived/
 apps/web/out/
 .idea/
 .vscode/

@@ -1,6 +1,27 @@
 # Dataset attribution and license notes
 
-Updated 2026-08-16 as part of Plan 028 (domain readiness roadmap).
+Updated 2026-10-02 for the training-source registry. The BML source code is
+MIT-licensed, but that license does not change the terms of third-party data.
+
+Training media and external checkouts stay outside Git. Keep the source ID,
+upstream URL, checksum, license text, and any permission record with the local
+training run.
+
+## BFMD (training only)
+
+[BFMD](https://github.com/Ning-D/BFMD) provides full-match badminton
+annotations for pose, court, shuttle, shot type, and hit events. Its [dataset
+page](https://ning-d.github.io/BFMD-Dataset/) states that the release is for
+non-commercial academic research, must not be redistributed, and does not
+redistribute the BWF TV source videos. It may be used only in a local run that
+honors those terms; it is not public-readiness evidence.
+
+## BST (training code)
+
+[BST](https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer) is
+MIT-licensed source code for skeleton-based stroke classification and includes
+normalization paths for joints, shuttlecock, and court position. Its datasets,
+downloaded weights, and upstream video rights remain separate artifacts.
 
 ## ShuttleSet (event/contact evidence)
 
@@ -18,6 +39,24 @@ the domain benchmark manifest.
   and benchmark evidence. No ShuttleSet media is committed to this repository.
   Redistribution or commercial use of the footage requires a separate rights
   review before public release.
+
+## ShuttleSet22 (training only)
+
+[ShuttleSet22](https://github.com/wywyWang/CoachAI-Projects/tree/main/CoachAI-Challenge-IJCAI2023/ShuttleSet22)
+extends ShuttleSet with train/validation/test stroke records, hitting frame,
+player positions, and court homography fields. The CoachAI repository carries
+an MIT license and the annotation CSVs have a separate MIT attribution notice,
+but the referenced match videos remain broadcaster-owned. Do not redistribute
+those videos or use them as public evidence without a separate rights review.
+
+## RacketVision (training code and auxiliary annotations)
+
+[RacketVision](https://github.com/OrcustD/RacketVision) is MIT-licensed code for
+ball tracking, five-keypoint racket pose, and trajectory prediction. Its
+[dataset card](https://huggingface.co/datasets/linfeng302/RacketVision) labels
+the dataset MIT, but BML still requires per-file provenance review before any
+downloaded video or derived media is redistributed or promoted to public
+readiness evidence.
 
 ## Fine-Badminton (research-only, never release evidence)
 

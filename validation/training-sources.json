@@ -1,0 +1,83 @@
+{
+  "manifestVersion": 1,
+  "policy": {
+    "localRoot": "validation/training-sources",
+    "derivedRoot": "validation/training-derived",
+    "downloadMode": "manual",
+    "maxInFlightSources": 1,
+    "maxRecordsPerRun": 50000,
+    "publicEvidenceRule": "own_capture_only"
+  },
+  "sources": [
+    {
+      "id": "bfmd",
+      "kind": "dataset",
+      "repositoryUrl": "https://github.com/Ning-D/BFMD",
+      "datasetUrl": "https://ning-d.github.io/BFMD-Dataset/",
+      "adapter": "bfmd-v1",
+      "roles": ["pose", "court", "shuttle", "stroke", "hit_event"],
+      "codeLicense": "not_declared",
+      "dataLicense": "non_commercial_academic_only",
+      "mediaPolicy": "no_redistribution",
+      "publicEvidence": false,
+      "localRoot": "validation/training-sources/bfmd",
+      "attribution": "BFMD: A Full-Match Badminton Dense Dataset for Dense Shot Captioning"
+    },
+    {
+      "id": "bst",
+      "kind": "training_code",
+      "repositoryUrl": "https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer",
+      "datasetUrl": "https://github.com/wywyWang/CoachAI-Projects/tree/main/ShuttleSet",
+      "adapter": "bst-v1",
+      "roles": ["stroke_classifier", "pose_features", "shuttle_features", "court_position"],
+      "codeLicense": "MIT",
+      "dataLicense": "upstream_dataset_specific",
+      "mediaPolicy": "no_redistribution",
+      "publicEvidence": false,
+      "localRoot": "validation/training-sources/bst",
+      "attribution": "BST: Badminton Stroke-type Transformer for Skeleton-based Action Recognition in Racket Sports"
+    },
+    {
+      "id": "shuttleset",
+      "kind": "dataset",
+      "repositoryUrl": "https://github.com/wywyWang/CoachAI-Projects",
+      "datasetUrl": "https://github.com/wywyWang/CoachAI-Projects/tree/main/ShuttleSet",
+      "adapter": "shuttleset-v1",
+      "roles": ["stroke", "contact_frame", "player_position", "court_homography", "rally_context"],
+      "codeLicense": "MIT",
+      "dataLicense": "MIT_annotations_broadcast_media_restricted",
+      "mediaPolicy": "no_redistribution",
+      "publicEvidence": false,
+      "localRoot": "validation/training-sources/shuttleset",
+      "attribution": "ShuttleSet: A Human-Annotated Stroke-Level Singles Dataset for Badminton Tactical Analysis"
+    },
+    {
+      "id": "shuttleset22",
+      "kind": "dataset",
+      "repositoryUrl": "https://github.com/wywyWang/CoachAI-Projects",
+      "datasetUrl": "https://github.com/wywyWang/CoachAI-Projects/tree/main/CoachAI-Challenge-IJCAI2023/ShuttleSet22",
+      "adapter": "shuttleset22-v1",
+      "roles": ["stroke", "contact_frame", "player_position", "court_homography", "rally_context"],
+      "codeLicense": "MIT",
+      "dataLicense": "MIT_annotations_broadcast_media_restricted",
+      "mediaPolicy": "no_redistribution",
+      "publicEvidence": false,
+      "localRoot": "validation/training-sources/shuttleset22",
+      "attribution": "ShuttleSet22: Benchmarking Stroke Forecasting with Stroke-Level Badminton Dataset"
+    },
+    {
+      "id": "racketvision",
+      "kind": "dataset_and_training_code",
+      "repositoryUrl": "https://github.com/OrcustD/RacketVision",
+      "datasetUrl": "https://huggingface.co/datasets/linfeng302/RacketVision",
+      "adapter": "racketvision-v1",
+      "roles": ["shuttle_tracking", "racket_pose", "ball_tracking", "trajectory"],
+      "codeLicense": "MIT",
+      "dataLicense": "MIT_listing_provenance_review",
+      "mediaPolicy": "provenance_review_required",
+      "publicEvidence": false,
+      "localRoot": "validation/training-sources/racketvision",
+      "attribution": "RacketVision: A Multiple Racket Sports Benchmark for Unified Ball and Racket Analysis"
+    }
+  ]
+}

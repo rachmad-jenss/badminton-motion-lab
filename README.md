@@ -119,6 +119,23 @@ git under `validation/domain-media/`). `npm run benchmark:fixtures` is a pipelin
 check only — since Plan 030 it does not write reports or the readiness seed;
 `npm run readiness:integrity` validates report/seed provenance.
 
+### Training-source registry (maintainer only)
+
+The selected training sources are registered in
+`validation/training-sources.json`: BFMD, BST, ShuttleSet, ShuttleSet22, and
+RacketVision. Source checkouts, raw video, annotations, and checkpoints stay
+outside Git under the ignored `validation/training-sources/` directory. The
+registry validator is metadata-only and bounded; it does not download media or
+load a full match into memory.
+
+```powershell
+npm run training:sources
+```
+
+See `docs/training/README.md` and `validation/DATASET_ATTRIBUTION.md` before
+provisioning any source. Third-party data terms remain separate from the BML
+source-code license.
+
 ### 4. Supabase (reserved, not yet wired)
 
 The `supabase/` migrations and the `.env.example` Supabase keys are reserved for a
@@ -135,4 +152,6 @@ time series never go into Postgres (ADR-013).
 
 ## License
 
-Private / hobby research project unless otherwise stated.
+The BML source code and documentation are released under the MIT License; see
+`LICENSE`. Third-party datasets, videos, annotations, model weights, and
+external repositories retain their own licenses and rights notices.
