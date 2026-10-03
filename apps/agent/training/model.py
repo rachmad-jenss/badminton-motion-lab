@@ -10,7 +10,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from .records import BML_STROKE_LABELS, FEATURE_NAMES
+from .records import BML_STROKE_LABELS, FEATURE_NAMES, extract_feature_vector
 
 
 CHECKPOINT_CONTRACT_VERSION = 1
@@ -89,6 +89,70 @@ def predict_checkpoint(checkpoint: dict[str, Any], features: Sequence[float]) ->
     }
     validate_prediction(prediction)
     return prediction
+
+
+def extract_pipeline_features(
+    *,
+    fps: float,
+    pose: dict[str, Any],
+    shuttle: dict[str, Any],
+    racket: dict[str, Any],
+    width: float = 1.0,
+    height: float = 1.0,
+) -> list[float]:
+    """Map bounded local-agent tracks into the training feature schema."""
+
+    if not math.isfinite(float(fps)) or fps < 0:
+        raise CheckpointError("pipeline fps must be finite and non-negative")
+    if not math.isfinite(float(width)) or width <= 0 or not math.isfinite(float(height)) or height <= 0:
+        raise CheckpointError("pipeline dimensions must be finite and positive")
+
+    pose_points = [
+        landmark
+        for frame in (pose.get("frames") or [])[:64]
+        for landmark in (frame.get("landmarks") or [])[:64]
+        if isinstance(landmark, dict)
+    ]
+    player_position = _mean_position(pose_points, width=width, height=height)
+    shuttle_points = [
+        point for point in (shuttle.get("points") or [])[:64] if isinstance(point, dict)
+    ]
+    racket_points = [
+        point for point in (racket.get("points") or [])[:64] if isinstance(point, dict)
+    ]
+    landing = _mean_position(shuttle_points, width=width, height=height)
+    record = {
+        "fps": fps,
+        "pose": {"frames": pose.get("frames") or []},
+        "shuttle": {"points": shuttle_points},
+        "racket": {"points": racket_points},
+        "features": {
+            "playerPosition": player_position,
+            "opponentPosition": None,
+            "landing": landing,
+            "backhand": False,
+            "aroundHead": False,
+        },
+    }
+    return extract_feature_vector(record)
+
+
+def _mean_position(points: Sequence[dict[str, Any]], *, width: float, height: float) -> dict[str, float] | None:
+    coordinates = []
+    for point in points:
+        try:
+            x = float(point["x"])
+            y = float(point["y"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if math.isfinite(x) and math.isfinite(y):
+            coordinates.append((x / width, y / height))
+    if not coordinates:
+        return None
+    return {
+        "x": sum(x for x, _ in coordinates) / len(coordinates),
+        "y": sum(y for _, y in coordinates) / len(coordinates),
+    }
 
 
 def validate_prediction(prediction: dict[str, Any]) -> dict[str, Any]:

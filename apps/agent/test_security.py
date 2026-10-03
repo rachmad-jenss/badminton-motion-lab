@@ -433,6 +433,12 @@ def test_analysis_manifest_matches_contract_step_shape(tmp_path: Path):
         events={},
         metrics=[],
         findings=[],
+        stroke_prediction={
+            "strokeId": "clear",
+            "contactFrame": 12,
+            "confidence": 0.8,
+            "provenance": {"checkpointSha256": "c" * 64, "publicEvidence": False},
+        },
         pipeline_version="0.2.2",
         step_timings={
             "pose": ("2026-01-01T00:00:00+00:00", "2026-01-01T00:00:01+00:00"),
@@ -453,6 +459,7 @@ def test_analysis_manifest_matches_contract_step_shape(tmp_path: Path):
         "a" * 64,
         steps["pose"]["outputHashes"][0],
     ]
+    assert package["manifest"]["artifacts"]["stroke_classifier"]["path"] == "stroke_classifier.json"
 
 
 def test_analysis_manifest_marks_degraded_shuttle_stage_failed(tmp_path: Path):

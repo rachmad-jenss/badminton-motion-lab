@@ -19,6 +19,8 @@ from training.records import (
 from training.model import FEATURE_SCHEMA_VERSION, REQUIRED_OUTPUTS, load_checkpoint, predict_checkpoint
 from training.cli import run_smoke
 from training.runner import TrainingConfig, run_training
+from main import _optional_stroke_prediction, _stroke_prediction_for_analysis
+from adapters.media import MediaError
 
 
 def _source(path: Path, source_id: str = "shuttleset22") -> RecordSource:
@@ -260,3 +262,60 @@ def test_smoke_runner_proves_training_reload_and_stays_locked(tmp_path: Path) ->
     assert result.evaluation["inferenceContractValid"] is True
     assert result.evaluation["evidenceClass"] == "synthetic_smoke"
     assert result.evaluation["readiness"] == "locked"
+
+
+def test_local_agent_feature_adapter_consumes_checkpoint_contract(tmp_path: Path) -> None:
+    records_path = tmp_path / "records.jsonl"
+    _write_jsonl(records_path, _training_rows())
+    result = run_training(
+        [_source(records_path)],
+        output_dir=tmp_path / "run",
+        config=TrainingConfig(seed=17, epochs=2, batch_size=3, learning_rate=0.2),
+    )
+
+    prediction = _stroke_prediction_for_analysis(
+        result.checkpoint_path,
+        fps=30,
+        pose={"frames": [{"frameIndex": 1, "landmarks": [{"x": 0.4, "y": 0.5}]}]},
+        shuttle={"points": [{"frameIndex": 1, "x": 0.3, "y": 0.4}]},
+        racket={"points": [{"frameIndex": 1, "x": 0.5, "y": 0.6}]},
+    )
+
+    assert set(REQUIRED_OUTPUTS).issubset(prediction)
+    assert prediction["provenance"]["checkpointSha256"] == result.checkpoint_sha256
+
+
+def test_unset_stroke_checkpoint_is_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("BML_STROKE_CHECKPOINT", raising=False)
+
+    result = _optional_stroke_prediction(
+        fps=30,
+        pose={"frames": []},
+        shuttle={"points": []},
+        racket={"points": []},
+        width=1280,
+        height=720,
+    )
+
+    assert result == {
+        "enabled": False,
+        "reason": "BML_STROKE_CHECKPOINT is not configured",
+    }
+
+
+def test_invalid_stroke_checkpoint_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    checkpoint_path = tmp_path / "invalid-checkpoint.json"
+    checkpoint_path.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("BML_STROKE_CHECKPOINT", str(checkpoint_path))
+
+    with pytest.raises(MediaError, match="Configured stroke checkpoint is invalid"):
+        _optional_stroke_prediction(
+            fps=30,
+            pose={"frames": []},
+            shuttle={"points": []},
+            racket={"points": []},
+            width=1280,
+            height=720,
+        )

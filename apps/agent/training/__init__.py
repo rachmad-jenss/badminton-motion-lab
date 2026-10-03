@@ -5,6 +5,7 @@ from .model import (
     FEATURE_SCHEMA_VERSION,
     MODEL_ID,
     REQUIRED_OUTPUTS,
+    extract_pipeline_features,
     load_checkpoint,
     predict_checkpoint,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "FEATURE_SCHEMA_VERSION",
     "MODEL_ID",
     "REQUIRED_OUTPUTS",
+    "extract_pipeline_features",
     "load_checkpoint",
     "predict_checkpoint",
 ]

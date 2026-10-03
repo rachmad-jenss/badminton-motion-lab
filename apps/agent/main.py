@@ -39,6 +39,12 @@ from adapters.shuttle import track_shuttle
 from pipeline.package import AnalysisPackageWriter
 from storage.auth import hash_secret, new_secret, now_epoch
 from storage.db import cleanup_storage, get_db_path, init_db
+from training.model import (
+    CheckpointError,
+    extract_pipeline_features,
+    load_checkpoint,
+    predict_checkpoint,
+)
 
 
 
@@ -567,6 +573,60 @@ def _timed_stage(callback: Any) -> tuple[Any, tuple[str, str]]:
     return result, (started_at, utc_now())
 
 
+def _stroke_prediction_for_analysis(
+    checkpoint_path: str | Path,
+    *,
+    fps: float,
+    pose: dict[str, Any],
+    shuttle: dict[str, Any],
+    racket: dict[str, Any],
+    width: float = 1.0,
+    height: float = 1.0,
+) -> dict[str, Any]:
+    checkpoint = load_checkpoint(Path(checkpoint_path))
+    features = extract_pipeline_features(
+        fps=fps,
+        pose=pose,
+        shuttle=shuttle,
+        racket=racket,
+        width=width,
+        height=height,
+    )
+    return predict_checkpoint(checkpoint, features)
+
+
+def _optional_stroke_prediction(
+    *,
+    fps: float,
+    pose: dict[str, Any],
+    shuttle: dict[str, Any],
+    racket: dict[str, Any],
+    width: float,
+    height: float,
+) -> dict[str, Any]:
+    checkpoint_raw = os.getenv("BML_STROKE_CHECKPOINT", "").strip()
+    if not checkpoint_raw:
+        return {
+            "enabled": False,
+            "reason": "BML_STROKE_CHECKPOINT is not configured",
+        }
+    try:
+        return {
+            "enabled": True,
+            **_stroke_prediction_for_analysis(
+                checkpoint_raw,
+                fps=fps,
+                pose=pose,
+                shuttle=shuttle,
+                racket=racket,
+                width=width,
+                height=height,
+            ),
+        }
+    except CheckpointError as exc:
+        raise MediaError(f"Configured stroke checkpoint is invalid: {exc}") from exc
+
+
 def _inspect_capture_sync(path: Path) -> tuple[str, dict[str, Any]]:
     meta = probe_media(path)
     return fingerprint_file(path), meta
@@ -678,6 +738,17 @@ def _run_analyze_sync(
 
     shuttle, shuttle_timing = _timed_stage(shuttle_stage)
 
+    stroke_prediction, stroke_prediction_timing = _timed_stage(
+        lambda: _optional_stroke_prediction(
+            fps=fps,
+            pose=pose,
+            shuttle=shuttle,
+            racket=racket,
+            width=width,
+            height=height,
+        )
+    )
+
     modules = body.modules or [
         f"technique:{body.stroke_hint or 'clear'}",
         f"footwork:layer:{body.stroke_hint or 'clear'}",
@@ -728,6 +799,7 @@ def _run_analyze_sync(
         events=events,
         metrics=metrics,
         findings=findings,
+        stroke_prediction=stroke_prediction,
         pipeline_version=PIPELINE_VERSION,
         step_timings={
             "quality_gate": quality_timing,
@@ -735,6 +807,7 @@ def _run_analyze_sync(
             "pose": pose_timing,
             "racket": racket_timing,
             "shuttle": shuttle_timing,
+            "stroke_classifier": stroke_prediction_timing,
             "events": events_timing,
             "metrics": metrics_timing,
         },
@@ -767,6 +840,7 @@ def _run_analyze_sync(
         "racketCoverage": racket.get("coverage"),
         "shuttleCoverage": shuttle.get("coverage"),
         "strokeHint": body.stroke_hint or "clear",
+        "strokePrediction": stroke_prediction,
         "frameWindow": {
             "decodedFrames": len(frames),
             "maxFramesCap": max_frames,

@@ -45,6 +45,7 @@ class AnalysisPackageWriter:
         events: dict[str, Any],
         metrics: list[dict[str, Any]],
         findings: list[dict[str, Any]],
+        stroke_prediction: dict[str, Any] | None = None,
         pipeline_version: str,
         step_timings: dict[str, tuple[str, str]] | None = None,
         step_input_artifacts: dict[str, list[str]] | None = None,
@@ -59,6 +60,15 @@ class AnalysisPackageWriter:
             "metrics": self._write_json("metrics.json", metrics),
             "findings": self._write_json("findings.json", findings),
             "court": self._write_json("court.json", court),
+            "stroke_classifier": self._write_json(
+                "stroke_classifier.json",
+                stroke_prediction
+                if stroke_prediction is not None
+                else {
+                    "enabled": False,
+                    "reason": "BML_STROKE_CHECKPOINT is not configured",
+                },
+            ),
         }
         step_timings = step_timings or {}
         step_input_artifacts = step_input_artifacts or {}
