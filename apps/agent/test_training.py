@@ -276,6 +276,37 @@ def _nonlinear_training_rows() -> list[dict]:
     return rows
 
 
+def _imbalanced_training_rows() -> list[dict]:
+    rows = []
+    train_strokes = ("smash",) * 8 + ("drop",) * 2 + ("clear",)
+    for index, stroke in enumerate(train_strokes):
+        rows.append(
+            {
+                "id": f"train-imbalanced-{index}",
+                "split": "train",
+                "type": stroke,
+                "frame": 10 + index,
+                "position": {"x": 0.2 + (index % 3) * 0.3, "y": 0.5},
+                "opponent_location_x": 0.5,
+                "opponent_location_y": 0.5,
+            }
+        )
+    for split in ("validation", "test"):
+        for index, stroke in enumerate(("smash", "drop", "clear")):
+            rows.append(
+                {
+                    "id": f"{split}-imbalanced-{index}",
+                    "split": split,
+                    "type": stroke,
+                    "frame": 20 + index,
+                    "position": {"x": 0.2 + index * 0.3, "y": 0.5},
+                    "opponent_location_x": 0.5,
+                    "opponent_location_y": 0.5,
+                }
+            )
+    return rows
+
+
 def test_small_nonlinear_classifier_learns_interaction_without_loading_dataset(
     tmp_path: Path,
 ) -> None:
@@ -324,6 +355,28 @@ def test_training_updates_parameters_and_evaluates_all_source_splits(tmp_path: P
     assert "macroF1" in result.evaluation["metrics"]["test"]
     assert "classMetrics" in result.evaluation["metrics"]["test"]
     assert result.evaluation["readiness"] == "locked"
+
+
+def test_training_records_class_coverage_and_inverse_frequency_weights(tmp_path: Path) -> None:
+    records_path = tmp_path / "records.jsonl"
+    _write_jsonl(records_path, _imbalanced_training_rows())
+
+    result = run_training(
+        [_source(records_path)],
+        output_dir=tmp_path / "run",
+        config=TrainingConfig(seed=17, epochs=2, batch_size=4, learning_rate=0.1),
+    )
+
+    checkpoint = json.loads(result.checkpoint_path.read_text(encoding="utf-8"))
+    training = checkpoint["training"]
+    assert training["classBalance"] == "inverse_frequency"
+    assert training["classCounts"]["smash"] == 8
+    assert training["classCounts"]["drop"] == 2
+    assert training["classCounts"]["clear"] == 1
+    assert training["classCounts"]["serve"] == 0
+    assert training["classWeights"]["clear"] > training["classWeights"]["drop"] > training["classWeights"]["smash"]
+    assert result.evaluation["classCoverage"]["train"]["unsupportedClasses"]
+    assert "serve" in result.evaluation["classCoverage"]["train"]["unsupportedClasses"]
 
 
 def test_checkpoint_reload_produces_required_contract_prediction(tmp_path: Path) -> None:

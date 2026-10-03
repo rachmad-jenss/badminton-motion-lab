@@ -123,8 +123,11 @@ and includes `strokeId`, absolute `contactFrame`, `contactFrameRelative`,
 `confidence`, and `provenance`. Contact regression is trained against the
 relative position inside the rally/window, then converted to the absolute frame
 using the inference window. Evaluation includes per-class precision/recall/F1,
-support-aware macro-F1, all-taxonomy macro-F1, and a confusion matrix. It
-contains no raw records, video, or frames. To inspect the local readiness
+support-aware macro-F1, all-taxonomy macro-F1, and a confusion matrix. It uses
+inverse-frequency class-balanced cross-entropy from the train split and records
+`classCounts`, `classWeights`, `classCoverage`, and `unsupportedClasses` so
+missing labels cannot be hidden by aggregate accuracy. It contains no raw
+records, video, or frames. To inspect the local readiness
 decision for the newest run (or a specific report), use:
 
 ```powershell

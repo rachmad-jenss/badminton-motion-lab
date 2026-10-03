@@ -98,6 +98,7 @@ def run_training(
     target_sum = 0.0
     target_square_sum = 0.0
     train_records = 0
+    class_counts = {label: 0 for label in BML_STROKE_LABELS}
     split_counts = {"train": 0, "validation": 0, "test": 0}
     first_pass_stats = ReaderStats()
 
@@ -108,6 +109,7 @@ def run_training(
         split_counts[split] += 1
         if split != "train":
             continue
+        class_counts[record["strokeId"]] += 1
         vector = np.asarray(extract_feature_vector(record), dtype=np.float64)
         feature_sum += vector
         feature_square_sum += vector * vector
@@ -129,6 +131,7 @@ def run_training(
     target_mean = target_sum / train_records
     target_variance = max(target_square_sum / train_records - target_mean * target_mean, 0.0)
     target_std = max(math.sqrt(target_variance), 1e-3)
+    class_weights = _inverse_frequency_class_weights(class_counts)
 
     rng = np.random.default_rng(config.seed)
     input_weights = rng.normal(0.0, 0.05, (feature_count, config.hidden_size))
@@ -165,6 +168,7 @@ def run_training(
                     contact_bias,
                     feature_mean,
                     feature_std,
+                    class_weights,
                     config,
                 )
                 epoch_loss += loss * len(batch_features)
@@ -184,6 +188,7 @@ def run_training(
                 contact_bias,
                 feature_mean,
                 feature_std,
+                class_weights,
                 config,
             )
             epoch_loss += loss * len(batch_features)
@@ -241,6 +246,7 @@ def run_training(
         "sourceIds": sorted({item["sourceId"] for item in source_provenance}),
         "sourceFiles": source_files,
         "splitCounts": split_counts,
+        "classCounts": class_counts,
         "heldOutRecords": held_out_count,
         "reader": asdict(first_pass_stats),
         "provenance": source_provenance,
@@ -280,6 +286,12 @@ def run_training(
             "hiddenSize": config.hidden_size,
             "shuffleBufferSize": config.shuffle_buffer_size,
             "trainingUpdates": training_updates,
+            "classBalance": "inverse_frequency",
+            "classCounts": class_counts,
+            "classWeights": {
+                label: float(class_weights[index])
+                for index, label in enumerate(BML_STROKE_LABELS)
+            },
         },
         "provenance": {
             "sourceIds": sorted({item["sourceId"] for item in source_provenance}),
@@ -336,6 +348,10 @@ def run_training(
             contact_std=target_std,
         )
     held_out_metrics = metrics.get("held_out")
+    class_coverage = {
+        split: _class_coverage(metric)
+        for split, metric in metrics.items()
+    }
     metric_gate_passed = bool(
         held_out_metrics
         and held_out_metrics["records"] > 0
@@ -364,6 +380,7 @@ def run_training(
         "inferenceContractValid": True,
         "requiredOutputs": list(REQUIRED_OUTPUTS),
         "metrics": metrics,
+        "classCoverage": class_coverage,
         "history": history,
         "metricGate": {
             "minHeldOutAccuracy": config.min_held_out_accuracy,
@@ -430,6 +447,7 @@ def _update_batch(
     contact_bias: float,
     feature_mean: np.ndarray,
     feature_std: np.ndarray,
+    class_weights: np.ndarray,
     config: TrainingConfig,
 ) -> tuple[float, float]:
     features = (np.asarray(batch_features, dtype=np.float64) - feature_mean) / feature_std
@@ -439,10 +457,17 @@ def _update_batch(
     hidden = np.maximum(hidden_pre_activation, 0.0)
     logits = hidden @ output_weights + output_bias
     probabilities = _softmax(logits)
-    cross_entropy = -float(np.mean(np.log(np.maximum(probabilities[np.arange(len(labels)), labels], 1e-12))))
+    sample_weights = class_weights[labels]
+    weight_sum = float(np.sum(sample_weights))
+    if weight_sum <= 0.0:
+        raise TrainingDataError("training batch has no positive class weight")
+    cross_entropy = -float(
+        np.sum(sample_weights * np.log(np.maximum(probabilities[np.arange(len(labels)), labels], 1e-12)))
+        / weight_sum
+    )
     grad_logits = probabilities.copy()
     grad_logits[np.arange(len(labels)), labels] -= 1.0
-    grad_logits /= len(labels)
+    grad_logits *= (sample_weights / weight_sum)[:, None]
     grad_output_weights = hidden.T @ grad_logits
     grad_output_bias = np.sum(grad_logits, axis=0)
     grad_hidden = (grad_logits @ output_weights.T) * (hidden_pre_activation > 0.0)
@@ -554,6 +579,33 @@ def _evaluate_split(
             "labels": list(BML_STROKE_LABELS),
             "matrix": confusion.tolist(),
         },
+    }
+
+
+def _inverse_frequency_class_weights(class_counts: dict[str, int]) -> np.ndarray:
+    counts = np.asarray([class_counts[label] for label in BML_STROKE_LABELS], dtype=np.float64)
+    supported = counts > 0
+    total = float(np.sum(counts))
+    supported_count = int(np.sum(supported))
+    weights = np.zeros(len(BML_STROKE_LABELS), dtype=np.float64)
+    if total <= 0.0 or supported_count == 0:
+        raise TrainingDataError("no supported training classes")
+    weights[supported] = total / (supported_count * counts[supported])
+    return weights
+
+
+def _class_coverage(metric: dict[str, Any]) -> dict[str, Any]:
+    class_metrics = metric.get("classMetrics", {})
+    counts = {
+        label: int(values.get("support", 0))
+        for label, values in class_metrics.items()
+    }
+    supported = [label for label, count in counts.items() if count > 0]
+    unsupported = [label for label, count in counts.items() if count == 0]
+    return {
+        "counts": counts,
+        "supportedClasses": supported,
+        "unsupportedClasses": unsupported,
     }
 
 

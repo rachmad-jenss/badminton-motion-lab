@@ -117,6 +117,7 @@ export function loadTrainingEvaluation(requestedPath) {
 
   validateCheckpoint(checkpoint, report, invalid);
   validateMetrics(report.metrics, invalid, notReady);
+  validateClassCoverage(report.classCoverage, invalid);
   validateEvidence(report, notReady);
 
   if (invalid.length > 0) return result("invalid", [...invalid, ...notReady], report, reportPath);
@@ -185,6 +186,13 @@ function validateCheckpoint(checkpoint, report, errors) {
   }
   if (provenance?.trainingManifestSha256 !== report.trainingManifestSha256) {
     errors.push("checkpoint training-manifest provenance mismatch");
+  }
+  const training = checkpoint.training;
+  if (!training || training.classBalance !== "inverse_frequency") {
+    errors.push("checkpoint class-balance metadata is missing");
+  } else {
+    validateClassBalanceMap(training.classCounts, "classCounts", errors, true);
+    validateClassBalanceMap(training.classWeights, "classWeights", errors, false);
   }
 
   const prediction = report.samplePrediction;
@@ -257,6 +265,57 @@ function validateMetrics(metrics, invalid, notReady) {
     }
   } else {
     notReady.push("held-out metrics are missing");
+  }
+}
+
+function validateClassCoverage(coverage, errors) {
+  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage)) {
+    errors.push("classCoverage is missing");
+    return;
+  }
+  for (const split of ["train", "validation", "test"]) {
+    const entry = coverage[split];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      errors.push("classCoverage." + split + " is missing");
+      continue;
+    }
+    validateClassBalanceMap(entry.counts, "classCoverage." + split + ".counts", errors, true);
+    if (!entry.counts || typeof entry.counts !== "object" || Array.isArray(entry.counts)) continue;
+    if (!Array.isArray(entry.supportedClasses) || !Array.isArray(entry.unsupportedClasses)) {
+      errors.push("classCoverage." + split + " must list supported and unsupported classes");
+      continue;
+    }
+    const supported = Object.keys(entry.counts).filter((label) => entry.counts[label] > 0).sort();
+    const unsupported = Object.keys(entry.counts).filter((label) => entry.counts[label] === 0).sort();
+    if (!sameStrings([...entry.supportedClasses].sort(), supported)) {
+      errors.push("classCoverage." + split + ".supportedClasses does not match counts");
+    }
+    if (!sameStrings([...entry.unsupportedClasses].sort(), unsupported)) {
+      errors.push("classCoverage." + split + ".unsupportedClasses does not match counts");
+    }
+  }
+}
+
+function validateClassBalanceMap(value, field, errors, integerValues) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    errors.push(field + " is missing");
+    return;
+  }
+  const keys = Object.keys(value);
+  if (keys.length !== STROKE_IDS.size || keys.some((key) => !STROKE_IDS.has(key))) {
+    errors.push(field + " must cover the stroke taxonomy");
+    return;
+  }
+  for (const key of keys) {
+    const number = value[key];
+    if (
+      !Number.isFinite(number) ||
+      number < 0 ||
+      (integerValues && !Number.isInteger(number))
+    ) {
+      errors.push(field + "." + key + " is invalid");
+      break;
+    }
   }
 }
 

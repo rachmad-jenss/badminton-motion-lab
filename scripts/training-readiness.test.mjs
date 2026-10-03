@@ -31,6 +31,18 @@ const CONFUSION = {
   matrix: LABELS.map((_, row) => LABELS.map((__, column) => (row === column ? 1 : 0))),
 };
 
+const CLASS_COUNTS = Object.fromEntries(LABELS.map((label) => [label, 1]));
+const CLASS_COVERAGE = Object.fromEntries(
+  ["train", "validation", "test"].map((split) => [
+    split,
+    {
+      counts: CLASS_COUNTS,
+      supportedClasses: LABELS,
+      unsupportedClasses: [],
+    },
+  ]),
+);
+
 function metric(overrides = {}) {
   return {
     records: 2,
@@ -58,6 +70,11 @@ function writeValidRun(overrides = {}) {
     featureNames: ["fps"],
     classes: LABELS,
     targetNormalization: { mean: 0.5, std: 0.2, representation: "relative_window" },
+    training: {
+      classBalance: "inverse_frequency",
+      classCounts: CLASS_COUNTS,
+      classWeights: CLASS_COUNTS,
+    },
     provenance: {
       trainingManifestSha256: manifestSha256,
       publicEvidence: false,
@@ -88,6 +105,7 @@ function writeValidRun(overrides = {}) {
     inferenceContractValid: true,
     requiredOutputs: ["strokeId", "contactFrame", "confidence", "provenance"],
     metrics: { train: metrics, validation: metrics, test: metrics, held_out: metrics },
+    classCoverage: CLASS_COVERAGE,
     heldOutSource: "own_capture",
     heldOutRecords: 2,
     evidenceClass: "own_capture",
@@ -119,6 +137,16 @@ test("checkpoint checksum mismatch is invalid evidence", () => {
   assert.equal(result.status, "invalid");
   assert.equal(result.ready, false);
   assert.match(result.errors.join("\n"), /checkpoint checksum mismatch/);
+});
+
+test("missing class coverage is invalid evidence", () => {
+  const run = writeValidRun({ classCoverage: undefined });
+
+  const result = loadTrainingEvaluation(run.reportPath);
+
+  assert.equal(result.status, "invalid");
+  assert.equal(result.ready, false);
+  assert.match(result.errors.join("\n"), /classCoverage is missing/);
 });
 
 test("synthetic smoke evidence remains not-ready", () => {
