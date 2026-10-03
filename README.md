@@ -130,11 +130,29 @@ load a full match into memory.
 
 ```powershell
 npm run training:sources
+npm run training:smoke
 ```
 
 See `docs/training/README.md` and `validation/DATASET_ATTRIBUTION.md` before
 provisioning any source. Third-party data terms remain separate from the BML
-source-code license.
+source-code license. `training:smoke` proves the bounded train/reload/inference
+path only; it must report `readiness=locked` and is not evidence that the
+registered datasets were trained. For a real run, use the explicit source/file
+mapping command in `docs/training/README.md`. Missing source roots produce
+`TRAINING NOT_RUN`, not a successful checkpoint.
+
+The local evaluation gate is separate:
+
+```powershell
+npm run readiness:training
+npm run readiness:integrity
+```
+
+Readiness can open only with matching checkpoint and manifest checksums, valid
+contract inference, finite train/validation/test metrics, and positive
+own-capture held-out metrics that pass the configured gate. Third-party or
+synthetic evidence stays locked. No raw dataset, video, extracted frame, or
+checkpoint is committed.
 
 ### 4. Supabase (reserved, not yet wired)
 

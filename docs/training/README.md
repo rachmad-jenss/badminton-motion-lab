@@ -45,6 +45,71 @@ Run the adapter contract tests with:
 npm run test:training-adapters
 ```
 
+## Real bounded training
+
+`npm run verify` and the adapter tests do not train a model. They only validate
+repository code and metadata. A real run needs the source checkouts and an
+explicit JSONL/CSV record file for every selected dataset source under the
+registry root. The trainer reads one record at a time, caps sequences and
+records, uses batch size at most 8, and writes only derived artifacts.
+
+First run the synthetic proof:
+
+```powershell
+npm run training:smoke
+```
+
+This must report non-zero `trainingUpdates`, successful checkpoint reload and
+inference-contract validation, but it must remain `readiness=locked`. It is
+not training-source or held-out evidence.
+
+After manual provisioning, a minimal real-source run is:
+
+```powershell
+npm run training:run -- `
+  --source bst `
+  --source shuttleset `
+  --source shuttleset22 `
+  --records shuttleset=validation/training-sources/shuttleset/records.jsonl `
+  --records shuttleset22=validation/training-sources/shuttleset22/records.jsonl `
+  --held-out validation/domain-media/own-capture-stroke.json
+```
+
+Add BFMD or RacketVision with another `--source` and explicit `--records`
+mapping when their normalized records are provisioned. The BST checkout is
+required as training-code provenance; dataset sources require both a checkout
+and an explicit records mapping. The command fails with `TRAINING NOT_RUN`
+when a root or mapping is missing, and that is not a successful training run.
+
+The run writes `checkpoint.json`, `checkpoint.sha256`,
+`training-manifest.json`, and `evaluation.json` below the ignored
+`validation/training-derived/` directory. The checkpoint is validated on load
+and includes `strokeId`, `contactFrame`, `confidence`, and `provenance`. It
+contains no raw records, video, or frames. To inspect the local readiness
+decision for the newest run (or a specific report), use:
+
+```powershell
+npm run readiness:training
+$env:BML_TRAINING_EVALUATION = "validation/training-derived/run-YYYYMMDD-HHMMSS/evaluation.json"
+npm run readiness:training
+```
+
+Only a report with finite train/validation/test metrics, a positive
+`own_capture` held-out set, a passing metric gate, matching checkpoint and
+manifest checksums, and valid inference output can be `ready`. Synthetic smoke,
+BST/ShuttleSet broadcast data, and other third-party data remain `not-ready`.
+If the report is ready, configure the local agent explicitly with its ignored
+checkpoint path:
+
+```powershell
+$env:BML_STROKE_CHECKPOINT = "validation/training-derived/run-YYYYMMDD-HHMMSS/checkpoint.json"
+```
+
+This makes the prediction observable in the analysis summary and
+`stroke_classifier.json`; it does not replace the existing perception or event
+pipeline. Public module readiness remains fail-closed until the domain report
+also passes.
+
 ## Model roles
 
 - Start stroke classification with the MIT-licensed BST implementation and
@@ -56,6 +121,7 @@ npm run test:training-adapters
 - Validate the resulting BML pipeline on held-out own-capture clips. Training
   sources do not automatically unlock public readiness.
 
-This repository change wires source contracts, normalization, and the license
-boundary. It does not pretend that model weights have been trained when the
-source data has not been provisioned locally.
+This repository wires source contracts, bounded training, checkpoint
+validation, inference, and the license boundary. It does not pretend that
+model weights have been trained when the source data has not been provisioned
+locally.

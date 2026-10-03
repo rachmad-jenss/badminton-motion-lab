@@ -21,6 +21,7 @@
     "test:training": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-training-tests.ps1",
     "training:smoke": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-training.ps1 smoke",
     "training:run": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-training.ps1 run",
+    "readiness:training": "node scripts/check-training-readiness.mjs",
     "training:sources": "node scripts/check-training-sources.mjs",
     "test:domain": "node scripts/run-domain-benchmarks.mjs",
     "test:hash": "node scripts/test-stream-sha256.mjs",
