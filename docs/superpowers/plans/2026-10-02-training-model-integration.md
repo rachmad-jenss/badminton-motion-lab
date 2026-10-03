@@ -90,7 +90,7 @@
   Run `& .\\apps\\agent\\.venv\\Scripts\\python.exe -m pytest apps/agent/test_training.py -q -p no:cacheprovider`. Expected: missing `training.model`/`training.runner` imports or missing CLI behavior.
 
 - [ ] **Step 3: Implement the bounded NumPy model.**
-  Fit train-only feature mean/std in a first streaming pass; run seeded linear softmax cross-entropy plus normalized contact-frame regression with SGD and batch size capped at 8; evaluate each split in a second streaming pass. Do not materialize all examples or shuffle by retaining the dataset.
+  Fit train-only feature mean/std in a first streaming pass; run a seeded one-hidden-layer ReLU classifier plus normalized contact-frame regression with SGD, batch size capped at 8, and a bounded shuffle buffer; evaluate each split in a second streaming pass. Do not materialize all examples or shuffle by retaining the dataset.
 
 - [ ] **Step 4: Implement checkpoint and manifest integrity.**
   Write canonical JSON parameters and feature metadata; hash input files streaming; write manifest before checkpoint; hash checkpoint after writing; validate shapes, classes, contract version, and checksum on load. Store only source IDs, file checksums, split counts, license/media fields, and config—not raw records or media.

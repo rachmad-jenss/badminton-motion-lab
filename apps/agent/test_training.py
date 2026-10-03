@@ -209,6 +209,56 @@ def _training_rows() -> list[dict]:
     return rows
 
 
+def _nonlinear_training_rows() -> list[dict]:
+    corners = (
+        (0.1, 0.1, "smash"),
+        (0.1, 0.9, "drop"),
+        (0.9, 0.1, "drop"),
+        (0.9, 0.9, "smash"),
+    )
+    rows = []
+    for split in ("train", "validation", "test"):
+        for repeat in range(8):
+            for index, (x, y, stroke) in enumerate(corners):
+                rows.append(
+                    {
+                        "id": f"{split}-xor-{repeat}-{index}",
+                        "split": split,
+                        "type": stroke,
+                        "frame": 10 + index,
+                        "position": {"x": x, "y": y},
+                        "opponent_location_x": 0.5,
+                        "opponent_location_y": 0.5,
+                        "landing_x": x,
+                        "landing_y": y,
+                    }
+                )
+    return rows
+
+
+def test_small_nonlinear_classifier_learns_interaction_without_loading_dataset(
+    tmp_path: Path,
+) -> None:
+    records_path = tmp_path / "records.jsonl"
+    _write_jsonl(records_path, _nonlinear_training_rows())
+
+    result = run_training(
+        [_source(records_path)],
+        output_dir=tmp_path / "run",
+        config=TrainingConfig(
+            seed=17,
+            epochs=50,
+            batch_size=8,
+            learning_rate=0.05,
+            hidden_size=8,
+        ),
+    )
+
+    checkpoint = json.loads(result.checkpoint_path.read_text(encoding="utf-8"))
+    assert checkpoint["classifier"]["architecture"] == "mlp_relu"
+    assert result.evaluation["metrics"]["test"]["accuracy"] >= 0.9
+
+
 def test_training_updates_parameters_and_evaluates_all_source_splits(tmp_path: Path) -> None:
     records_path = tmp_path / "records.jsonl"
     _write_jsonl(records_path, _training_rows())

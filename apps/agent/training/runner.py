@@ -14,6 +14,7 @@ import numpy as np
 
 from .model import (
     CHECKPOINT_CONTRACT_VERSION,
+    DEFAULT_HIDDEN_SIZE,
     FEATURE_SCHEMA_VERSION,
     MODEL_ID,
     REQUIRED_OUTPUTS,
@@ -36,11 +37,13 @@ class TrainingConfig:
     seed: int = 17
     epochs: int = 5
     batch_size: int = 8
-    learning_rate: float = 0.1
+    learning_rate: float = 0.01
     contact_loss_weight: float = 0.25
     max_records: int = 50_000
     max_record_bytes: int = 1 << 20
     max_sequence_items: int = 64
+    hidden_size: int = DEFAULT_HIDDEN_SIZE
+    shuffle_buffer_size: int = 1024
     min_held_out_accuracy: float = 0.5
     max_held_out_contact_mae: float = 3.0
 
@@ -51,6 +54,10 @@ class TrainingConfig:
             raise ValueError("batch_size must be between 1 and 8")
         if not math.isfinite(self.learning_rate) or self.learning_rate <= 0:
             raise ValueError("learning_rate must be positive")
+        if self.hidden_size < 1 or self.hidden_size > 128:
+            raise ValueError("hidden_size must be between 1 and 128")
+        if self.shuffle_buffer_size < 1 or self.shuffle_buffer_size > 4096:
+            raise ValueError("shuffle_buffer_size must be between 1 and 4096")
         if self.contact_loss_weight < 0 or not math.isfinite(self.contact_loss_weight):
             raise ValueError("contact_loss_weight must be non-negative")
         if self.max_records < 1:
@@ -124,8 +131,10 @@ def run_training(
     contact_std = max(math.sqrt(contact_variance), 1.0)
 
     rng = np.random.default_rng(config.seed)
-    classifier_weights = rng.normal(0.0, 0.01, (len(BML_STROKE_LABELS), feature_count))
-    classifier_bias = np.zeros(len(BML_STROKE_LABELS), dtype=np.float64)
+    input_weights = rng.normal(0.0, 0.05, (feature_count, config.hidden_size))
+    input_bias = np.zeros(config.hidden_size, dtype=np.float64)
+    output_weights = rng.normal(0.0, 0.05, (config.hidden_size, len(BML_STROKE_LABELS)))
+    output_bias = np.zeros(len(BML_STROKE_LABELS), dtype=np.float64)
     contact_weights = np.zeros(feature_count, dtype=np.float64)
     contact_bias = 0.0
     history: list[dict[str, Any]] = []
@@ -137,7 +146,7 @@ def run_training(
         batch_contacts: list[float] = []
         epoch_loss = 0.0
         epoch_records = 0
-        for record in _iter_sources(sources, config):
+        for record in _iter_shuffled_records(sources, config, rng):
             if record["split"] != "train":
                 continue
             batch_features.append(np.asarray(extract_feature_vector(record), dtype=np.float64))
@@ -148,8 +157,10 @@ def run_training(
                     batch_features,
                     batch_classes,
                     batch_contacts,
-                    classifier_weights,
-                    classifier_bias,
+                    input_weights,
+                    input_bias,
+                    output_weights,
+                    output_bias,
                     contact_weights,
                     contact_bias,
                     feature_mean,
@@ -165,8 +176,10 @@ def run_training(
                 batch_features,
                 batch_classes,
                 batch_contacts,
-                classifier_weights,
-                classifier_bias,
+                input_weights,
+                input_bias,
+                output_weights,
+                output_bias,
                 contact_weights,
                 contact_bias,
                 feature_mean,
@@ -186,8 +199,10 @@ def run_training(
                         sources,
                         split=split,
                         config=config,
-                        classifier_weights=classifier_weights,
-                        classifier_bias=classifier_bias,
+                        input_weights=input_weights,
+                        input_bias=input_bias,
+                        output_weights=output_weights,
+                        output_bias=output_bias,
                         contact_weights=contact_weights,
                         contact_bias=contact_bias,
                         feature_mean=feature_mean,
@@ -241,16 +256,25 @@ def run_training(
         "classes": list(BML_STROKE_LABELS),
         "normalization": {"mean": feature_mean.tolist(), "std": feature_std.tolist()},
         "targetNormalization": {"mean": contact_mean, "std": contact_std},
-        "classifier": {"weights": classifier_weights.tolist(), "bias": classifier_bias.tolist()},
+        "classifier": {
+            "architecture": "mlp_relu",
+            "hiddenSize": config.hidden_size,
+            "inputWeights": input_weights.tolist(),
+            "inputBias": input_bias.tolist(),
+            "outputWeights": output_weights.tolist(),
+            "outputBias": output_bias.tolist(),
+        },
         "contactRegressor": {"weights": contact_weights.tolist(), "bias": contact_bias},
         "training": {
             "seed": config.seed,
             "epochs": config.epochs,
             "batchSize": config.batch_size,
             "learningRate": config.learning_rate,
-            "optimizer": "sgd",
+            "optimizer": "sgd_bounded_shuffle",
             "loss": "softmax_cross_entropy_plus_contact_mse",
             "contactLossWeight": config.contact_loss_weight,
+            "hiddenSize": config.hidden_size,
+            "shuffleBufferSize": config.shuffle_buffer_size,
             "trainingUpdates": training_updates,
         },
         "provenance": {
@@ -273,8 +297,10 @@ def run_training(
             sources,
             split=split,
             config=config,
-            classifier_weights=classifier_weights,
-            classifier_bias=classifier_bias,
+            input_weights=input_weights,
+            input_bias=input_bias,
+            output_weights=output_weights,
+            output_bias=output_bias,
             contact_weights=contact_weights,
             contact_bias=contact_bias,
             feature_mean=feature_mean,
@@ -289,8 +315,10 @@ def run_training(
             held_out_sources,
             split="held_out",
             config=config,
-            classifier_weights=classifier_weights,
-            classifier_bias=classifier_bias,
+            input_weights=input_weights,
+            input_bias=input_bias,
+            output_weights=output_weights,
+            output_bias=output_bias,
             contact_weights=contact_weights,
             contact_bias=contact_bias,
             feature_mean=feature_mean,
@@ -365,12 +393,30 @@ def _iter_sources(
     )
 
 
+def _iter_shuffled_records(
+    sources: Sequence[RecordSource], config: TrainingConfig, rng: np.random.Generator
+):
+    """Shuffle a bounded record buffer without retaining a full source."""
+
+    buffer: list[dict[str, Any]] = []
+    for record in _iter_sources(sources, config):
+        buffer.append(record)
+        if len(buffer) >= config.shuffle_buffer_size:
+            index = int(rng.integers(0, len(buffer)))
+            yield buffer.pop(index)
+    while buffer:
+        index = int(rng.integers(0, len(buffer)))
+        yield buffer.pop(index)
+
+
 def _update_batch(
     batch_features: list[np.ndarray],
     batch_classes: list[int],
     batch_contacts: list[float],
-    classifier_weights: np.ndarray,
-    classifier_bias: np.ndarray,
+    input_weights: np.ndarray,
+    input_bias: np.ndarray,
+    output_weights: np.ndarray,
+    output_bias: np.ndarray,
     contact_weights: np.ndarray,
     contact_bias: float,
     feature_mean: np.ndarray,
@@ -380,14 +426,23 @@ def _update_batch(
     features = (np.asarray(batch_features, dtype=np.float64) - feature_mean) / feature_std
     labels = np.asarray(batch_classes, dtype=np.int64)
     contacts = np.asarray(batch_contacts, dtype=np.float64)
-    logits = features @ classifier_weights.T + classifier_bias
+    hidden_pre_activation = features @ input_weights + input_bias
+    hidden = np.maximum(hidden_pre_activation, 0.0)
+    logits = hidden @ output_weights + output_bias
     probabilities = _softmax(logits)
     cross_entropy = -float(np.mean(np.log(np.maximum(probabilities[np.arange(len(labels)), labels], 1e-12))))
     grad_logits = probabilities.copy()
     grad_logits[np.arange(len(labels)), labels] -= 1.0
     grad_logits /= len(labels)
-    classifier_weights -= config.learning_rate * (grad_logits.T @ features)
-    classifier_bias -= config.learning_rate * np.sum(grad_logits, axis=0)
+    grad_output_weights = hidden.T @ grad_logits
+    grad_output_bias = np.sum(grad_logits, axis=0)
+    grad_hidden = (grad_logits @ output_weights.T) * (hidden_pre_activation > 0.0)
+    grad_input_weights = features.T @ grad_hidden
+    grad_input_bias = np.sum(grad_hidden, axis=0)
+    output_weights -= config.learning_rate * grad_output_weights
+    output_bias -= config.learning_rate * grad_output_bias
+    input_weights -= config.learning_rate * grad_input_weights
+    input_bias -= config.learning_rate * grad_input_bias
 
     contact_prediction = features @ contact_weights + contact_bias
     contact_error = contact_prediction - contacts
@@ -404,8 +459,10 @@ def _evaluate_split(
     *,
     split: str,
     config: TrainingConfig,
-    classifier_weights: np.ndarray,
-    classifier_bias: np.ndarray,
+    input_weights: np.ndarray,
+    input_bias: np.ndarray,
+    output_weights: np.ndarray,
+    output_bias: np.ndarray,
     contact_weights: np.ndarray,
     contact_bias: float,
     feature_mean: np.ndarray,
@@ -423,7 +480,8 @@ def _evaluate_split(
         if record["split"] != split:
             continue
         vector = (np.asarray(extract_feature_vector(record), dtype=np.float64) - feature_mean) / feature_std
-        logits = classifier_weights @ vector + classifier_bias
+        hidden = np.maximum(vector @ input_weights + input_bias, 0.0)
+        logits = hidden @ output_weights + output_bias
         probabilities = _softmax(logits.reshape(1, -1))[0]
         predicted_index = int(np.argmax(probabilities))
         target_index = class_index[record["strokeId"]]

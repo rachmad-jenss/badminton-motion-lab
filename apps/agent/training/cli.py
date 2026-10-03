@@ -147,6 +147,8 @@ def run_provisioned(args: argparse.Namespace) -> TrainingRunResult:
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
             max_records=args.max_records,
+            hidden_size=args.hidden_size,
+            shuffle_buffer_size=args.shuffle_buffer_size,
         ),
         held_out_sources=held_out_sources,
         evidence_class="own_capture" if held_out_sources else "training_only",
@@ -194,8 +196,10 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--seed", type=int, default=17)
     run.add_argument("--epochs", type=int, default=5)
     run.add_argument("--batch-size", type=int, default=8)
-    run.add_argument("--learning-rate", type=float, default=0.1)
+    run.add_argument("--learning-rate", type=float, default=0.01)
     run.add_argument("--max-records", type=int, default=50_000)
+    run.add_argument("--hidden-size", type=int, default=32)
+    run.add_argument("--shuffle-buffer-size", type=int, default=1024)
     return parser
 
 

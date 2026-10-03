@@ -17,6 +17,7 @@ CHECKPOINT_CONTRACT_VERSION = 1
 MODEL_ID = "bml-technique-stroke-v1"
 FEATURE_SCHEMA_VERSION = 1
 REQUIRED_OUTPUTS = ("strokeId", "contactFrame", "confidence", "provenance")
+DEFAULT_HIDDEN_SIZE = 32
 
 
 class CheckpointError(ValueError):
@@ -60,9 +61,17 @@ def predict_checkpoint(checkpoint: dict[str, Any], features: Sequence[float]) ->
     normalized = (values - mean) / std
 
     classifier = checkpoint["classifier"]
-    weights = np.asarray(classifier["weights"], dtype=np.float64)
-    bias = np.asarray(classifier["bias"], dtype=np.float64)
-    logits = weights @ normalized + bias
+    if classifier.get("architecture", "linear") == "mlp_relu":
+        input_weights = np.asarray(classifier["inputWeights"], dtype=np.float64)
+        input_bias = np.asarray(classifier["inputBias"], dtype=np.float64)
+        output_weights = np.asarray(classifier["outputWeights"], dtype=np.float64)
+        output_bias = np.asarray(classifier["outputBias"], dtype=np.float64)
+        hidden = np.maximum(normalized @ input_weights + input_bias, 0.0)
+        logits = hidden @ output_weights + output_bias
+    else:
+        weights = np.asarray(classifier["weights"], dtype=np.float64)
+        bias = np.asarray(classifier["bias"], dtype=np.float64)
+        logits = weights @ normalized + bias
     logits = logits - np.max(logits)
     probabilities = np.exp(logits)
     probabilities = probabilities / np.sum(probabilities)
@@ -196,12 +205,36 @@ def _validate_checkpoint(payload: dict[str, Any]) -> None:
     classifier = payload.get("classifier")
     if not isinstance(classifier, dict):
         raise CheckpointError("checkpoint classifier is missing")
+    architecture = classifier.get("architecture", "linear")
     try:
-        weights = np.asarray(classifier.get("weights"), dtype=np.float64)
-        bias = np.asarray(classifier.get("bias"), dtype=np.float64)
+        if architecture == "mlp_relu":
+            input_weights = np.asarray(classifier.get("inputWeights"), dtype=np.float64)
+            input_bias = np.asarray(classifier.get("inputBias"), dtype=np.float64)
+            output_weights = np.asarray(classifier.get("outputWeights"), dtype=np.float64)
+            output_bias = np.asarray(classifier.get("outputBias"), dtype=np.float64)
+            hidden_size = int(classifier.get("hiddenSize", 0))
+        elif architecture == "linear":
+            input_weights = np.asarray(classifier.get("weights"), dtype=np.float64)
+            input_bias = np.asarray(classifier.get("bias"), dtype=np.float64)
+            output_weights = np.empty((0, 0), dtype=np.float64)
+            output_bias = np.empty((0,), dtype=np.float64)
+            hidden_size = 0
+        else:
+            raise CheckpointError("unsupported checkpoint classifier architecture")
     except (TypeError, ValueError):
         raise CheckpointError("checkpoint classifier parameters are invalid")
-    if weights.shape != (len(BML_STROKE_LABELS), len(FEATURE_NAMES)) or bias.shape != (len(BML_STROKE_LABELS),):
+    if architecture == "mlp_relu":
+        if (
+            hidden_size < 1
+            or input_weights.shape != (len(FEATURE_NAMES), hidden_size)
+            or input_bias.shape != (hidden_size,)
+            or output_weights.shape != (hidden_size, len(BML_STROKE_LABELS))
+            or output_bias.shape != (len(BML_STROKE_LABELS),)
+        ):
+            raise CheckpointError("checkpoint classifier shape is invalid")
+    elif input_weights.shape != (len(BML_STROKE_LABELS), len(FEATURE_NAMES)) or input_bias.shape != (
+        len(BML_STROKE_LABELS),
+    ):
         raise CheckpointError("checkpoint classifier shape is invalid")
     contact = payload.get("contactRegressor")
     if not isinstance(contact, dict):
@@ -212,7 +245,10 @@ def _validate_checkpoint(payload: dict[str, Any]) -> None:
         raise CheckpointError("checkpoint contact regressor parameters are invalid")
     if contact_weights.shape != (len(FEATURE_NAMES),) or not _finite_scalar(contact, "bias"):
         raise CheckpointError("checkpoint contact regressor shape is invalid")
-    if not np.all(np.isfinite(weights)) or not np.all(np.isfinite(bias)) or not np.all(np.isfinite(contact_weights)):
+    classifier_arrays = (input_weights, input_bias, output_weights, output_bias)
+    if not all(np.all(np.isfinite(values)) for values in classifier_arrays) or not np.all(
+        np.isfinite(contact_weights)
+    ):
         raise CheckpointError("checkpoint parameters contain non-finite values")
     provenance = payload.get("provenance")
     if not isinstance(provenance, dict) or provenance.get("publicEvidence") is not False:

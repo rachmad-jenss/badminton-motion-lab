@@ -99,7 +99,9 @@ npm run training:run -- `
   --source shuttleset22 `
   --records shuttleset=validation/training-sources/shuttleset/records.normalized.jsonl `
   --records shuttleset22=validation/training-sources/shuttleset22/records.normalized.jsonl `
-  --learning-rate 0.001 `
+  --epochs 8 `
+  --shuffle-buffer-size 1024 `
+  --learning-rate 0.01 `
   --max-records 50000
 ```
 
@@ -109,7 +111,9 @@ required as training-code provenance; dataset sources require both a checkout
 and an explicit records mapping. The command fails with `TRAINING NOT_RUN`
 when a root or mapping is missing, and that is not a successful training run.
 
-The run writes `checkpoint.json`, `checkpoint.sha256`,
+The baseline uses a seeded one-hidden-layer ReLU classifier with a bounded
+shuffle buffer; batch size remains capped at 8 and the full source is never
+materialized in memory. The run writes `checkpoint.json`, `checkpoint.sha256`,
 `training-manifest.json`, and `evaluation.json` below the ignored
 `validation/training-derived/` directory. The checkpoint is validated on load
 and includes `strokeId`, `contactFrame`, `confidence`, and `provenance`. It

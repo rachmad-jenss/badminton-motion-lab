@@ -25,9 +25,9 @@ fail-closed until the required own-capture evidence exists.
 ## Selected approach
 
 Use a small NumPy implementation in the existing Python Local Agent runtime.
-The baseline is a deterministic linear softmax classifier for BML's stroke
-taxonomy plus a small linear contact-frame regressor. It is intentionally not a
-full BST Transformer replacement: the first milestone proves the complete
+The baseline is a deterministic one-hidden-layer ReLU classifier for BML's
+stroke taxonomy plus a small linear contact-frame regressor. It is intentionally
+not a full BST Transformer replacement: the first milestone proves the complete
 source-to-checkpoint-to-inference-to-readiness path under the repository's
 memory constraints.
 
