@@ -10,7 +10,16 @@ import { TRAINING_CHECKPOINT_CONTRACT } from "./training-adapters.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const derivedRoot = join(root, "validation", "training-derived");
-const REQUIRED_METRICS = ["records", "accuracy", "contactMaeFrames", "confidenceMean", "loss"];
+const REQUIRED_METRICS = [
+  "records",
+  "accuracy",
+  "macroF1",
+  "macroF1AllClasses",
+  "contactMaeFrames",
+  "contactMaeRelative",
+  "confidenceMean",
+  "loss",
+];
 const STROKE_IDS = new Set([
   "serve",
   "forehand",
@@ -164,6 +173,9 @@ function validateCheckpoint(checkpoint, report, errors) {
   if (checkpoint.featureSchemaVersion !== TRAINING_CHECKPOINT_CONTRACT.featureSchemaVersion) {
     errors.push("checkpoint feature schema version mismatch");
   }
+  if (checkpoint.targetNormalization?.representation !== "relative_window") {
+    errors.push("checkpoint contact target must use relative_window representation");
+  }
   if (!Array.isArray(checkpoint.classes) || !checkpoint.classes.some((id) => STROKE_IDS.has(id))) {
     errors.push("checkpoint class taxonomy is missing");
   }
@@ -196,6 +208,13 @@ function validateCheckpoint(checkpoint, report, errors) {
   if (prediction.provenance?.publicEvidence !== false) {
     errors.push("samplePrediction provenance must set publicEvidence=false");
   }
+  if (
+    !Number.isFinite(prediction.contactFrameRelative) ||
+    prediction.contactFrameRelative < 0 ||
+    prediction.contactFrameRelative > 1
+  ) {
+    errors.push("samplePrediction contactFrameRelative must be between 0 and 1");
+  }
 }
 
 function validateMetrics(metrics, invalid, notReady) {
@@ -214,6 +233,17 @@ function validateMetrics(metrics, invalid, notReady) {
     }
     if (!Number.isInteger(metric.records) || metric.records < 1) {
       invalid.push("metrics." + split + ".records must be positive");
+    }
+    const confusion = metric.confusionMatrix;
+    if (
+      !confusion ||
+      !Array.isArray(confusion.labels) ||
+      confusion.labels.length !== STROKE_IDS.size ||
+      !Array.isArray(confusion.matrix) ||
+      confusion.matrix.length !== STROKE_IDS.size ||
+      confusion.matrix.some((row) => !Array.isArray(row) || row.length !== STROKE_IDS.size)
+    ) {
+      invalid.push("metrics." + split + ".confusionMatrix must be a square stroke matrix");
     }
   }
   if (metrics.held_out && typeof metrics.held_out === "object") {

@@ -31,6 +31,8 @@ test("normalizes ShuttleSet and ShuttleSet22 tactical fields into one record", (
       rally: 4,
       ball_round: 3,
       frame_num: 42,
+      window_start_frame: 22,
+      window_end_frame: 62,
       type: "smash",
       player_location_x: 0.4,
       player_location_y: 0.8,
@@ -40,6 +42,7 @@ test("normalizes ShuttleSet and ShuttleSet22 tactical fields into one record", (
       landing_y: 0.1,
       backhand: false,
       aroundhead: true,
+      temporalFeatures: { window_span_seconds: 1.2 },
     },
     { sampleId: "match-1-s2-r4-h3", fps: 30, split: "validation" },
   );
@@ -49,9 +52,13 @@ test("normalizes ShuttleSet and ShuttleSet22 tactical fields into one record", (
   assert.equal(result.sampleId, "match-1-s2-r4-h3");
   assert.equal(result.strokeId, "smash");
   assert.equal(result.contactFrame, 42);
+  assert.equal(result.contactFrameRelative, 0.5);
+  assert.equal(result.windowStartFrame, 22);
+  assert.equal(result.windowEndFrame, 62);
   assert.equal(result.features.playerPosition.x, 0.4);
   assert.equal(result.features.opponentPosition.y, 0.2);
   assert.equal(result.features.landing.x, 0.3);
+  assert.equal(result.features.temporalFeatures.window_span_seconds, 1.2);
   assert.equal(result.provenance.publicEvidence, false);
 });
 

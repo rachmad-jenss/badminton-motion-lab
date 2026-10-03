@@ -49,10 +49,13 @@ file counts and provenance manifests before using a source.
 The source-specific record normalizers live in
 [`scripts/training-adapters.mjs`](../../scripts/training-adapters.mjs). They
 map BFMD, BST, ShuttleSet/ShuttleSet22, and RacketVision annotation records to
-the bounded `bml-training-record-v1` shape. The
+the bounded `bml-training-record-v1` shape. ShuttleSet/ShuttleSet22 records
+carry a bounded rally/window frame range and precomputed temporal summaries;
+the same temporal summaries are calculated from local-agent tracks at
+inference. The
 [`TRAINING_CHECKPOINT_CONTRACT`](../../scripts/training-adapters.mjs) defines
-the required model outputs and reserves held-out evaluation for own-capture
-data.
+the required model outputs, uses checkpoint contract v2 with a relative-window
+contact target, and reserves held-out evaluation for own-capture data.
 
 Run the adapter contract tests with:
 
@@ -116,7 +119,11 @@ shuffle buffer; batch size remains capped at 8 and the full source is never
 materialized in memory. The run writes `checkpoint.json`, `checkpoint.sha256`,
 `training-manifest.json`, and `evaluation.json` below the ignored
 `validation/training-derived/` directory. The checkpoint is validated on load
-and includes `strokeId`, `contactFrame`, `confidence`, and `provenance`. It
+and includes `strokeId`, absolute `contactFrame`, `contactFrameRelative`,
+`confidence`, and `provenance`. Contact regression is trained against the
+relative position inside the rally/window, then converted to the absolute frame
+using the inference window. Evaluation includes per-class precision/recall/F1,
+support-aware macro-F1, all-taxonomy macro-F1, and a confusion matrix. It
 contains no raw records, video, or frames. To inspect the local readiness
 decision for the newest run (or a specific report), use:
 

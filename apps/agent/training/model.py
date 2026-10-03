@@ -13,9 +13,9 @@ import numpy as np
 from .records import BML_STROKE_LABELS, FEATURE_NAMES, extract_feature_vector
 
 
-CHECKPOINT_CONTRACT_VERSION = 1
+CHECKPOINT_CONTRACT_VERSION = 2
 MODEL_ID = "bml-technique-stroke-v1"
-FEATURE_SCHEMA_VERSION = 1
+FEATURE_SCHEMA_VERSION = 2
 REQUIRED_OUTPUTS = ("strokeId", "contactFrame", "confidence", "provenance")
 DEFAULT_HIDDEN_SIZE = 32
 
@@ -45,7 +45,13 @@ def load_checkpoint(path: Path, *, expected_sha256: str | None = None) -> dict[s
     return payload
 
 
-def predict_checkpoint(checkpoint: dict[str, Any], features: Sequence[float]) -> dict[str, Any]:
+def predict_checkpoint(
+    checkpoint: dict[str, Any],
+    features: Sequence[float],
+    *,
+    window_start_frame: float = 0.0,
+    window_end_frame: float | None = None,
+) -> dict[str, Any]:
     _validate_checkpoint(checkpoint)
     if len(features) != len(FEATURE_NAMES):
         raise CheckpointError(
@@ -54,6 +60,12 @@ def predict_checkpoint(checkpoint: dict[str, Any], features: Sequence[float]) ->
     values = np.asarray(features, dtype=np.float64)
     if not np.all(np.isfinite(values)):
         raise CheckpointError("feature vector contains non-finite values")
+    if not math.isfinite(float(window_start_frame)):
+        raise CheckpointError("window start frame must be finite")
+    if window_end_frame is None:
+        window_end_frame = float(window_start_frame) + 1.0
+    if not math.isfinite(float(window_end_frame)) or float(window_end_frame) < float(window_start_frame):
+        raise CheckpointError("window end frame must be finite and not before the start")
 
     normalization = checkpoint["normalization"]
     mean = np.asarray(normalization["mean"], dtype=np.float64)
@@ -81,7 +93,11 @@ def predict_checkpoint(checkpoint: dict[str, Any], features: Sequence[float]) ->
     contact_weights = np.asarray(contact["weights"], dtype=np.float64)
     contact_normalized = float(contact_weights @ normalized + float(contact["bias"]))
     target_norm = checkpoint["targetNormalization"]
-    contact_frame = int(max(0, round(contact_normalized * target_norm["std"] + target_norm["mean"])))
+    contact_frame_relative = float(
+        np.clip(contact_normalized * target_norm["std"] + target_norm["mean"], 0.0, 1.0)
+    )
+    window_span = max(float(window_end_frame) - float(window_start_frame), 1.0)
+    contact_frame = int(round(float(window_start_frame) + contact_frame_relative * window_span))
 
     checkpoint_sha256 = checkpoint.get("_checkpointSha256")
     if not checkpoint_sha256:
@@ -89,6 +105,7 @@ def predict_checkpoint(checkpoint: dict[str, Any], features: Sequence[float]) ->
     prediction = {
         "strokeId": checkpoint["classes"][class_index],
         "contactFrame": contact_frame,
+        "contactFrameRelative": contact_frame_relative,
         "confidence": float(np.max(probabilities)),
         "provenance": {
             **checkpoint["provenance"],
@@ -108,6 +125,8 @@ def extract_pipeline_features(
     racket: dict[str, Any],
     width: float = 1.0,
     height: float = 1.0,
+    window_start_frame: float = 0.0,
+    window_end_frame: float | None = None,
 ) -> list[float]:
     """Map bounded local-agent tracks into the training feature schema."""
 
@@ -115,6 +134,12 @@ def extract_pipeline_features(
         raise CheckpointError("pipeline fps must be finite and non-negative")
     if not math.isfinite(float(width)) or width <= 0 or not math.isfinite(float(height)) or height <= 0:
         raise CheckpointError("pipeline dimensions must be finite and positive")
+    if not math.isfinite(float(window_start_frame)):
+        raise CheckpointError("pipeline window start frame must be finite")
+    if window_end_frame is None:
+        window_end_frame = float(window_start_frame) + 1.0
+    if not math.isfinite(float(window_end_frame)) or float(window_end_frame) < float(window_start_frame):
+        raise CheckpointError("pipeline window end frame must be finite and not before the start")
 
     pose_points = [
         landmark
@@ -132,6 +157,8 @@ def extract_pipeline_features(
     landing = _mean_position(shuttle_points, width=width, height=height)
     record = {
         "fps": fps,
+        "windowStartFrame": window_start_frame,
+        "windowEndFrame": window_end_frame,
         "pose": {"frames": pose.get("frames") or []},
         "shuttle": {"points": shuttle_points},
         "racket": {"points": racket_points},
@@ -172,6 +199,10 @@ def validate_prediction(prediction: dict[str, Any]) -> dict[str, Any]:
         raise CheckpointError("prediction strokeId is outside the BML taxonomy")
     if isinstance(prediction["contactFrame"], bool) or not isinstance(prediction["contactFrame"], int):
         raise CheckpointError("prediction contactFrame must be an integer")
+    if "contactFrameRelative" in prediction:
+        relative = float(prediction["contactFrameRelative"])
+        if not math.isfinite(relative) or not 0.0 <= relative <= 1.0:
+            raise CheckpointError("prediction contactFrameRelative must be between 0 and 1")
     confidence = float(prediction["confidence"])
     if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
         raise CheckpointError("prediction confidence must be between 0 and 1")
@@ -200,6 +231,8 @@ def _validate_checkpoint(payload: dict[str, Any]) -> None:
         normalization, "std", len(FEATURE_NAMES)
     ):
         raise CheckpointError("checkpoint feature normalization is invalid")
+    if not isinstance(target_norm, dict) or target_norm.get("representation") != "relative_window":
+        raise CheckpointError("checkpoint contact target must use relative_window representation")
     if not _finite_scalar(target_norm, "mean") or not _positive_scalar(target_norm, "std"):
         raise CheckpointError("checkpoint contact normalization is invalid")
     classifier = payload.get("classifier")

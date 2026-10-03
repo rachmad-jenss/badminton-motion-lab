@@ -61,10 +61,10 @@ export const OWN_CAPTURE_ADAPTER_CONTRACT = Object.freeze({
 });
 
 export const TRAINING_CHECKPOINT_CONTRACT = Object.freeze({
-  version: 1,
+  version: 2,
   modelId: "bml-technique-stroke-v1",
   inputSchemaVersion: TRAINING_RECORD_SCHEMA_VERSION,
-  featureSchemaVersion: 1,
+  featureSchemaVersion: 2,
   requiredOutputs: Object.freeze(["strokeId", "contactFrame", "confidence", "provenance"]),
   heldOutSource: "own_capture",
 });
@@ -115,6 +115,31 @@ function position(x, y) {
   const px = numberOrNull(x);
   const py = numberOrNull(y);
   return px === null || py === null ? null : { x: px, y: py };
+}
+
+function windowBounds(raw, options, contactFrame) {
+  let start = numberOrNull(
+    defined(
+      options.windowStartFrame,
+      raw.windowStartFrame,
+      raw.window_start_frame,
+      raw.rallyStartFrame,
+      raw.rally_start_frame,
+    ),
+  );
+  let end = numberOrNull(
+    defined(
+      options.windowEndFrame,
+      raw.windowEndFrame,
+      raw.window_end_frame,
+      raw.rallyEndFrame,
+      raw.rally_end_frame,
+    ),
+  );
+  if (start === null) start = contactFrame ?? 0;
+  if (end === null) end = contactFrame ?? start + 1;
+  if (end <= start) end = start + 1;
+  return { start, end };
 }
 
 function normalizeSourceRecord(sourceId, raw, options, contract) {
@@ -175,6 +200,15 @@ function normalizeSourceRecord(sourceId, raw, options, contract) {
     features = { ...(raw.features && typeof raw.features === "object" ? raw.features : {}) };
   }
 
+  const window = windowBounds(raw, options, contactFrame);
+  const contactFrameRelative =
+    contactFrame === null
+      ? null
+      : Math.max(0, Math.min(1, (contactFrame - window.start) / Math.max(window.end - window.start, 1)));
+  if (raw.temporalFeatures && typeof raw.temporalFeatures === "object") {
+    features.temporalFeatures = raw.temporalFeatures;
+  }
+
   return {
     schemaVersion: TRAINING_RECORD_SCHEMA_VERSION,
     sampleId: sampleIdFor(sourceId, raw, options.sampleId),
@@ -182,11 +216,15 @@ function normalizeSourceRecord(sourceId, raw, options, contract) {
     split,
     strokeId,
     contactFrame,
+    contactFrameRelative,
+    windowStartFrame: window.start,
+    windowEndFrame: window.end,
     fps: numberOrNull(defined(options.fps, raw.fps)),
     pose,
     courtCorners,
     shuttle,
     racket,
+    temporal: raw.temporal && typeof raw.temporal === "object" ? raw.temporal : null,
     features,
     confidence: numberOrNull(defined(raw.confidence, options.confidence)),
     provenance: {

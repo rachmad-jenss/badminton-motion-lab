@@ -582,6 +582,8 @@ def _stroke_prediction_for_analysis(
     racket: dict[str, Any],
     width: float = 1.0,
     height: float = 1.0,
+    window_start_frame: float = 0.0,
+    window_end_frame: float | None = None,
 ) -> dict[str, Any]:
     checkpoint = load_checkpoint(Path(checkpoint_path))
     features = extract_pipeline_features(
@@ -591,8 +593,15 @@ def _stroke_prediction_for_analysis(
         racket=racket,
         width=width,
         height=height,
+        window_start_frame=window_start_frame,
+        window_end_frame=window_end_frame,
     )
-    return predict_checkpoint(checkpoint, features)
+    return predict_checkpoint(
+        checkpoint,
+        features,
+        window_start_frame=window_start_frame,
+        window_end_frame=window_end_frame,
+    )
 
 
 def _optional_stroke_prediction(
@@ -603,6 +612,8 @@ def _optional_stroke_prediction(
     racket: dict[str, Any],
     width: float,
     height: float,
+    window_start_frame: float = 0.0,
+    window_end_frame: float | None = None,
 ) -> dict[str, Any]:
     checkpoint_raw = os.getenv("BML_STROKE_CHECKPOINT", "").strip()
     if not checkpoint_raw:
@@ -621,6 +632,8 @@ def _optional_stroke_prediction(
                 racket=racket,
                 width=width,
                 height=height,
+                window_start_frame=window_start_frame,
+                window_end_frame=window_end_frame,
             ),
         }
     except CheckpointError as exc:
@@ -746,6 +759,8 @@ def _run_analyze_sync(
             racket=racket,
             width=width,
             height=height,
+            window_start_frame=float(frames[0][0]),
+            window_end_frame=float(frames[-1][0]),
         )
     )
 

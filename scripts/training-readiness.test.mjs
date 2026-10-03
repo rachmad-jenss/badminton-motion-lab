@@ -26,17 +26,38 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex").toUpperCase();
 }
 
+const CONFUSION = {
+  labels: LABELS,
+  matrix: LABELS.map((_, row) => LABELS.map((__, column) => (row === column ? 1 : 0))),
+};
+
+function metric(overrides = {}) {
+  return {
+    records: 2,
+    accuracy: 0.75,
+    macroF1: 0.7,
+    macroF1AllClasses: 0.4,
+    contactMaeFrames: 1.5,
+    contactMaeRelative: 0.1,
+    confidenceMean: 0.8,
+    loss: 0.3,
+    confusionMatrix: CONFUSION,
+    ...overrides,
+  };
+}
+
 function writeValidRun(overrides = {}) {
   const dir = mkdtempSync(join(tmpdir(), "bml-training-readiness-"));
   const manifest = JSON.stringify({ manifestVersion: 1, sourceIds: ["own_capture"] });
   const manifestSha256 = sha256(manifest);
   writeFileSync(join(dir, "training-manifest.json"), manifest);
   const checkpoint = {
-    checkpointVersion: 1,
+    checkpointVersion: 2,
     modelId: "bml-technique-stroke-v1",
-    featureSchemaVersion: 1,
+    featureSchemaVersion: 2,
     featureNames: ["fps"],
     classes: LABELS,
+    targetNormalization: { mean: 0.5, std: 0.2, representation: "relative_window" },
     provenance: {
       trainingManifestSha256: manifestSha256,
       publicEvidence: false,
@@ -49,19 +70,14 @@ function writeValidRun(overrides = {}) {
   const samplePrediction = {
     strokeId: "clear",
     contactFrame: 12,
+    contactFrameRelative: 0.5,
     confidence: 0.8,
     provenance: {
       checkpointSha256,
       publicEvidence: false,
     },
   };
-  const metrics = {
-    records: 2,
-    accuracy: 0.75,
-    contactMaeFrames: 1.5,
-    confidenceMean: 0.8,
-    loss: 0.3,
-  };
+  const metrics = metric();
   const report = {
     reportVersion: 1,
     checkpointPath: "checkpoint.json",
@@ -110,7 +126,11 @@ test("synthetic smoke evidence remains not-ready", () => {
     evidenceClass: "synthetic_smoke",
     heldOutSource: null,
     heldOutRecords: 0,
-    metrics: { train: { records: 2, accuracy: 1, contactMaeFrames: 0, confidenceMean: 1, loss: 0 }, validation: { records: 2, accuracy: 1, contactMaeFrames: 0, confidenceMean: 1, loss: 0 }, test: { records: 2, accuracy: 1, contactMaeFrames: 0, confidenceMean: 1, loss: 0 } },
+    metrics: {
+      train: metric({ accuracy: 1, macroF1: 1, contactMaeFrames: 0, contactMaeRelative: 0, confidenceMean: 1, loss: 0 }),
+      validation: metric({ accuracy: 1, macroF1: 1, contactMaeFrames: 0, contactMaeRelative: 0, confidenceMean: 1, loss: 0 }),
+      test: metric({ accuracy: 1, macroF1: 1, contactMaeFrames: 0, contactMaeRelative: 0, confidenceMean: 1, loss: 0 }),
+    },
     metricGate: { passed: false },
     readiness: "locked",
   });

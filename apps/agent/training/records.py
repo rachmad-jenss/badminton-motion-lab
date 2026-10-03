@@ -48,6 +48,16 @@ FEATURE_NAMES = (
     "racket_mean_x",
     "racket_mean_y",
     "sequence_span",
+    "window_span_seconds",
+    "pose_speed_mean",
+    "pose_speed_peak",
+    "pose_acceleration_peak",
+    "shuttle_speed_mean",
+    "shuttle_speed_peak",
+    "shuttle_acceleration_peak",
+    "racket_speed_mean",
+    "racket_speed_peak",
+    "racket_acceleration_peak",
 )
 
 _SOURCE_IDS = frozenset({"bfmd", "bst", "shuttleset", "shuttleset22", "racketvision", "own_capture"})
@@ -222,6 +232,10 @@ def normalize_training_record(
     if contact_frame is None or contact_frame < 0:
         raise _UnsupportedRecord("missing contact frame")
 
+    window_start, window_end = _window_bounds(raw, contact_frame)
+    contact_frame_relative = (contact_frame - window_start) / max(window_end - window_start, 1.0)
+    contact_frame_relative = min(1.0, max(0.0, contact_frame_relative))
+
     features: dict[str, Any] = {}
     player = _first(raw, "position", "playerPosition", "player_position")
     opponent = _first(raw, "opponentPosition", "opponent_position")
@@ -239,6 +253,8 @@ def normalize_training_record(
     features["aroundHead"] = _bool_or_none(_first(raw, "aroundHead", "aroundhead", "around_head"))
     if isinstance(raw.get("modelFeatures"), list):
         features["modelFeatures"] = raw["modelFeatures"]
+    if isinstance(raw.get("temporalFeatures"), dict):
+        features["temporalFeatures"] = raw["temporalFeatures"]
 
     return {
         "schemaVersion": TRAINING_RECORD_SCHEMA_VERSION,
@@ -247,11 +263,15 @@ def normalize_training_record(
         "split": split,
         "strokeId": stroke_id,
         "contactFrame": int(contact_frame),
+        "contactFrameRelative": float(contact_frame_relative),
+        "windowStartFrame": int(window_start),
+        "windowEndFrame": int(window_end),
         "fps": _number_or_none(_first(raw, "fps")),
         "pose": _series(_first(raw, "pose", "joints"), "frames"),
         "courtCorners": _first(raw, "courtCorners"),
         "shuttle": _series(_first(raw, "shuttle", "shuttlecock", "ball"), "points"),
         "racket": _series(_first(raw, "racket"), "points"),
+        "temporal": raw.get("temporal") if isinstance(raw.get("temporal"), dict) else None,
         "features": features,
         "confidence": _number_or_none(_first(raw, "confidence")),
         "provenance": {
@@ -273,6 +293,24 @@ def extract_feature_vector(record: dict[str, Any]) -> list[float]:
     shuttle = _summarize_series(record.get("shuttle"), "points")
     racket = _summarize_series(record.get("racket"), "points")
     fps = _number_or_none(record.get("fps")) or 0.0
+    window_start, window_end = _record_window_bounds(record)
+    window_span_frames = max(window_end - window_start, 1.0)
+    precomputed_temporal = features.get("temporalFeatures")
+    if isinstance(precomputed_temporal, dict):
+        window_span_seconds = _finite_or_zero(_number_or_none(precomputed_temporal.get("window_span_seconds")))
+        pose_motion = _motion_tuple_from_features(precomputed_temporal, "pose")
+        shuttle_motion = _motion_tuple_from_features(precomputed_temporal, "shuttle")
+        racket_motion = _motion_tuple_from_features(precomputed_temporal, "racket")
+    else:
+        window_span_seconds = _finite_or_zero(window_span_frames / max(fps, 1e-6))
+        temporal = record.get("temporal") if isinstance(record.get("temporal"), dict) else {}
+        pose_motion = _motion_summary(record.get("pose") or {"points": temporal.get("player")}, "frames", fps)
+        shuttle_motion = _motion_summary(
+            record.get("shuttle") or {"points": temporal.get("shuttle")}, "points", fps
+        )
+        racket_motion = _motion_summary(
+            record.get("racket") or {"points": temporal.get("racket")}, "points", fps
+        )
     return [
         _finite_or_zero(fps / 60.0),
         _finite_or_zero(player[0]),
@@ -293,7 +331,135 @@ def extract_feature_vector(record: dict[str, Any]) -> list[float]:
         _finite_or_zero(racket[1]),
         _finite_or_zero(racket[2]),
         _finite_or_zero(max(pose[3], shuttle[3], racket[3])),
+        window_span_seconds,
+        *_motion_features(pose_motion),
+        *_motion_features(shuttle_motion),
+        *_motion_features(racket_motion),
     ]
+
+
+def _window_bounds(raw: dict[str, Any], contact_frame: float) -> tuple[float, float]:
+    start = _number_or_none(
+        _first(raw, "windowStartFrame", "window_start_frame", "rallyStartFrame", "rally_start_frame", "startFrame", "start_frame")
+    )
+    end = _number_or_none(
+        _first(raw, "windowEndFrame", "window_end_frame", "rallyEndFrame", "rally_end_frame", "endFrame", "end_frame")
+    )
+    inferred = _frame_bounds_from_values(
+        raw.get("pose"), raw.get("shuttle"), raw.get("racket"), raw.get("temporal")
+    )
+    if start is None:
+        start = inferred[0] if inferred is not None else contact_frame
+    if end is None:
+        end = inferred[1] if inferred is not None else contact_frame
+    if end <= start:
+        end = max(start + 1.0, contact_frame)
+        if end <= start:
+            start = min(start, contact_frame - 1.0)
+    return float(start), float(end)
+
+
+def _record_window_bounds(record: dict[str, Any]) -> tuple[float, float]:
+    start = _number_or_none(record.get("windowStartFrame"))
+    end = _number_or_none(record.get("windowEndFrame"))
+    inferred = _frame_bounds_from_values(record.get("pose"), record.get("shuttle"), record.get("racket"))
+    if start is None:
+        start = inferred[0] if inferred is not None else 0.0
+    if end is None:
+        end = inferred[1] if inferred is not None else start + 1.0
+    if end <= start:
+        end = start + 1.0
+    return float(start), float(end)
+
+
+def _frame_bounds_from_values(*values: Any) -> tuple[float, float] | None:
+    frames: list[float] = []
+    for value in values:
+        for _, _, frame in _collect_series_points(value, ""):
+            if frame is not None:
+                frames.append(frame)
+    if not frames:
+        return None
+    return min(frames), max(frames)
+
+
+def _collect_series_points(value: Any, key: str) -> list[tuple[float, float, float | None]]:
+    points: list[tuple[float, float, float | None]] = []
+
+    def visit(node: Any, frame: float | None = None) -> None:
+        if isinstance(node, dict):
+            local_frame = _number_or_none(_first(node, "frameIndex", "frame_index", "frame", "frame_num"))
+            local_frame = frame if local_frame is None else local_frame
+            x = _number_or_none(node.get("x"))
+            y = _number_or_none(node.get("y"))
+            if x is not None and y is not None:
+                points.append((x, y, local_frame))
+            for child_key, child in node.items():
+                if child_key not in {
+                    "x",
+                    "y",
+                    "confidence",
+                    "visibility",
+                    "frameIndex",
+                    "frame_index",
+                    "frame",
+                    "frame_num",
+                }:
+                    visit(child, local_frame)
+        elif isinstance(node, list):
+            for child in node[:64]:
+                visit(child, frame)
+
+    root = value.get(key) if key and isinstance(value, dict) and key in value else value
+    visit(root)
+    return points
+
+
+def _motion_summary(value: Any, key: str, fps: float) -> tuple[float, float, float]:
+    points = _collect_series_points(value, key)
+    if len(points) < 2:
+        return 0.0, 0.0, 0.0
+
+    by_frame: dict[float, list[tuple[float, float]]] = {}
+    for index, (x, y, frame) in enumerate(points):
+        frame_key = float(frame) if frame is not None else float(index)
+        by_frame.setdefault(frame_key, []).append((x, y))
+    ordered = sorted(
+        (frame, sum(x for x, _ in coords) / len(coords), sum(y for _, y in coords) / len(coords))
+        for frame, coords in by_frame.items()
+    )
+    if len(ordered) < 2:
+        return 0.0, 0.0, 0.0
+
+    frames_per_second = max(float(fps), 1.0)
+    speeds: list[float] = []
+    intervals: list[float] = []
+    for previous, current in zip(ordered, ordered[1:]):
+        dt_frames = max(current[0] - previous[0], 1.0)
+        dt_seconds = dt_frames / frames_per_second
+        speeds.append(math.hypot(current[1] - previous[1], current[2] - previous[2]) / dt_seconds)
+        intervals.append(dt_seconds)
+    accelerations = [
+        abs(speeds[index] - speeds[index - 1]) / max(intervals[index], 1e-6)
+        for index in range(1, len(speeds))
+    ]
+    return (
+        float(sum(speeds) / len(speeds)),
+        float(max(speeds)),
+        float(max(accelerations)) if accelerations else 0.0,
+    )
+
+
+def _motion_features(summary: tuple[float, float, float]) -> list[float]:
+    return [_finite_or_zero(value) for value in summary]
+
+
+def _motion_tuple_from_features(features: dict[str, Any], prefix: str) -> tuple[float, float, float]:
+    return (
+        _finite_or_zero(_number_or_none(features.get(prefix + "_speed_mean"))),
+        _finite_or_zero(_number_or_none(features.get(prefix + "_speed_peak"))),
+        _finite_or_zero(_number_or_none(features.get(prefix + "_acceleration_peak"))),
+    )
 
 
 def _validate_source(source: RecordSource) -> Path:

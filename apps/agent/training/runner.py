@@ -95,8 +95,8 @@ def run_training(
     class_index = {label: index for index, label in enumerate(BML_STROKE_LABELS)}
     feature_sum = np.zeros(feature_count, dtype=np.float64)
     feature_square_sum = np.zeros(feature_count, dtype=np.float64)
-    contact_sum = 0.0
-    contact_square_sum = 0.0
+    target_sum = 0.0
+    target_square_sum = 0.0
     train_records = 0
     split_counts = {"train": 0, "validation": 0, "test": 0}
     first_pass_stats = ReaderStats()
@@ -111,9 +111,9 @@ def run_training(
         vector = np.asarray(extract_feature_vector(record), dtype=np.float64)
         feature_sum += vector
         feature_square_sum += vector * vector
-        contact = float(record["contactFrame"])
-        contact_sum += contact
-        contact_square_sum += contact * contact
+        target = float(record["contactFrameRelative"])
+        target_sum += target
+        target_square_sum += target * target
         train_records += 1
 
     if train_records == 0:
@@ -126,9 +126,9 @@ def run_training(
     feature_variance = np.maximum(feature_square_sum / train_records - feature_mean * feature_mean, 0.0)
     feature_std = np.sqrt(feature_variance)
     feature_std[feature_std < 1e-6] = 1.0
-    contact_mean = contact_sum / train_records
-    contact_variance = max(contact_square_sum / train_records - contact_mean * contact_mean, 0.0)
-    contact_std = max(math.sqrt(contact_variance), 1.0)
+    target_mean = target_sum / train_records
+    target_variance = max(target_square_sum / train_records - target_mean * target_mean, 0.0)
+    target_std = max(math.sqrt(target_variance), 1e-3)
 
     rng = np.random.default_rng(config.seed)
     input_weights = rng.normal(0.0, 0.05, (feature_count, config.hidden_size))
@@ -143,7 +143,7 @@ def run_training(
     for epoch in range(1, config.epochs + 1):
         batch_features: list[np.ndarray] = []
         batch_classes: list[int] = []
-        batch_contacts: list[float] = []
+        batch_targets: list[float] = []
         epoch_loss = 0.0
         epoch_records = 0
         for record in _iter_shuffled_records(sources, config, rng):
@@ -151,12 +151,12 @@ def run_training(
                 continue
             batch_features.append(np.asarray(extract_feature_vector(record), dtype=np.float64))
             batch_classes.append(class_index[record["strokeId"]])
-            batch_contacts.append((float(record["contactFrame"]) - contact_mean) / contact_std)
+            batch_targets.append((float(record["contactFrameRelative"]) - target_mean) / target_std)
             if len(batch_features) >= config.batch_size:
                 loss, contact_bias = _update_batch(
                     batch_features,
                     batch_classes,
-                    batch_contacts,
+                    batch_targets,
                     input_weights,
                     input_bias,
                     output_weights,
@@ -170,12 +170,12 @@ def run_training(
                 epoch_loss += loss * len(batch_features)
                 epoch_records += len(batch_features)
                 training_updates += 1
-                batch_features, batch_classes, batch_contacts = [], [], []
+                batch_features, batch_classes, batch_targets = [], [], []
         if batch_features:
             loss, contact_bias = _update_batch(
                 batch_features,
                 batch_classes,
-                batch_contacts,
+                batch_targets,
                 input_weights,
                 input_bias,
                 output_weights,
@@ -207,8 +207,8 @@ def run_training(
                         contact_bias=contact_bias,
                         feature_mean=feature_mean,
                         feature_std=feature_std,
-                        contact_mean=contact_mean,
-                        contact_std=contact_std,
+                        contact_mean=target_mean,
+                        contact_std=target_std,
                     )
                     for split in ("train", "validation", "test")
                 },
@@ -255,7 +255,11 @@ def run_training(
         "featureNames": list(FEATURE_NAMES),
         "classes": list(BML_STROKE_LABELS),
         "normalization": {"mean": feature_mean.tolist(), "std": feature_std.tolist()},
-        "targetNormalization": {"mean": contact_mean, "std": contact_std},
+        "targetNormalization": {
+            "mean": target_mean,
+            "std": target_std,
+            "representation": "relative_window",
+        },
         "classifier": {
             "architecture": "mlp_relu",
             "hiddenSize": config.hidden_size,
@@ -291,7 +295,12 @@ def run_training(
     (output_dir / "checkpoint.sha256").write_text(checkpoint_sha256 + "\n", encoding="utf-8")
 
     loaded = load_checkpoint(checkpoint_path, expected_sha256=checkpoint_sha256)
-    sample_prediction = predict_checkpoint(loaded, [0.0] * feature_count)
+    sample_prediction = predict_checkpoint(
+        loaded,
+        [0.0] * feature_count,
+        window_start_frame=0.0,
+        window_end_frame=1.0,
+    )
     metrics = {
         split: _evaluate_split(
             sources,
@@ -305,8 +314,8 @@ def run_training(
             contact_bias=contact_bias,
             feature_mean=feature_mean,
             feature_std=feature_std,
-            contact_mean=contact_mean,
-            contact_std=contact_std,
+            contact_mean=target_mean,
+            contact_std=target_std,
         )
         for split in ("train", "validation", "test")
     }
@@ -323,8 +332,8 @@ def run_training(
             contact_bias=contact_bias,
             feature_mean=feature_mean,
             feature_std=feature_std,
-            contact_mean=contact_mean,
-            contact_std=contact_std,
+            contact_mean=target_mean,
+            contact_std=target_std,
         )
     held_out_metrics = metrics.get("held_out")
     metric_gate_passed = bool(
@@ -473,9 +482,11 @@ def _evaluate_split(
     records = 0
     correct = 0
     contact_errors: list[float] = []
+    contact_relative_errors: list[float] = []
     confidences: list[float] = []
     losses: list[float] = []
     class_index = {label: index for index, label in enumerate(BML_STROKE_LABELS)}
+    confusion = np.zeros((len(BML_STROKE_LABELS), len(BML_STROKE_LABELS)), dtype=np.int64)
     for record in _iter_sources(sources, config):
         if record["split"] != split:
             continue
@@ -486,17 +497,63 @@ def _evaluate_split(
         predicted_index = int(np.argmax(probabilities))
         target_index = class_index[record["strokeId"]]
         correct += int(predicted_index == target_index)
+        confusion[target_index, predicted_index] += 1
         confidences.append(float(np.max(probabilities)))
-        contact_prediction = float(vector @ contact_weights + contact_bias) * contact_std + contact_mean
+        contact_prediction_relative = float(
+            np.clip(float(vector @ contact_weights + contact_bias) * contact_std + contact_mean, 0.0, 1.0)
+        )
+        window_start = float(record.get("windowStartFrame", 0.0))
+        window_end = float(record.get("windowEndFrame", window_start + 1.0))
+        window_span = max(window_end - window_start, 1.0)
+        contact_prediction = window_start + contact_prediction_relative * window_span
+        contact_relative_errors.append(
+            abs(contact_prediction_relative - float(record["contactFrameRelative"]))
+        )
         contact_errors.append(abs(contact_prediction - float(record["contactFrame"])))
         losses.append(-math.log(max(float(probabilities[target_index]), 1e-12)))
         records += 1
+
+    class_metrics: dict[str, dict[str, float | int]] = {}
+    f1_scores: list[float] = []
+    supported_f1_scores: list[float] = []
+    unsupported_classes: list[str] = []
+    for index, label in enumerate(BML_STROKE_LABELS):
+        true_positive = int(confusion[index, index])
+        support = int(np.sum(confusion[index, :]))
+        predicted = int(np.sum(confusion[:, index]))
+        precision = true_positive / predicted if predicted else 0.0
+        recall = true_positive / support if support else 0.0
+        f1 = 2.0 * precision * recall / (precision + recall) if precision + recall else 0.0
+        f1_scores.append(f1)
+        if support > 0:
+            supported_f1_scores.append(f1)
+        else:
+            unsupported_classes.append(label)
+        class_metrics[label] = {
+            "support": support,
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+        }
     return {
         "records": records,
         "accuracy": float(correct / records) if records else None,
         "contactMaeFrames": float(sum(contact_errors) / len(contact_errors)) if contact_errors else None,
+        "contactMaeRelative": (
+            float(sum(contact_relative_errors) / len(contact_relative_errors))
+            if contact_relative_errors
+            else None
+        ),
         "confidenceMean": float(sum(confidences) / len(confidences)) if confidences else None,
         "loss": float(sum(losses) / len(losses)) if losses else None,
+        "macroF1": float(sum(supported_f1_scores) / len(supported_f1_scores)) if supported_f1_scores else 0.0,
+        "macroF1AllClasses": float(sum(f1_scores) / len(f1_scores)),
+        "unsupportedClasses": unsupported_classes,
+        "classMetrics": class_metrics,
+        "confusionMatrix": {
+            "labels": list(BML_STROKE_LABELS),
+            "matrix": confusion.tolist(),
+        },
     }
 
 

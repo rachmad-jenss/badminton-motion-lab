@@ -64,6 +64,8 @@ def test_iter_training_records_normalizes_jsonl_and_preserves_source_provenance(
                 "ball_round": 3,
                 "split": "validation",
                 "frame_num": 42,
+                "window_start_frame": 22,
+                "window_end_frame": 62,
                 "type": "smash",
                 "player_location_x": 0.4,
                 "player_location_y": 0.8,
@@ -85,6 +87,9 @@ def test_iter_training_records_normalizes_jsonl_and_preserves_source_provenance(
     assert result[0]["split"] == "validation"
     assert result[0]["strokeId"] == "smash"
     assert result[0]["contactFrame"] == 42
+    assert result[0]["contactFrameRelative"] == pytest.approx(0.5)
+    assert result[0]["windowStartFrame"] == 22
+    assert result[0]["windowEndFrame"] == 62
     assert result[0]["provenance"]["publicEvidence"] is False
 
 
@@ -189,6 +194,41 @@ def test_feature_vector_does_not_use_labels() -> None:
     assert vector == changed_label_vector
 
 
+def test_temporal_features_use_inference_tracks_without_contact_label() -> None:
+    record = {
+        "fps": 30,
+        "strokeId": "smash",
+        "contactFrame": 12,
+        "contactFrameRelative": 0.5,
+        "windowStartFrame": 0,
+        "windowEndFrame": 30,
+        "pose": {
+            "frames": [
+                {"frameIndex": 0, "landmarks": [{"x": 0.1, "y": 0.2}]},
+                {"frameIndex": 15, "landmarks": [{"x": 0.4, "y": 0.2}]},
+                {"frameIndex": 30, "landmarks": [{"x": 0.9, "y": 0.2}]},
+            ]
+        },
+        "shuttle": {"points": [{"frameIndex": 0, "x": 0.2, "y": 0.3}, {"frameIndex": 30, "x": 0.8, "y": 0.4}]},
+        "racket": {"points": [{"frameIndex": 0, "x": 0.2, "y": 0.3}, {"frameIndex": 30, "x": 0.9, "y": 0.4}]},
+        "features": {
+            "playerPosition": {"x": 0.4, "y": 0.5},
+            "opponentPosition": {"x": 0.6, "y": 0.5},
+            "landing": {"x": 0.3, "y": 0.2},
+            "backhand": False,
+            "aroundHead": True,
+        },
+    }
+
+    vector = extract_feature_vector(record)
+    changed_target_vector = extract_feature_vector({**record, "contactFrame": 99, "contactFrameRelative": 0.9})
+
+    assert vector == changed_target_vector
+    assert vector[FEATURE_NAMES.index("window_span_seconds")] == pytest.approx(1.0)
+    assert vector[FEATURE_NAMES.index("pose_speed_peak")] > 0
+    assert vector[FEATURE_NAMES.index("racket_acceleration_peak")] >= 0
+
+
 def _training_rows() -> list[dict]:
     rows = []
     positions = {"smash": 0.2, "drop": 0.5, "clear": 0.8}
@@ -257,6 +297,10 @@ def test_small_nonlinear_classifier_learns_interaction_without_loading_dataset(
     checkpoint = json.loads(result.checkpoint_path.read_text(encoding="utf-8"))
     assert checkpoint["classifier"]["architecture"] == "mlp_relu"
     assert result.evaluation["metrics"]["test"]["accuracy"] >= 0.9
+    assert 0.0 <= result.evaluation["metrics"]["test"]["macroF1"] <= 1.0
+    assert 0.0 <= result.evaluation["metrics"]["test"]["macroF1AllClasses"] <= 1.0
+    assert len(result.evaluation["metrics"]["test"]["confusionMatrix"]["labels"]) == 12
+    assert len(result.evaluation["metrics"]["test"]["confusionMatrix"]["matrix"]) == 12
 
 
 def test_training_updates_parameters_and_evaluates_all_source_splits(tmp_path: Path) -> None:
@@ -277,6 +321,8 @@ def test_training_updates_parameters_and_evaluates_all_source_splits(tmp_path: P
     assert result.evaluation["metrics"]["train"]["records"] == 3
     assert result.evaluation["metrics"]["validation"]["records"] == 3
     assert result.evaluation["metrics"]["test"]["records"] == 3
+    assert "macroF1" in result.evaluation["metrics"]["test"]
+    assert "classMetrics" in result.evaluation["metrics"]["test"]
     assert result.evaluation["readiness"] == "locked"
 
 
@@ -295,6 +341,7 @@ def test_checkpoint_reload_produces_required_contract_prediction(tmp_path: Path)
     assert set(REQUIRED_OUTPUTS).issubset(prediction)
     assert prediction["strokeId"] in {"serve", "forehand", "backhand", "smash", "clear", "drop", "drive", "net_shot", "lift", "block", "defensive_return", "jump_smash"}
     assert isinstance(prediction["contactFrame"], int)
+    assert 0.0 <= prediction["contactFrameRelative"] <= 1.0
     assert 0.0 <= prediction["confidence"] <= 1.0
     assert prediction["provenance"]["checkpointSha256"] == result.checkpoint_sha256
     assert checkpoint["featureSchemaVersion"] == FEATURE_SCHEMA_VERSION
@@ -344,10 +391,13 @@ def test_local_agent_feature_adapter_consumes_checkpoint_contract(tmp_path: Path
         pose={"frames": [{"frameIndex": 1, "landmarks": [{"x": 0.4, "y": 0.5}]}]},
         shuttle={"points": [{"frameIndex": 1, "x": 0.3, "y": 0.4}]},
         racket={"points": [{"frameIndex": 1, "x": 0.5, "y": 0.6}]},
+        window_start_frame=100,
+        window_end_frame=140,
     )
 
     assert set(REQUIRED_OUTPUTS).issubset(prediction)
     assert prediction["provenance"]["checkpointSha256"] == result.checkpoint_sha256
+    assert 100 <= prediction["contactFrame"] <= 140
 
 
 def test_unset_stroke_checkpoint_is_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
