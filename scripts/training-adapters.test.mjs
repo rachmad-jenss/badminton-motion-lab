@@ -112,3 +112,26 @@ test("rejects third-party held-out records and exposes checkpoint requirements",
     "provenance",
   ]);
 });
+
+test("accepts a third-party test split without treating it as held-out evidence", () => {
+  const result = normalizeTrainingRecord(
+    "shuttleset22",
+    { id: "test-1", type: "smash", frame_num: 7 },
+    { split: "test" },
+  );
+
+  assert.equal(result.split, "test");
+  assert.equal(result.provenance.publicEvidence, false);
+});
+
+test("normalizes an own-capture held-out record without making training data public", () => {
+  const result = normalizeTrainingRecord(
+    "own_capture",
+    { id: "own-1", strokeId: "smash", contactFrame: 12 },
+    { split: "held_out" },
+  );
+
+  assert.equal(result.sourceId, "own_capture");
+  assert.equal(result.split, "held_out");
+  assert.equal(result.provenance.publicEvidence, false);
+});

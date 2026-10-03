@@ -50,10 +50,21 @@ export const SOURCE_ADAPTER_CONTRACTS = Object.freeze({
   }),
 });
 
+export const OWN_CAPTURE_ADAPTER_CONTRACT = Object.freeze({
+  adapter: "bml-own-capture-v1",
+  roles: Object.freeze(["stroke", "contact_frame", "held_out_evaluation"]),
+  codeLicense: "MIT",
+  dataLicense: "bml_maintainer_owned",
+  mediaPolicy: "own_capture_only",
+  publicEvidence: false,
+  heldOutPolicy: "own_capture_only",
+});
+
 export const TRAINING_CHECKPOINT_CONTRACT = Object.freeze({
   version: 1,
   modelId: "bml-technique-stroke-v1",
   inputSchemaVersion: TRAINING_RECORD_SCHEMA_VERSION,
+  featureSchemaVersion: 1,
   requiredOutputs: Object.freeze(["strokeId", "contactFrame", "confidence", "provenance"]),
   heldOutSource: "own_capture",
 });
@@ -95,6 +106,11 @@ function sampleIdFor(sourceId, raw, requested) {
   return sourceId + "-record";
 }
 
+function contractFor(sourceId) {
+  if (sourceId === "own_capture") return OWN_CAPTURE_ADAPTER_CONTRACT;
+  return SOURCE_ADAPTER_CONTRACTS[sourceId];
+}
+
 function position(x, y) {
   const px = numberOrNull(x);
   const py = numberOrNull(y);
@@ -103,14 +119,17 @@ function position(x, y) {
 
 function normalizeSourceRecord(sourceId, raw, options, contract) {
   const split = String(defined(options.split, raw.split, "train"));
-  if (!["train", "validation", "held_out"].includes(split)) {
+  if (!["train", "validation", "test", "held_out"].includes(split)) {
     throw new Error("unsupported training split: " + split);
   }
   if (split === "held_out" && sourceId !== "own_capture") {
     throw new Error("held-out split is reserved for own_capture");
   }
+  if (sourceId === "own_capture" && split !== "held_out") {
+    throw new Error("own_capture records must use held_out split");
+  }
 
-  const features = {};
+  let features = {};
   let strokeId = null;
   let contactFrame = null;
   let pose = null;
@@ -147,6 +166,13 @@ function normalizeSourceRecord(sourceId, raw, options, contract) {
     const ball = defined(raw.shuttle, raw.ball);
     shuttle = ball ? { points: Array.isArray(ball) ? ball : [ball] } : null;
     racket = seriesOrNull(raw.racket, "points");
+  } else if (sourceId === "own_capture") {
+    strokeId = textOrNull(defined(raw.strokeId, raw.stroke_id, raw.strokeType, raw.stroke_type, raw.type));
+    contactFrame = numberOrNull(defined(raw.contactFrame, raw.contact_frame, raw.frameIndex, raw.frame));
+    pose = seriesOrNull(defined(raw.pose, raw.joints), "frames");
+    shuttle = seriesOrNull(defined(raw.shuttle, raw.shuttlecock), "points");
+    racket = seriesOrNull(raw.racket, "points");
+    features = { ...(raw.features && typeof raw.features === "object" ? raw.features : {}) };
   }
 
   return {
@@ -176,9 +202,9 @@ function normalizeSourceRecord(sourceId, raw, options, contract) {
 export function validateNormalizedTrainingRecord(record) {
   const errors = [];
   if (record?.schemaVersion !== TRAINING_RECORD_SCHEMA_VERSION) errors.push("schemaVersion must be 1");
-  if (!SOURCE_ADAPTER_CONTRACTS[record?.sourceId]) errors.push("unknown sourceId");
+  if (!contractFor(record?.sourceId)) errors.push("unknown sourceId");
   if (!record?.sampleId) errors.push("sampleId is required");
-  if (!["train", "validation", "held_out"].includes(record?.split)) errors.push("unsupported split");
+  if (!["train", "validation", "test", "held_out"].includes(record?.split)) errors.push("unsupported split");
   if (record?.split === "held_out" && record?.sourceId !== "own_capture") {
     errors.push("held-out split is reserved for own_capture");
   }
@@ -190,7 +216,7 @@ export function validateNormalizedTrainingRecord(record) {
 }
 
 export function normalizeTrainingRecord(sourceId, rawRecord, options = {}) {
-  const contract = SOURCE_ADAPTER_CONTRACTS[sourceId];
+  const contract = contractFor(sourceId);
   if (!contract) throw new Error("unknown training source: " + sourceId);
   if (!rawRecord || typeof rawRecord !== "object" || Array.isArray(rawRecord)) {
     throw new Error("training record must be an object");
