@@ -5,17 +5,16 @@ export default function ContributePage() {
     <main className="page-contribute">
       <h1>Help improve the measurements</h1>
       <p className="tag">
-        Badminton Motion Lab is in beta. Every module is locked until real badminton footage
-        proves the pipeline measures it correctly. Your videos can speed that up without ever
-        leaving your PC.
+        Badminton Motion Lab is in beta. Modules are available experimentally now; real badminton
+        footage will continue to improve and validate the benchmark gates. Your videos can speed
+        that up without ever leaving your PC.
       </p>
 
       <section className="panel">
         <h2>The honest rule</h2>
         <p>
-          Locked modules are not a limitation to hide: they mean no fabricated score. A module
-          unlocks only when both kinds of evidence pass — broadcast footage for event timing and
-          own-capture clips for body measurements (Plan 028).
+          Experimental modules are not presented as production-validated scores. The analysis runs
+          locally now while benchmark evidence and quality gates continue to improve the results.
         </p>
       </section>
 

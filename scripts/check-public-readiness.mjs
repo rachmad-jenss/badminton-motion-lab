@@ -1,5 +1,5 @@
 /**
- * Public completeness gate: zero locked modules in readiness.seed.json
+ * Public completeness gate: only fully benchmarked modules count as complete.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -16,18 +16,24 @@ if (!existsSync(seedPath)) {
 const seed = JSON.parse(readFileSync(seedPath, "utf8"));
 const entries = Object.entries(seed.modules || {});
 const locked = entries.filter(([, s]) => s === "locked").map(([id]) => id);
+const experimental = entries.filter(([, s]) => s === "experimental").map(([id]) => id);
 const on = entries.filter(([, s]) => s === "on").map(([id]) => id);
 
 console.log(`Modules: ${entries.length}`);
 console.log(`On: ${on.length}`);
 console.log(`Locked: ${locked.length}`);
-if (locked.length) {
-  console.error("Public completeness FAILED. Locked:\n" + locked.join("\n"));
+console.log(`Experimental: ${experimental.length}`);
+if (locked.length || experimental.length) {
+  console.error(
+    "Public completeness FAILED. Modules still unavailable for public claims:\n" +
+      [...locked, ...experimental].join("\n"),
+  );
   process.exit(1);
 }
 
 const checklist = {
   zeroLocked: locked.length === 0,
+  zeroExperimental: experimental.length === 0,
   windowsInstaller: existsSync(join(root, "infra", "windows", "install-agent.ps1")),
   packagingStub: existsSync(join(root, "infra", "windows", "package-agent.cmd")),
   captureGuide: existsSync(join(root, "apps", "web", "src", "app", "capture-guide", "page.tsx")),

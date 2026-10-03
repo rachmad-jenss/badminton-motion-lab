@@ -118,7 +118,7 @@ const seedSqlPath = join(root, "supabase", "seed.sql");
 if (existsSync(seedSqlPath)) {
   const seedSql = readFileSync(seedSqlPath, "utf8");
   const sqlModules = [
-    ...seedSql.matchAll(/\(\'((?:technique|footwork):[^\']+)\',\s*\'(?:locked|on)\'/g),
+    ...seedSql.matchAll(/\(\'((?:technique|footwork):[^\']+)\',\s*\'(?:locked|experimental|on)\'/g),
   ]
     .map((m) => m[1])
     .sort();
@@ -220,7 +220,7 @@ for (const name of readdirSync(reportsDir)) {
 for (const moduleId of expectedModules) {
   const report = reports.get(moduleId);
   if (!report) fail("missing report for " + moduleId);
-  const expectedStatus = report.passed ? "on" : "locked";
+  const expectedStatus = report.passed ? "on" : "experimental";
   if (seed.modules[moduleId] !== expectedStatus) {
     fail(moduleId + " seed=" + seed.modules[moduleId] + " report=" + expectedStatus);
   }
@@ -245,5 +245,5 @@ console.log(
     manifestClips.length,
 );
 if (!allOn) {
-  console.log("Public completeness is not ready; locked modules remain intentionally visible.");
+  console.log("Public completeness is not ready; experimental modules remain usable locally.");
 }

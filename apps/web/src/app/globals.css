@@ -586,6 +586,11 @@ h3 {
   color: var(--shell-accent-strong);
 }
 
+.status-badge.experimental {
+  border-color: color-mix(in srgb, #d99a2b 62%, transparent);
+  color: color-mix(in srgb, #d99a2b 84%, var(--token-ink));
+}
+
 .status-badge.locked {
   border-color: var(--token-border-strong);
   background: color-mix(in srgb, var(--token-ink) 8%, transparent);

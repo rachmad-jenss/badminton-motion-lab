@@ -1064,13 +1064,19 @@ async def local_readiness(_token: str = Depends(require_bearer)) -> dict[str, An
             records.append(
                 {
                     "moduleId": data["moduleId"],
-                    "status": "on" if data.get("passed") else "locked",
+                    "status": "on" if data.get("passed") else "experimental",
                     "passed": data.get("passed", False),
                     "reportPath": str(p),
                 }
             )
     locked = [r["moduleId"] for r in records if r["status"] == "locked"]
-    return {"records": records, "complete": len(records) > 0 and len(locked) == 0, "locked": locked}
+    experimental = [r["moduleId"] for r in records if r["status"] == "experimental"]
+    return {
+        "records": records,
+        "complete": len(records) > 0 and not locked and not experimental,
+        "locked": locked,
+        "experimental": experimental,
+    }
 
 
 def main() -> None:

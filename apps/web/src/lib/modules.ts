@@ -32,10 +32,12 @@ export function getModules(): UiModule[] {
 export function publicCompletenessFromSeed(): {
   complete: boolean;
   locked: string[];
+  experimental: string[];
   on: string[];
 } {
   const modules = getModules();
   const locked = modules.filter((m) => m.status === "locked").map((m) => m.moduleId);
+  const experimental = modules.filter((m) => m.status === "experimental").map((m) => m.moduleId);
   const on = modules.filter((m) => m.status === "on").map((m) => m.moduleId);
-  return { complete: locked.length === 0, locked, on };
+  return { complete: locked.length === 0 && experimental.length === 0, locked, experimental, on };
 }

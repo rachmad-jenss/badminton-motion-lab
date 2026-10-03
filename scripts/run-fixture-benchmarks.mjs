@@ -236,9 +236,9 @@ async function main() {
         gate: GATE,
       };
       writeFileSync(join(reportsDir, `${safeName}.json`), JSON.stringify(locked, null, 2));
-      modules[moduleId] = "locked";
+      modules[moduleId] = "experimental";
       allPassed = false;
-      console.log(`LOCK ${moduleId} (no dedicated run)`);
+      console.log(`EXPERIMENTAL ${moduleId} (no dedicated run)`);
       continue;
     }
     const raw = {
@@ -262,8 +262,8 @@ async function main() {
     const report = evaluate(kind, raw);
     if (!report.passed) allPassed = false;
     writeFileSync(join(reportsDir, `${safeName}.json`), JSON.stringify(report, null, 2));
-    modules[moduleId] = report.passed ? "on" : "locked";
-    console.log(`${report.passed ? "ON " : "LOCK"} ${moduleId}`);
+    modules[moduleId] = report.passed ? "on" : "experimental";
+    console.log(`${report.passed ? "ON " : "EXPERIMENTAL"} ${moduleId}`);
   }
 
   // Fail hard if any report still has synthetic theater notes

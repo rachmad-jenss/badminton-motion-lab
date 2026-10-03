@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test("home discloses beta and locked modules honestly", async ({ page }) => {
+test("home discloses experimental modules honestly", async ({ page }) => {
   await page.goto("/");
 
   const notice = page.locator(".beta-notice");
   await expect(notice).toContainText("Beta");
   await expect(notice.getByRole("link")).toHaveAttribute("href", "/contribute");
-  await expect(page.getByText("In review", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Experimental", { exact: true }).first()).toBeVisible();
 });
 
 test("contribute page explains local-first opt-in and attribution", async ({ page }) => {

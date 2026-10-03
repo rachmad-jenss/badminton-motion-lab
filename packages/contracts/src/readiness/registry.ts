@@ -1,4 +1,4 @@
-export type ModuleStatus = "locked" | "on";
+export type ModuleStatus = "locked" | "experimental" | "on";
 
 export interface BenchmarkGate {
   /** Contact frame error threshold in frames at reference 30fps. */
@@ -96,9 +96,16 @@ export function evaluateBenchmark(
 export function publicCompleteness(records: ModuleReadinessRecord[]): {
   complete: boolean;
   locked: string[];
+  experimental: string[];
   on: string[];
 } {
   const locked = records.filter((r) => r.status === "locked").map((r) => r.moduleId);
+  const experimental = records.filter((r) => r.status === "experimental").map((r) => r.moduleId);
   const on = records.filter((r) => r.status === "on").map((r) => r.moduleId);
-  return { complete: locked.length === 0 && on.length === records.length, locked, on };
+  return {
+    complete: locked.length === 0 && experimental.length === 0 && on.length === records.length,
+    locked,
+    experimental,
+    on,
+  };
 }

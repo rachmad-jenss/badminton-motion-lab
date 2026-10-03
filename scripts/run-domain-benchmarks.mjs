@@ -373,7 +373,7 @@ async function main() {
   const ciSmoke = process.argv.includes("--ci-smoke");
   const { manifest, policy, moduleEvidence } = loadManifest();
   if (!manifest.clips.length) {
-    console.log("No domain clips in manifest; nothing to benchmark (honest locked state).");
+    console.log("No domain clips in manifest; nothing to benchmark (honest experimental state).");
     process.exit(0);
   }
   if (ciSmoke) {
@@ -459,9 +459,9 @@ async function main() {
         gate: { ...GATE, policy },
       };
       writeFileSync(join(reportsDir, safeName + ".json"), JSON.stringify(locked, null, 2));
-      modules[moduleId] = "locked";
+      modules[moduleId] = "experimental";
       allPassed = false;
-      console.log("LOCK " + moduleId + " (no evidence)");
+      console.log("EXPERIMENTAL " + moduleId + " (no evidence)");
       continue;
     }
     const evaluated = evaluateModule(
@@ -501,9 +501,9 @@ async function main() {
       gate: evaluated.gate,
     };
     writeFileSync(join(reportsDir, safeName + ".json"), JSON.stringify(report, null, 2));
-    modules[moduleId] = evaluated.passed ? "on" : "locked";
+    modules[moduleId] = evaluated.passed ? "on" : "experimental";
     if (!evaluated.passed) allPassed = false;
-    console.log((evaluated.passed ? "ON " : "LOCK") + " " + moduleId);
+    console.log((evaluated.passed ? "ON " : "EXPERIMENTAL") + " " + moduleId);
   }
 
   for (const name of readdirSync(reportsDir)) {

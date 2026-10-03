@@ -12,7 +12,9 @@ import { OnboardingSteps } from "@/components/OnboardingSteps";
 import Link from "next/link";
 
 function moduleStatusLabel(status: string): string {
-  return status === "on" ? "Ready" : "In review";
+  if (status === "on") return "Ready";
+  if (status === "experimental") return "Experimental";
+  return "In review";
 }
 
 export default function HomePage() {
@@ -60,7 +62,7 @@ export default function HomePage() {
       ) : null}
       {!completeness.complete ? (
         <div className="notice beta-notice" role="note">
-          Beta — some modules are still locked while real-evidence benchmarks are in progress.{" "}
+          Beta — modules are available experimentally while real-evidence benchmarks are in progress.{" "}
           <Link href="/contribute">See how you can help →</Link>
         </div>
       ) : null}
@@ -84,8 +86,8 @@ export default function HomePage() {
         <h2>Technique Lab</h2>
         {!completeness.complete ? (
           <p className="muted labs-note">
-            Some analysis areas are still in review. They will appear here when their measurements
-            are ready; you can still use the available areas below.
+            Experimental analysis is available now. Benchmark evidence will continue to refine the
+            measurements; use the results as beta guidance.
           </p>
         ) : null}
         <div className="lab-list">
