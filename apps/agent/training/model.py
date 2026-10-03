@@ -196,14 +196,20 @@ def _validate_checkpoint(payload: dict[str, Any]) -> None:
     classifier = payload.get("classifier")
     if not isinstance(classifier, dict):
         raise CheckpointError("checkpoint classifier is missing")
-    weights = np.asarray(classifier.get("weights"), dtype=np.float64)
-    bias = np.asarray(classifier.get("bias"), dtype=np.float64)
+    try:
+        weights = np.asarray(classifier.get("weights"), dtype=np.float64)
+        bias = np.asarray(classifier.get("bias"), dtype=np.float64)
+    except (TypeError, ValueError):
+        raise CheckpointError("checkpoint classifier parameters are invalid")
     if weights.shape != (len(BML_STROKE_LABELS), len(FEATURE_NAMES)) or bias.shape != (len(BML_STROKE_LABELS),):
         raise CheckpointError("checkpoint classifier shape is invalid")
     contact = payload.get("contactRegressor")
     if not isinstance(contact, dict):
         raise CheckpointError("checkpoint contact regressor is missing")
-    contact_weights = np.asarray(contact.get("weights"), dtype=np.float64)
+    try:
+        contact_weights = np.asarray(contact.get("weights"), dtype=np.float64)
+    except (TypeError, ValueError):
+        raise CheckpointError("checkpoint contact regressor parameters are invalid")
     if contact_weights.shape != (len(FEATURE_NAMES),) or not _finite_scalar(contact, "bias"):
         raise CheckpointError("checkpoint contact regressor shape is invalid")
     if not np.all(np.isfinite(weights)) or not np.all(np.isfinite(bias)) or not np.all(np.isfinite(contact_weights)):
@@ -218,7 +224,10 @@ def _validate_checkpoint(payload: dict[str, Any]) -> None:
 def _finite_vector(container: Any, key: str, length: int) -> bool:
     if not isinstance(container, dict):
         return False
-    values = np.asarray(container.get(key), dtype=np.float64)
+    try:
+        values = np.asarray(container.get(key), dtype=np.float64)
+    except (TypeError, ValueError):
+        return False
     return values.shape == (length,) and bool(np.all(np.isfinite(values)))
 
 

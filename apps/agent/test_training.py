@@ -319,3 +319,30 @@ def test_invalid_stroke_checkpoint_fails_closed(
             width=1280,
             height=720,
         )
+
+
+def test_malformed_checkpoint_parameters_fail_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    records_path = tmp_path / "records.jsonl"
+    _write_jsonl(records_path, _training_rows())
+    result = run_training(
+        [_source(records_path)],
+        output_dir=tmp_path / "run",
+        config=TrainingConfig(seed=17, epochs=1, batch_size=3, learning_rate=0.2),
+    )
+    payload = json.loads(result.checkpoint_path.read_text(encoding="utf-8"))
+    payload["normalization"]["mean"] = None
+    malformed = tmp_path / "malformed-checkpoint.json"
+    malformed.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setenv("BML_STROKE_CHECKPOINT", str(malformed))
+
+    with pytest.raises(MediaError, match="Configured stroke checkpoint is invalid"):
+        _optional_stroke_prediction(
+            fps=30,
+            pose={"frames": []},
+            shuttle={"points": []},
+            racket={"points": []},
+            width=1280,
+            height=720,
+        )
