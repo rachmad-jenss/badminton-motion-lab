@@ -16,6 +16,9 @@ from training.records import (
     iter_training_records,
     stable_split,
 )
+from training.model import FEATURE_SCHEMA_VERSION, REQUIRED_OUTPUTS, load_checkpoint, predict_checkpoint
+from training.cli import run_smoke
+from training.runner import TrainingConfig, run_training
 
 
 def _source(path: Path, source_id: str = "shuttleset22") -> RecordSource:
@@ -167,3 +170,93 @@ def test_feature_vector_does_not_use_labels() -> None:
 
     assert len(vector) == len(FEATURE_NAMES)
     assert vector == changed_label_vector
+
+
+def _training_rows() -> list[dict]:
+    rows = []
+    positions = {"smash": 0.2, "drop": 0.5, "clear": 0.8}
+    for split in ("train", "validation", "test"):
+        for index, (stroke, x) in enumerate(positions.items()):
+            rows.append(
+                {
+                    "id": f"{split}-{stroke}-{index}",
+                    "split": split,
+                    "type": stroke,
+                    "frame": 10 + index * 5,
+                    "fps": 30,
+                    "position": {"x": x, "y": 0.5},
+                    "opponent_location_x": 1.0 - x,
+                    "opponent_location_y": 0.5,
+                }
+            )
+    return rows
+
+
+def test_training_updates_parameters_and_evaluates_all_source_splits(tmp_path: Path) -> None:
+    records_path = tmp_path / "records.jsonl"
+    _write_jsonl(records_path, _training_rows())
+    result = run_training(
+        [_source(records_path)],
+        output_dir=tmp_path / "run",
+        config=TrainingConfig(seed=17, epochs=3, batch_size=3, learning_rate=0.2),
+    )
+
+    assert result.checkpoint_path.is_file()
+    assert result.manifest_path.is_file()
+    assert result.evaluation_path.is_file()
+    assert len(result.checkpoint_sha256) == 64
+    assert result.evaluation["trainingUpdates"] > 0
+    assert result.evaluation["inferenceContractValid"] is True
+    assert result.evaluation["metrics"]["train"]["records"] == 3
+    assert result.evaluation["metrics"]["validation"]["records"] == 3
+    assert result.evaluation["metrics"]["test"]["records"] == 3
+    assert result.evaluation["readiness"] == "locked"
+
+
+def test_checkpoint_reload_produces_required_contract_prediction(tmp_path: Path) -> None:
+    records_path = tmp_path / "records.jsonl"
+    _write_jsonl(records_path, _training_rows())
+    result = run_training(
+        [_source(records_path)],
+        output_dir=tmp_path / "run",
+        config=TrainingConfig(seed=17, epochs=2, batch_size=3, learning_rate=0.2),
+    )
+
+    checkpoint = load_checkpoint(result.checkpoint_path, expected_sha256=result.checkpoint_sha256)
+    prediction = predict_checkpoint(checkpoint, [0.0] * len(FEATURE_NAMES))
+
+    assert set(REQUIRED_OUTPUTS).issubset(prediction)
+    assert prediction["strokeId"] in {"serve", "forehand", "backhand", "smash", "clear", "drop", "drive", "net_shot", "lift", "block", "defensive_return", "jump_smash"}
+    assert isinstance(prediction["contactFrame"], int)
+    assert 0.0 <= prediction["confidence"] <= 1.0
+    assert prediction["provenance"]["checkpointSha256"] == result.checkpoint_sha256
+    assert checkpoint["featureSchemaVersion"] == FEATURE_SCHEMA_VERSION
+
+
+def test_missing_source_fails_before_checkpoint_creation(tmp_path: Path) -> None:
+    missing_root = tmp_path / "missing-source"
+    source = RecordSource(
+        source_id="shuttleset22",
+        path=missing_root / "records.jsonl",
+        allowed_root=missing_root,
+        provenance={"sourceId": "shuttleset22", "publicEvidence": False},
+    )
+    output_dir = tmp_path / "run"
+
+    with pytest.raises(TrainingDataError, match="source root missing"):
+        run_training(
+            [source],
+            output_dir=output_dir,
+            config=TrainingConfig(seed=17, epochs=1, batch_size=2, learning_rate=0.1),
+        )
+
+    assert not output_dir.exists()
+
+
+def test_smoke_runner_proves_training_reload_and_stays_locked(tmp_path: Path) -> None:
+    result = run_smoke(tmp_path / "smoke")
+
+    assert result.evaluation["trainingUpdates"] > 0
+    assert result.evaluation["inferenceContractValid"] is True
+    assert result.evaluation["evidenceClass"] == "synthetic_smoke"
+    assert result.evaluation["readiness"] == "locked"
