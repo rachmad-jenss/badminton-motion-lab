@@ -31,6 +31,21 @@ safe local roots. It intentionally does not download, decode, or load a full
 match. Any future trainer must process one rally/window at a time, cap frames
 and resolution, and keep concurrency at one by default.
 
+The repository includes bounded provisioning helpers for the two sources that
+are not hosted in the Git checkout itself:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/provision-bfmd-annotations.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/provision-racketvision-static.ps1
+```
+
+They write only under ignored `validation/training-sources/` directories. The
+BFMD helper fetches the public annotation package and skips its inaccessible
+cache/video paths. The RacketVision helper fetches global non-video
+annotations, `badminton/info`, and the bounded `badminton/all/match1` sample;
+it never fetches `*/videos/*`, extracted frames, or weights. Verify the local
+file counts and provenance manifests before using a source.
+
 The source-specific record normalizers live in
 [`scripts/training-adapters.mjs`](../../scripts/training-adapters.mjs). They
 map BFMD, BST, ShuttleSet/ShuttleSet22, and RacketVision annotation records to
@@ -63,16 +78,29 @@ This must report non-zero `trainingUpdates`, successful checkpoint reload and
 inference-contract validation, but it must remain `readiness=locked`. It is
 not training-source or held-out evidence.
 
-After manual provisioning, a minimal real-source run is:
+After provisioning ShuttleSet/ShuttleSet22, create deterministic match-level
+records (the source CSVs use Mandarin stroke labels):
+
+```powershell
+python scripts/prepare-training-records.py --source-id shuttleset `
+  --root validation/training-sources/shuttleset `
+  --output validation/training-sources/shuttleset/records.normalized.jsonl
+python scripts/prepare-training-records.py --source-id shuttleset22 `
+  --root validation/training-sources/shuttleset22 `
+  --output validation/training-sources/shuttleset22/records.normalized.jsonl
+```
+
+A minimal real-source run is:
 
 ```powershell
 npm run training:run -- `
   --source bst `
   --source shuttleset `
   --source shuttleset22 `
-  --records shuttleset=validation/training-sources/shuttleset/records.jsonl `
-  --records shuttleset22=validation/training-sources/shuttleset22/records.jsonl `
-  --held-out validation/domain-media/own-capture-stroke.json
+  --records shuttleset=validation/training-sources/shuttleset/records.normalized.jsonl `
+  --records shuttleset22=validation/training-sources/shuttleset22/records.normalized.jsonl `
+  --learning-rate 0.001 `
+  --max-records 50000
 ```
 
 Add BFMD or RacketVision with another `--source` and explicit `--records`

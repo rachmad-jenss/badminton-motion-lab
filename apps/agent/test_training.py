@@ -88,6 +88,21 @@ def test_iter_training_records_normalizes_jsonl_and_preserves_source_provenance(
     assert result[0]["provenance"]["publicEvidence"] is False
 
 
+def test_iter_training_records_normalizes_shuttleset_labels(tmp_path: Path) -> None:
+    records_path = tmp_path / "shuttleset.csv"
+    records_path.write_text(
+        "type,frame_num,player_location_x,player_location_y,opponent_location_x,opponent_location_y\n"
+        "發短球,10,0.2,0.3,0.8,0.7\n"
+        "點扣,20,0.3,0.4,0.7,0.6\n"
+        "放小球,30,0.4,0.5,0.6,0.5\n",
+        encoding="utf-8",
+    )
+
+    records = list(iter_training_records([_source(records_path, "shuttleset")], seed=17))
+
+    assert [record["strokeId"] for record in records] == ["serve", "smash", "net_shot"]
+
+
 def test_reader_rejects_a_source_file_outside_allowed_root(tmp_path: Path) -> None:
     allowed = tmp_path / "allowed"
     allowed.mkdir()
