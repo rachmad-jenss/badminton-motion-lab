@@ -10,6 +10,8 @@ Push-Location (Join-Path $PSScriptRoot "..")
 try {
   & $python -m pytest apps/agent/test_training.py -q -p no:cacheprovider --basetemp $tempRoot
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  & node --test scripts/training-readiness.test.mjs
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
   Pop-Location
 }

@@ -10,14 +10,17 @@
   "modules": {
     "technique:*": {
       "requiredArtifacts": ["pose", "racket", "shuttle", "events", "metrics"],
+      "requiresTrainingEvidence": true,
       "benchmark": "validation/reports/technique__{stroke}.json"
     },
     "footwork:pure": {
       "requiredArtifacts": ["pose", "events", "metrics"],
+      "requiresTrainingEvidence": false,
       "requiresCourt": true
     },
     "footwork:layer:*": {
       "requiredArtifacts": ["pose", "events", "metrics"],
+      "requiresTrainingEvidence": true,
       "requiresCourt": true
     }
   }

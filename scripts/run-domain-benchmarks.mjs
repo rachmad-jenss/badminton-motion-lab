@@ -24,6 +24,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TECHNIQUE_STROKES, allModuleIds, moduleKind } from "./module-inventory.mjs";
 import { sha256File } from "./stream-sha256.mjs";
+import { loadTrainingEvaluation } from "./check-training-readiness.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -31,6 +32,9 @@ const AGENT = process.env.BML_AGENT_URL || "http://127.0.0.1:8787";
 const MANIFEST_PATH =
   process.env.BML_DOMAIN_MANIFEST || join(root, "validation", "domain-manifest.json");
 const CONTRACT_PATH = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
+const MODULE_MATRIX = JSON.parse(
+  readFileSync(join(root, "validation", "benchmark-configs", "module-matrix.json"), "utf8"),
+);
 
 function fail(message) {
   console.error("Domain benchmark FAILED: " + message);
@@ -207,7 +211,7 @@ async function analyzeClip(clip, token) {
   };
 }
 
-function evaluateModule(moduleId, kind, results, policy) {
+function evaluateModule(moduleId, kind, results, policy, moduleEvidence, trainingEvidence, moduleConfig) {
   const byId = new Map(results.map((r) => [r.clipId, r]));
   const ev = moduleEvidence[moduleId] || { eventClips: [], poseClips: [] };
   const uniqueEvent = [...new Set(ev.eventClips)];
@@ -300,7 +304,15 @@ function evaluateModule(moduleId, kind, results, policy) {
   }
 
   const totalClips = eventClips.length + poseClips.length;
-  const passed = eventPass && posePass;
+  const requiresTrainingEvidence = moduleConfig.requiresTrainingEvidence === true;
+  if (requiresTrainingEvidence && !trainingEvidence.ready) {
+    notes.push(
+      "Training evidence " +
+        trainingEvidence.status +
+        (trainingEvidence.errors.length ? ": " + trainingEvidence.errors.join("; ") : ""),
+    );
+  }
+  const passed = eventPass && posePass && (!requiresTrainingEvidence || trainingEvidence.ready);
   const policyObj = {
     ...policy,
     contactFrameTolerance: GATE.contactFrameTolerance,
@@ -337,7 +349,23 @@ function evaluateModule(moduleId, kind, results, policy) {
     },
     passed,
     notes,
+    requiresTrainingEvidence,
     gate: { ...GATE, policy: policyObj },
+  };
+}
+
+function moduleConfigFor(moduleId) {
+  if (moduleId.startsWith("technique:")) return MODULE_MATRIX.modules["technique:*"] || {};
+  if (moduleId === "footwork:pure") return MODULE_MATRIX.modules["footwork:pure"] || {};
+  if (moduleId.startsWith("footwork:layer:")) return MODULE_MATRIX.modules["footwork:layer:*"] || {};
+  return {};
+}
+
+function trainingEvidenceSummary(trainingEvidence) {
+  return {
+    status: trainingEvidence.status,
+    ready: trainingEvidence.ready,
+    errors: trainingEvidence.errors,
   };
 }
 
@@ -402,6 +430,7 @@ async function main() {
 
   const generatedAt = new Date().toISOString();
   const digest = manifestDigest(manifest);
+  const trainingEvidence = loadTrainingEvaluation();
   const reportsDir = join(root, "validation", "reports");
   mkdirSync(reportsDir, { recursive: true });
   const modules = {};
@@ -409,6 +438,7 @@ async function main() {
 
   for (const moduleId of allModuleIds()) {
     const kind = moduleKind(moduleId);
+    const moduleConfig = moduleConfigFor(moduleId);
     const safeName = moduleId.replaceAll(":", "__");
     const ev = moduleEvidence[moduleId] || { eventClips: [], poseClips: [] };
     const hasEvidence = ev.eventClips?.length || ev.poseClips?.length;
@@ -423,6 +453,8 @@ async function main() {
         fixturePassRate: 0,
         passed: false,
         evidence: { eventClips: [], poseClips: [], eventPass: false, posePass: false, policy },
+        trainingEvidence: trainingEvidenceSummary(trainingEvidence),
+        requiresTrainingEvidence: moduleConfig.requiresTrainingEvidence === true,
         notes: ["No domain evidence declared for " + moduleId],
         gate: { ...GATE, policy },
       };
@@ -432,7 +464,15 @@ async function main() {
       console.log("LOCK " + moduleId + " (no evidence)");
       continue;
     }
-    const evaluated = evaluateModule(moduleId, kind, results, policy);
+    const evaluated = evaluateModule(
+      moduleId,
+      kind,
+      results,
+      policy,
+      moduleEvidence,
+      trainingEvidence,
+      moduleConfig,
+    );
     const report = {
       moduleId,
       generatedAt,
@@ -449,6 +489,8 @@ async function main() {
       courtValidRate: evaluated.aggregate.courtValidRate,
       poseDetectionCoverage: evaluated.aggregate.poseDetectionCoverage,
       evidence: evaluated.evidence,
+      trainingEvidence: trainingEvidenceSummary(trainingEvidence),
+      requiresTrainingEvidence: evaluated.requiresTrainingEvidence,
       clipResults: evaluated.clipResults,
       passed: evaluated.passed,
       notes: [

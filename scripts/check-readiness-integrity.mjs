@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { allModuleIds } from "./module-inventory.mjs";
 import { sha256File } from "./stream-sha256.mjs";
 import { loadTrainingSourceManifest } from "./check-training-sources.mjs";
+import { loadTrainingEvaluation } from "./check-training-readiness.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const seedPath = join(root, "apps", "web", "src", "lib", "readiness.seed.json");
@@ -27,6 +28,9 @@ const fixturePath = join(root, "validation", "fixtures", "person_1280x720_30fps.
 const contractPath = join(root, "packages", "contracts", "src", "schemas", "analysis.ts");
 const manifestPath = join(root, "validation", "domain-manifest.json");
 const trainingSourceManifestPath = join(root, "validation", "training-sources.json");
+const moduleMatrix = JSON.parse(
+  readFileSync(join(root, "validation", "benchmark-configs", "module-matrix.json"), "utf8"),
+);
 
 const expectedModules = allModuleIds();
 
@@ -67,6 +71,13 @@ function isDomainReport(report) {
   );
 }
 
+function requiresTrainingEvidence(moduleId) {
+  if (moduleId.startsWith("technique:")) return moduleMatrix.modules["technique:*"]?.requiresTrainingEvidence === true;
+  if (moduleId === "footwork:pure") return moduleMatrix.modules["footwork:pure"]?.requiresTrainingEvidence === true;
+  if (moduleId.startsWith("footwork:layer:")) return moduleMatrix.modules["footwork:layer:*"]?.requiresTrainingEvidence === true;
+  return false;
+}
+
 const trainingSources = loadTrainingSourceManifest(trainingSourceManifestPath);
 if (trainingSources.errors.length > 0) {
   fail("training source manifest is invalid: " + trainingSources.errors.join(" | "));
@@ -95,6 +106,7 @@ const manifestClips = manifest && Array.isArray(manifest.clips) ? manifest.clips
 const clipById = new Map(manifestClips.map((c) => [c.id, c]));
 const policy = manifest?.policy || {};
 const domainDigest = manifest ? manifestDigest(manifest) : "";
+const trainingEvidence = loadTrainingEvaluation();
 
 const seedIds = Object.keys(seed.modules || {}).sort();
 const expectedIds = [...expectedModules].sort();
@@ -184,6 +196,20 @@ for (const name of readdirSync(reportsDir)) {
 
   if (report.passed && report.fixtureKind !== "badminton_stroke") {
     fail(report.moduleId + " passed without fixtureKind=badminton_stroke");
+  }
+  if (report.passed && requiresTrainingEvidence(report.moduleId)) {
+    if (!trainingEvidence.ready) {
+      fail(
+        report.moduleId +
+          " passed but current training evidence is " +
+          trainingEvidence.status +
+          ": " +
+          trainingEvidence.errors.join("; "),
+      );
+    }
+    if (report.trainingEvidence?.ready !== true) {
+      fail(report.moduleId + " passed without an embedded ready training-evidence status");
+    }
   }
   const notes = (report.notes || []).join(" ");
   if (/synthetic|walking person fixture/i.test(notes)) {
