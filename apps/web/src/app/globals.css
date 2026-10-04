@@ -405,6 +405,7 @@ nav.app-nav {
   box-sizing: border-box;
   cursor: pointer;
   appearance: none;
+  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-fast) ease, background var(--motion-fast) ease;
 }
 
 .icon-menu[open] .icon-button {
@@ -467,6 +468,7 @@ nav.app-nav {
   font-size: 0.78rem;
   text-align: left;
   cursor: pointer;
+  transition: transform var(--motion-fast) var(--ease-out), border-color var(--motion-fast) ease, background var(--motion-fast) ease;
 }
 
 .menu-option:active {
@@ -862,6 +864,11 @@ label {
   color: var(--color-error);
 }
 
+.notice.error-notice {
+  border-left-color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 10%, var(--shell-surface));
+}
+
 .status {
   margin: 0.75rem 0 0;
   color: var(--token-ink-muted);
@@ -934,6 +941,10 @@ table {
 .trend-scroll {
   overflow-x: auto;
   padding-bottom: 0.5rem;
+}
+
+.table-wrap table {
+  width: 100%;
 }
 
 th,
@@ -1121,7 +1132,7 @@ pre {
 }
 
 .hero > * {
-  animation: rise-in var(--motion-medium) ease both;
+  animation: rise-in var(--motion-medium) var(--ease-out) both;
 }
 
 .hero > *:nth-child(2) { animation-delay: 60ms; }
@@ -1283,6 +1294,74 @@ pre {
   .row {
     align-items: stretch;
   }
+
+  .responsive-table {
+    overflow: visible;
+  }
+
+  .responsive-table table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td {
+    display: block;
+  }
+
+  .responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .responsive-table tr {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--token-border);
+  }
+
+  .responsive-table td {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 34%) minmax(0, 1fr);
+    gap: 0.7rem;
+    padding: 0.35rem 0;
+    border: 0;
+  }
+
+  .responsive-table td::before {
+    content: attr(data-label);
+    color: var(--token-ink-muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .responsive-table td.metric-name > span,
+  .responsive-table td.metric-name > details {
+    grid-column: 2;
+  }
+
+  .trend-scroll {
+    overflow: visible;
+  }
+
+  .trend-chart {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(2.6rem, 1fr));
+    min-width: 0;
+    height: auto;
+    gap: 0.35rem;
+  }
+
+  .trend-point {
+    min-width: 0;
+  }
+
+  .trend-bar {
+    width: min(100%, 2rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1292,7 +1371,7 @@ pre {
 
   .hero > *,
   .shell-backdrop {
-    animation: fade-in-soft 200ms ease both;
+    animation: fade-in-soft 200ms var(--ease-out) both;
     animation-delay: 0ms !important;
   }
 
@@ -1300,8 +1379,15 @@ pre {
   .d-btn,
   .module,
   .trend-bar,
-  .icon-menu-panel {
+  .icon-menu-panel,
+  .result-reveal,
+  .phase-swap {
     transition-duration: 120ms;
+  }
+
+  .result-reveal,
+  .phase-swap {
+    animation: none !important;
   }
 
   .nav-link:hover,

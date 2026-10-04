@@ -119,7 +119,7 @@ export default function ComparePage() {
         </div>
       </header>
 
-      {error ? <div className="notice" role="status">{error} <Link href={setupAction.href}>{setupAction.label} →</Link></div> : null}
+      {error ? <div className="notice error-notice" role="alert">{error} <Link href={setupAction.href}>{setupAction.label} →</Link></div> : null}
       {loading ? <p className="muted" role="status">Loading session series…</p> : null}
       {Object.keys(seriesErrors).length > 0 ? (
         <div className="notice error-notice" role="alert">
@@ -133,15 +133,16 @@ export default function ComparePage() {
           {!hasAnyData && Object.keys(seriesErrors).length === 0 ? (
             <p className="muted">No runs yet - analyze a local video first.</p>
           ) : (
-            <div className="table-wrap">
+            <div className="table-wrap responsive-table">
               <table>
+                <caption className="sr-only">Latest measurements compared with the previous run</caption>
                 <thead>
                   <tr>
-                    <th>Metric</th>
-                    <th>Previous</th>
-                    <th>Current</th>
-                    <th>Change</th>
-                    <th>Sessions</th>
+                    <th scope="col">Metric</th>
+                    <th scope="col">Previous</th>
+                    <th scope="col">Current</th>
+                    <th scope="col">Change</th>
+                    <th scope="col">Sessions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -151,20 +152,20 @@ export default function ComparePage() {
                     const definition = metricDefinition(id);
                     return (
                       <tr key={id}>
-                        <td className="metric-name">
+                        <td className="metric-name" data-label="Metric">
                           <span>{metricLabel(id)}</span>
                           <small>{definition?.description ?? id}</small>
                         </td>
-                        <td>{formatValue(comparison.previous)}</td>
-                        <td>{formatValue(comparison.current)}</td>
-                        <td>
+                        <td data-label="Previous">{formatValue(comparison.previous)}</td>
+                        <td data-label="Current">{formatValue(comparison.current)}</td>
+                        <td data-label="Change">
                           {seriesErrors[id]
                             ? seriesErrors[id]
                             : comparison.delta == null
                               ? "-"
                               : `${comparison.delta >= 0 ? "+" : ""}${comparison.delta} ${comparison.current?.unit ?? ""}`}
                         </td>
-                        <td>{points.length}</td>
+                        <td data-label="Sessions">{points.length}</td>
                       </tr>
                     );
                   })}
@@ -189,12 +190,12 @@ export default function ComparePage() {
                   <small>{metricDefinition(id)?.description ?? id}</small>
                 </p>
                 <div className="trend-scroll">
-                  <div className="row trend-chart">
+                  <div className="row trend-chart" role="list" aria-label={`${metricLabel(id)} over time`}>
                     {points.map((point) => (
-                      <div key={`${point.sessionId}-${id}`} className="trend-point">
+                      <div key={`${point.sessionId}-${id}`} className="trend-point" role="listitem">
                         <div
                           className="trend-bar"
-                          aria-label={`${point.sessionTitle}: ${point.value} ${point.unit}`}
+                          aria-hidden="true"
                           title={`${point.sessionTitle}: ${point.value} ${point.unit}`}
                           style={{
                             "--bar-height": `${Math.max(4, (Math.abs(point.value) / max) * 100)}px`,
@@ -203,6 +204,7 @@ export default function ComparePage() {
                         <div className="muted trend-label">
                           {point.sessionTitle.slice(0, 10)}
                         </div>
+                        <span className="sr-only">{point.sessionTitle}: {point.value} {point.unit}</span>
                       </div>
                     ))}
                   </div>

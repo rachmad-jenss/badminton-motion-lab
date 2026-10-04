@@ -68,7 +68,7 @@ export default function HomePage() {
       <OnboardingSteps readiness={readiness} paired={paired} />
 
       {readiness === "not_ready" ? (
-        <div className="notice" role="alert">
+        <div className="notice error-notice" role="alert">
           Setup is almost ready. Check the helper app, video model, and browser pairing before analyzing. <Link href="/agent">Check setup →</Link>
         </div>
       ) : null}

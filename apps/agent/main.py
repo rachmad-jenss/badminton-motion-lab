@@ -841,6 +841,7 @@ def _run_analyze_sync(
 
     summary = {
         "title": meta.get("title") or video_path.stem,
+        "fps": float(meta.get("fps") or 30),
         "metrics": metrics,
         "findings": findings,
         "events": events,

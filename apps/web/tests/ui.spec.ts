@@ -260,7 +260,7 @@ test("Compare does not call protected series endpoints before pairing", async ({
 
   await gotoWithAgentReady(page, "/compare", "Pair this browser first");
 
-  await expect(page.getByRole("status")).toContainText("Pair this browser");
+  await expect(page.getByRole("alert")).toContainText("Pair this browser");
   expect(protectedRequests).toHaveLength(0);
 });
 
@@ -306,7 +306,12 @@ test("background theme changes the visual shell and persists", async ({ page }) 
 
   await theme.click();
   await expect(pairInMotion).toBeVisible();
+  await expect(page.getByRole("menu", { name: "Background theme" })).toBeVisible();
   await expect(page.locator(".background-swatch img").first()).toHaveAttribute("loading", "lazy");
+  const firstBackgroundOption = page.getByRole("menu", { name: "Background theme" }).getByRole("menuitemradio").first();
+  await firstBackgroundOption.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menu", { name: "Background theme" }).getByRole("menuitemradio").nth(1)).toBeFocused();
   await pairInMotion.click();
 
   // Menu closes on select; assert shell + storage instead of hidden aria-checked.
@@ -398,6 +403,7 @@ test("analysis success exposes findings, evidence, and withheld metrics", async 
         analysisRunId: "run-1",
         agentMediaUrl: "/media/run-1",
         summary: {
+            fps: 30,
           metrics: [
             {
               metricId: "elbow_angle_contact",
@@ -669,6 +675,8 @@ test("Compare keeps partial results and hides raw metric errors", async ({ page 
 
   await expect(page.locator("td").filter({ hasText: "Baseline session" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Progress over time" })).toBeVisible();
+  await expect(page.getByRole("table").first().getByRole("columnheader", { name: "Metric" })).toHaveAttribute("scope", "col");
+  await expect(page.getByRole("list", { name: /Elbow angle at contact over time/ })).toBeVisible();
   await expect(page.getByText("Could not load this metric.", { exact: true })).toBeVisible();
   await expect(page.getByText("internal secret", { exact: true })).not.toBeVisible();
   await expect(page.locator("td").filter({ hasText: "Shuttle approach angle" }).first()).toBeVisible();
