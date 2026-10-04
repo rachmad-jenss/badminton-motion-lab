@@ -100,12 +100,12 @@ export default function ComparePage() {
           shown neutrally unless the measurement has a clear better direction.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "locked"}`}>
+          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "experimental"}`}>
             {readyToAnalyze
               ? agentReadinessLabel(readiness)
               : readiness === "ready"
-                ? "Pair this browser first"
-                : agentReadinessLabel(readiness)}
+                ? "Experimental — Pair this browser first"
+                : `Experimental — ${agentReadinessLabel(readiness)}`}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void load()} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}

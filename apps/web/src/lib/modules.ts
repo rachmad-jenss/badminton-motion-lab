@@ -25,7 +25,9 @@ export function getModules(): UiModule[] {
     moduleId,
     label: moduleLabel(moduleId),
     kind: moduleKind(moduleId),
-    status: seed.modules[moduleId] ?? "locked",
+    // Missing benchmark metadata must not hide a module from local experiments.
+    // Public completeness still reports the missing entry separately.
+    status: seed.modules[moduleId] ?? "experimental",
   }));
 }
 

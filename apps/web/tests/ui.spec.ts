@@ -57,6 +57,7 @@ test("home explains what remains available while agent is offline", async ({ pag
 
   await expect(page.getByRole("status")).toContainText("Setup is not running yet");
   await expect(page.getByRole("link", { name: "Open setup" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Try experimental analysis" })).toHaveAttribute("href", "/analyze");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
 });
 
@@ -96,14 +97,19 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
   await expect(pairButton).toBeEnabled();
 });
 
-test("Analyze requires pairing and exposes dominant-hand input", async ({ page }) => {
+test("Experimental analysis can be opened before pairing", async ({ page }) => {
   await clearAgentStorage(page);
   await mockHealth(page);
 
   await gotoWithAgentReady(page, "/analyze", "Pair this browser first");
 
   await expect(page.getByRole("combobox", { name: /Dominant hand/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Analyze this video" })).toBeDisabled();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "experimental.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("fixture"),
+  });
+  await expect(page.getByRole("button", { name: "Analyze this video" })).toBeEnabled();
   await expect(page.locator("div.notice[role='alert']")).toContainText("Pair this browser");
 });
 

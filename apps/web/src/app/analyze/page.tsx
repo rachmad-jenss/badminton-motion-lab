@@ -112,7 +112,8 @@ export default function AnalyzePage() {
 
   const readiness = agentReadiness(health);
   const busy = phase === "registering" || phase === "analyzing";
-  const canAnalyze = readiness === "ready" && paired;
+  const readyToAnalyze = readiness === "ready" && paired;
+  const canAnalyze = !busy;
   const poseReady = health?.payload?.poseModelPresent !== false;
   const pairingChallengeReady = typeof health?.payload?.pairingCode === "string";
 
@@ -220,12 +221,10 @@ export default function AnalyzePage() {
           movement; the original stays on this PC.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${canAnalyze ? "on" : "locked"}`}>
-            {canAnalyze
+          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "experimental"}`}>
+            {readyToAnalyze
               ? "Ready to analyze"
-              : readiness === "ready"
-                ? "Pair this browser first"
-                : agentReadinessLabel(readiness)} · {agentBaseUrl()}
+              : "Experimental — " + (readiness === "ready" ? "Pair this browser first" : agentReadinessLabel(readiness))} · {agentBaseUrl()}
           </span>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             {checking ? "Refreshing…" : "Refresh"}
@@ -238,7 +237,7 @@ export default function AnalyzePage() {
         </div>
       </header>
 
-      {readiness !== "ready" || !paired ? (
+      {!readyToAnalyze ? (
         <div className={`notice${readiness === "checking" ? "" : " error-notice"}`} role={readiness === "checking" ? "status" : "alert"}>
           {readiness === "checking"
             ? "Checking setup before analysis..."
@@ -249,6 +248,7 @@ export default function AnalyzePage() {
                 : !paired
                   ? "Pair this browser before analyzing."
                   : "Start and pair the helper app before analyzing."}{" "}
+          Experimental mode is open; choose a video now and the local agent will report any setup requirement.{" "}
           <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
@@ -333,7 +333,7 @@ export default function AnalyzePage() {
           </span>
         </label>
         <div className="row">
-          <button className="d-btn d-btn-primary" disabled={!canAnalyze || busy || (!selectedFile && !path.trim())} onClick={() => void runAnalyze()}>
+          <button className="d-btn d-btn-primary" disabled={!canAnalyze || (!selectedFile && !path.trim())} onClick={() => void runAnalyze()}>
             {busy ? "Checking video…" : "Analyze this video"}
           </button>
           <Link className="d-btn d-btn-ghost" href="/capture-guide">How to record a good video</Link>

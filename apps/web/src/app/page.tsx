@@ -31,15 +31,11 @@ export default function HomePage() {
   const technique = modules.filter((m) => m.kind === "technique_stroke");
   const footwork = modules.filter((m) => m.kind !== "technique_stroke");
   const readiness = agentReadiness(health);
-  const primaryHref = readiness === "ready" && paired ? "/analyze" : "/agent";
+  const primaryHref = "/analyze";
   const primaryLabel =
     readiness === "ready" && paired
       ? "Choose a video"
-      : readiness === "not_ready"
-        ? "Finish setup"
-        : readiness === "checking"
-          ? "Check setup"
-          : "Set up on this PC";
+      : "Try experimental analysis";
 
   return (
     <main className="page-home">
@@ -57,7 +53,8 @@ export default function HomePage() {
 
       {readiness === "offline" ? (
         <div className="notice" role="status">
-          Setup is not running yet. Start it to analyze and review a video on this PC. <Link href="/agent">Open setup →</Link>
+          Setup is not running yet. Experimental analysis is open; start it to analyze and review a
+          video on this PC. <Link href="/agent">Open setup →</Link>
         </div>
       ) : null}
       {!completeness.complete ? (

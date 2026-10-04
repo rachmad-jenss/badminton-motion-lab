@@ -141,8 +141,8 @@ export default function AgentPage() {
           original video stays on this PC.
         </p>
         <div className="row hero-actions">
-          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "locked"}`}>
-            {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Setup needs attention"}
+          <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "experimental"}`}>
+            {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Experimental — Setup needs attention"}
           </span>
           <a className="d-btn d-btn-primary" href="#pair">
             Go to pairing
