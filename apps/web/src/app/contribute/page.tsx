@@ -2,13 +2,15 @@ import Link from "next/link";
 
 export default function ContributePage() {
   return (
-    <main className="page-contribute">
-      <h1>Help improve the measurements</h1>
-      <p className="tag">
-        Badminton Motion Lab is in beta. Modules are available experimentally now; real badminton
-        footage will continue to improve and validate the benchmark gates. Your videos can speed
-        that up without ever leaving your PC.
-      </p>
+    <main className="page-tool page-contribute">
+      <header className="hero">
+        <h1 className="brand">Help improve the measurements</h1>
+        <p className="tag">
+          Badminton Motion Lab is in beta. Modules are available experimentally now; real badminton
+          footage will continue to improve and validate the benchmark gates. Your videos can speed
+          that up without ever leaving your PC.
+        </p>
+      </header>
 
       <section className="panel">
         <h2>The honest rule</h2>

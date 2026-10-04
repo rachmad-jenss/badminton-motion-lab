@@ -12,6 +12,7 @@ test("home discloses experimental modules honestly", async ({ page }) => {
 test("contribute page explains local-first opt-in and attribution", async ({ page }) => {
   await page.goto("/contribute");
 
+  await expect(page.locator("main.page-tool.page-contribute > header.hero")).toBeVisible();
   await expect(page.getByRole("heading", { name: /Help improve the measurements/ })).toBeVisible();
   await expect(page.getByText(/stays on your PC/)).toBeVisible();
   await expect(page.getByText(/report JSON/)).toBeVisible();

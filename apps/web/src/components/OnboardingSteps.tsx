@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { agentNextAction, type AgentReadiness } from "@/lib/agent";
 
-type StepState = "done" | "current" | "next";
+type StepState = "done" | "current" | "checking" | "next";
 
 type OnboardingStepsProps = {
   readiness: AgentReadiness;
@@ -12,6 +12,19 @@ type OnboardingStepsProps = {
 function stepsFor({ readiness, paired, completed }: OnboardingStepsProps) {
   const setupDone = readiness === "ready";
   const pairDone = paired;
+
+  if (readiness === "checking") {
+    return {
+      nextLabel: "Check setup",
+      nextHref: "/agent",
+      steps: [
+        ["Checking setup", "/agent", "checking"],
+        ["Pair browser", "/agent#pair", "next"],
+        ["Choose a video", "/analyze", "next"],
+        ["Review results", "/compare", "next"],
+      ] as const,
+    };
+  }
 
   if (completed && setupDone && pairDone) {
     return {
@@ -75,12 +88,12 @@ export function OnboardingSteps(props: OnboardingStepsProps) {
       <h2 id="first-run-heading">Your next step</h2>
       <ol className="check-list onboarding-list">
         {steps.map(([label, href, state], index) => (
-          <li key={label} aria-current={state === "current" ? "step" : undefined}>
+          <li key={label} aria-current={state === "current" || state === "checking" ? "step" : undefined}>
             <Link href={href}>
               {index + 1}. {label}
             </Link>
-            <strong className={state === "done" ? "check-ok" : state === "current" ? "phase" : "muted"}>
-              {state === "done" ? "Done" : state === "current" ? "Now" : "Next"}
+            <strong className={state === "done" ? "check-ok" : state === "current" || state === "checking" ? "phase" : "muted"}>
+              {state === "done" ? "Done" : state === "checking" ? "Checking…" : state === "current" ? "Now" : "Next"}
             </strong>
           </li>
         ))}

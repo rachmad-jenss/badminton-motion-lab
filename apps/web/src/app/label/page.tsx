@@ -30,6 +30,7 @@ const EMPTY_CORNERS: CourtCorner[] = [
 
 export default function LabelPage() {
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [paired, setPaired] = useState(false);
   const [captureId, setCaptureId] = useState("");
   const [fps, setFps] = useState(30);
@@ -45,8 +46,16 @@ export default function LabelPage() {
   const [cornerError, setCornerError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     setPaired(Boolean(agentToken()));
-    void agentHealth().then(setHealth);
+    void agentHealth().then((nextHealth) => {
+      if (!active) return;
+      setHealth(nextHealth);
+      setHydrated(true);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const techniques = getModules().filter((m) => m.kind === "technique_stroke");
@@ -174,10 +183,24 @@ export default function LabelPage() {
     }
   }
 
+  if (!hydrated) {
+    return (
+      <main className="page-tool page-label">
+        <header className="hero">
+          <h1 className="brand">Label a capture</h1>
+          <p className="tag" role="status">Checking local setup…</p>
+        </header>
+      </main>
+    );
+  }
+
   if (!paired) {
     return (
-      <main className="page-label">
-        <h1>Label a capture</h1>
+      <main className="page-tool page-label">
+        <header className="hero">
+          <h1 className="brand">Label a capture</h1>
+          <p className="tag">Pair this browser with the Local Agent before labeling a capture.</p>
+        </header>
         <div className="notice" role="status">
           Pair this browser first. <Link href={readiness === "offline" ? "/agent#install" : "/agent"}>{readiness === "offline" ? "Install local helper" : "Open setup"} →</Link>
         </div>
@@ -186,12 +209,14 @@ export default function LabelPage() {
   }
 
   return (
-    <main className="page-label">
-      <h1>Label a capture</h1>
-      <p className="muted">
+    <main className="page-tool page-label">
+      <header className="hero">
+        <h1 className="brand">Label a capture</h1>
+        <p className="tag">
         Maintainer tool: mark the contact frame and the four court corners so a clip becomes
         domain-valid ground truth (fixtureKind badminton_stroke). The video never leaves this PC.
-      </p>
+        </p>
+      </header>
 
       <section className="panel">
         <h2>Capture</h2>

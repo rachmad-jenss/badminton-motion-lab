@@ -61,6 +61,35 @@ test("home explains what remains available while agent is offline", async ({ pag
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
 });
 
+test("shared shell exposes a skip link before the brand and a focus target", async ({ page }) => {
+  await mockHealth(page);
+  await page.goto("/");
+
+  const skipLink = page.getByRole("link", { name: "Skip to content" });
+  await expect(skipLink).toHaveAttribute("href", "#main-content");
+  await page.keyboard.press("Tab");
+  await expect(skipLink).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main-content")).toBeFocused();
+});
+
+test("home keeps readiness neutral while the Local Agent health check is pending", async ({ page }) => {
+  await page.route(HEALTH_URL, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ ok: true, pairingCode: "test-pairing-code", poseModelPresent: true }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByText("Checking…").first()).toBeVisible();
+  await expect(page.getByText("Start setup", { exact: true })).toHaveCount(0);
+});
+
 test("offline setup gives beginners a starter bundle and concrete Windows steps", async ({ page }) => {
   await page.route(`${AGENT_URL}/health`, async (route) => {
     await route.fulfill({ status: 503, body: "offline" });
@@ -251,6 +280,8 @@ test("all primary routes share navigation and fit a narrow viewport", async ({ p
     expect(await page.evaluate(() => document.body.scrollWidth <= window.innerWidth + 1)).toBe(true);
     if (route === "/") {
       await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
+      await page.keyboard.press("Tab");
       const brandHome = page.getByRole("link", { name: "Badminton Motion Lab home" });
       await expect(brandHome).toBeFocused();
       expect(await brandHome.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
@@ -275,6 +306,7 @@ test("background theme changes the visual shell and persists", async ({ page }) 
 
   await theme.click();
   await expect(pairInMotion).toBeVisible();
+  await expect(page.locator(".background-swatch img").first()).toHaveAttribute("loading", "lazy");
   await pairInMotion.click();
 
   // Menu closes on select; assert shell + storage instead of hidden aria-checked.

@@ -23,7 +23,7 @@ export default function AgentPage() {
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [pairing, setPairing] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [paired, setPaired] = useState(false);
@@ -203,8 +203,8 @@ export default function AgentPage() {
           {checks.map((check) => (
             <li key={check.label}>
               <span>{check.label}</span>
-              <strong className={check.ok ? "check-ok" : "check-fail"}>
-                {check.ok ? "Ready" : "Needs attention"}
+              <strong className={checking ? "phase" : check.ok ? "check-ok" : "check-fail"}>
+                {checking ? "Checking…" : check.ok ? "Ready" : "Needs attention"}
               </strong>
             </li>
           ))}

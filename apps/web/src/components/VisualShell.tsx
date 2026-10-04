@@ -184,6 +184,9 @@ export function VisualShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="visual-shell" data-content-side={preset.contentSide} style={shellStyle}>
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       {prevPresetId ? (
         <div
           className="shell-backdrop shell-backdrop-static"
@@ -250,7 +253,9 @@ export function VisualShell({ children }: { children: ReactNode }) {
                       if (menu) closeMenuWithAnimation(menu);
                     }}
                   >
-                    <span className="background-swatch" style={{ backgroundImage: `url("${option.image}")` }} aria-hidden="true" />
+                    <span className="background-swatch" aria-hidden="true">
+                      <img src={option.image} alt="" loading="lazy" decoding="async" />
+                    </span>
                     <span>{option.label}</span>
                   </button>
                 ))}
@@ -260,7 +265,9 @@ export function VisualShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="shell-content">{children}</div>
+      <div className="shell-content" id="main-content" tabIndex={-1}>
+        {children}
+      </div>
     </div>
   );
 }
