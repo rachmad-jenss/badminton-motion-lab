@@ -93,7 +93,9 @@ export function OnboardingSteps(props: OnboardingStepsProps) {
               {index + 1}. {label}
             </Link>
             <strong className={state === "done" ? "check-ok" : state === "current" || state === "checking" ? "phase" : "muted"}>
-              {state === "done" ? "Done" : state === "checking" ? "Checking…" : state === "current" ? "Now" : "Next"}
+              <span key={state} className="phase-swap">
+                {state === "done" ? "Done" : state === "checking" ? "Checking…" : state === "current" ? "Now" : "Next"}
+              </span>
             </strong>
           </li>
         ))}

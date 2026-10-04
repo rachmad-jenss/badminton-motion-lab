@@ -200,12 +200,12 @@ summary {
 
 .visual-shell {
   --token-ink: var(--color-base-content);
-  --token-ink-muted: color-mix(in srgb, var(--token-ink) 78%, transparent);
-  --token-ink-soft: color-mix(in srgb, var(--token-ink) 64%, transparent);
+  --token-ink-muted: color-mix(in srgb, var(--token-ink) 82%, var(--color-base-100));
+  --token-ink-soft: color-mix(in srgb, var(--token-ink) 70%, var(--color-base-100));
   --token-border: color-mix(in srgb, var(--token-ink) 16%, transparent);
   --token-border-strong: color-mix(in srgb, var(--token-ink) 26%, transparent);
-  --token-glass: color-mix(in srgb, var(--color-base-100) 72%, transparent);
-  --token-glass-soft: color-mix(in srgb, var(--color-base-100) 48%, transparent);
+  --token-glass: color-mix(in srgb, var(--color-base-100) 82%, transparent);
+  --token-glass-soft: color-mix(in srgb, var(--color-base-100) 64%, transparent);
   --token-shadow: 0 1rem 3rem color-mix(in srgb, var(--color-base-content) 12%, transparent);
   --shell-accent: var(--color-primary);
   --shell-accent-strong: var(--color-primary);
@@ -225,6 +225,12 @@ summary {
   position: fixed;
   inset: 0;
   pointer-events: none;
+}
+
+.visual-shell[data-preferences-ready="false"] .shell-backdrop,
+.visual-shell[data-preferences-ready="false"] .shell-overlay,
+.visual-shell[data-preferences-ready="false"]::after {
+  visibility: hidden;
 }
 
 [data-theme="bml-light"] .visual-shell::after {
@@ -646,8 +652,8 @@ h3 {
 }
 
 .status-badge.experimental {
-  border-color: color-mix(in srgb, #d99a2b 62%, transparent);
-  color: color-mix(in srgb, #d99a2b 84%, var(--token-ink));
+  border-color: color-mix(in srgb, var(--color-warning) 62%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 84%, var(--token-ink));
 }
 
 .status-badge.locked {
@@ -1131,6 +1137,11 @@ pre {
   to { opacity: 1; }
 }
 
+@keyframes notice-in {
+  from { opacity: 0; transform: translateY(-0.25rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .hero > * {
   animation: rise-in var(--motion-medium) var(--ease-out) both;
 }
@@ -1154,6 +1165,10 @@ pre {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .notice {
+    animation: notice-in 220ms var(--ease-out) both;
+  }
+
   .icon-menu-panel {
     transform-origin: top right;
     transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
@@ -1386,7 +1401,8 @@ pre {
   }
 
   .result-reveal,
-  .phase-swap {
+  .phase-swap,
+  .notice {
     animation: none !important;
   }
 

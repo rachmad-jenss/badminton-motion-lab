@@ -303,6 +303,7 @@ test("background theme changes the visual shell and persists", async ({ page }) 
   });
 
   await expect(shell).toHaveAttribute("data-content-side", "left");
+  await expect(shell).toHaveAttribute("data-preferences-ready", "true");
 
   await theme.click();
   await expect(pairInMotion).toBeVisible();

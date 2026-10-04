@@ -68,6 +68,7 @@ function BackgroundGlyph() {
 export function VisualShell({ children }: { children: ReactNode }) {
   const [backgroundId, setBackgroundId] = useState(DEFAULT_BACKGROUND_ID);
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [prevPresetId, setPrevPresetId] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
   const [closingMenu, setClosingMenu] = useState<MenuId | null>(null);
@@ -173,6 +174,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
     if (savedTheme === "system" || savedTheme === "light" || savedTheme === "dark") {
       setThemeMode(savedTheme);
     }
+    setPreferencesReady(true);
   }, []);
 
   useEffect(() => {
@@ -227,7 +229,12 @@ export function VisualShell({ children }: { children: ReactNode }) {
   const shellStyle = shellVars(preset);
 
   return (
-    <div className="visual-shell" data-content-side={preset.contentSide} style={shellStyle}>
+    <div
+      className="visual-shell"
+      data-content-side={preset.contentSide}
+      data-preferences-ready={preferencesReady ? "true" : "false"}
+      style={shellStyle}
+    >
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
