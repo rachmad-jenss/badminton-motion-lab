@@ -43,6 +43,8 @@ the domain benchmark manifest.
   shuttle locations, and a per-stroke backhand flag.
 - Use policy in this project: clips are processed locally for private research
   and benchmark evidence. No ShuttleSet media is committed to this repository.
+For local training only, an explicit `backhand=1` annotation is preserved as
+the canonical `backhand` label; missing values are not treated as forehand.
   Redistribution or commercial use of the footage requires a separate rights
   review before public release.
 

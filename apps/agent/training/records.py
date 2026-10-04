@@ -213,6 +213,12 @@ def normalize_training_record(
     stroke_raw = _first(raw, "strokeId", "stroke_id", "strokeType", "stroke_type", "shotType", "shot_type", "type")
     if stroke_raw in (None, ""):
         raise _UnsupportedRecord("missing stroke label")
+    label_source = raw.get("label_source")
+    if source_id in {"shuttleset", "shuttleset22"} and _bool_or_none(_first(raw, "backhand")) is True:
+        explicit_label = _canonical_label(stroke_raw)
+        if explicit_label not in {"backhand", "forehand"}:
+            stroke_raw = "backhand"
+            label_source = label_source or "shuttleset_backhand_flag"
     stroke_id = _canonical_label(stroke_raw)
     if stroke_id not in BML_STROKE_LABELS:
         raise _UnsupportedRecord(f"unsupported stroke label: {stroke_raw}")
@@ -261,8 +267,8 @@ def normalize_training_record(
         "sourceId": source_id,
         "publicEvidence": False,
     }
-    if raw.get("label_source") not in (None, ""):
-        record_provenance["labelSource"] = str(raw["label_source"])
+    if label_source not in (None, ""):
+        record_provenance["labelSource"] = str(label_source)
 
     return {
         "schemaVersion": TRAINING_RECORD_SCHEMA_VERSION,

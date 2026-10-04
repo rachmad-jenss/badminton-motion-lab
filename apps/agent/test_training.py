@@ -19,7 +19,11 @@ from training.records import (
 )
 from training.model import FEATURE_SCHEMA_VERSION, REQUIRED_OUTPUTS, load_checkpoint, predict_checkpoint
 from training.cli import run_smoke
-from training.runner import TrainingConfig, _inverse_frequency_class_weights, run_training
+from training.runner import (
+    TrainingConfig,
+    _inverse_frequency_class_weights,
+    run_training,
+)
 from main import _optional_stroke_prediction, _stroke_prediction_for_analysis
 from adapters.media import MediaError
 
@@ -112,6 +116,21 @@ def test_iter_training_records_normalizes_shuttleset_labels(tmp_path: Path) -> N
     records = list(iter_training_records([_source(records_path, "shuttleset")], seed=17))
 
     assert [record["strokeId"] for record in records] == ["serve", "smash", "net_shot"]
+
+
+def test_iter_training_records_promotes_explicit_shuttleset_backhand_flag(tmp_path: Path) -> None:
+    records_path = tmp_path / "shuttleset.csv"
+    records_path.write_text(
+        "type,frame_num,backhand,player_location_x,player_location_y\n"
+        "點扣,20,1.0,0.3,0.4\n"
+        "點扣,40,,0.4,0.5\n",
+        encoding="utf-8",
+    )
+
+    records = list(iter_training_records([_source(records_path, "shuttleset")], seed=17))
+
+    assert [record["strokeId"] for record in records] == ["backhand", "smash"]
+    assert records[0]["provenance"]["labelSource"] == "shuttleset_backhand_flag"
 
 
 def test_reader_rejects_a_source_file_outside_allowed_root(tmp_path: Path) -> None:
@@ -299,6 +318,35 @@ def test_bfmd_caption_preparer_emits_bounded_canonical_records(tmp_path: Path) -
     ]
     assert filtered_summary["records"] == 1
     assert {record["type"] for record in filtered_records} == {"forehand"}
+
+
+def test_bfmd_caption_preparer_uses_local_windows_per_shot(tmp_path: Path) -> None:
+    root = tmp_path / "bfmd"
+    caption_dir = root / "data" / "BFMD_data" / "annotations" / "caption"
+    caption_dir.mkdir(parents=True)
+    (caption_dir / "match-1.json").write_text(
+        json.dumps(
+            {
+                "match_name": "match-1",
+                "shots": [
+                    {"frame": 100, "game": 1, "rally": 1, "shot_type": "clear"},
+                    {"frame": 200, "game": 1, "rally": 1, "shot_type": "smash"},
+                    {"frame": 300, "game": 1, "rally": 1, "shot_type": "drop"},
+                    {"frame": 400, "game": 1, "rally": 1, "shot_type": "block"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = root / "records.normalized.jsonl"
+
+    summary = _PREPARE_RECORDS["prepare"]("bfmd", root, output, seed=17, max_records=None)
+    records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+    assert summary["records"] == 4
+    windows = {(record["window_start_frame"], record["window_end_frame"]) for record in records}
+    assert len(windows) == 4
+    assert all(end - start <= 96 for start, end in windows)
 
 
 def test_record_normalization_preserves_label_derivation_provenance() -> None:

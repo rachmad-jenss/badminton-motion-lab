@@ -140,6 +140,11 @@ def run_provisioned(args: argparse.Namespace) -> TrainingRunResult:
                 if source_id == "bfmd"
                 else {}
             ),
+            **(
+                {"labelDerivation": "dataset_backhand_flag_v1"}
+                if source_id in {"shuttleset", "shuttleset22"}
+                else {}
+            ),
         }
         for source_id in selected
     ]

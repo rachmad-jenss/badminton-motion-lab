@@ -52,6 +52,7 @@ BFMD_LABELS = {
 }
 BFMD_ORIENTATION_LABELS = {"forehand", "backhand", "jump_smash"}
 BFMD_CANONICAL_LABELS = set(BFMD_LABELS.values()) | BFMD_ORIENTATION_LABELS
+BFMD_WINDOW_CONTEXT_FRAMES = 48
 
 def split_for(source_id: str, match: str, seed: int) -> str:
     digest = hashlib.sha256(f"{seed}:{source_id}:{match}".encode("utf-8")).digest()
@@ -248,6 +249,16 @@ def _bfmd_file_splits(
     return assignments
 
 
+def _bfmd_window(frames: list[float], frame: float) -> tuple[float, float]:
+    if not frames:
+        return frame, frame + 1.0
+    start = max(min(frames), frame - BFMD_WINDOW_CONTEXT_FRAMES)
+    end = min(max(frames), frame + BFMD_WINDOW_CONTEXT_FRAMES)
+    if end <= start:
+        end = max(start + 1.0, frame)
+    return start, end
+
+
 def _bfmd_record(
     root: Path,
     path: Path,
@@ -361,6 +372,7 @@ def _prepare_bfmd(
                     continue
                 key = (str(shot.get("game", "")), str(shot.get("rally", "")))
                 frames = rally_frames.get(key, [frame])
+                window_start, window_end = _bfmd_window(frames, frame)
                 record = _bfmd_record(
                     root,
                     path,
@@ -368,10 +380,10 @@ def _prepare_bfmd(
                     row_number,
                     label,
                     file_splits[path],
-                    min(frames),
-                    max(frames),
-                    _bounded_track_points(player_points, min(frames), max(frames)),
-                    _bounded_track_points(shuttle_points, min(frames), max(frames)),
+                    window_start,
+                    window_end,
+                    _bounded_track_points(player_points, window_start, window_end),
+                    _bounded_track_points(shuttle_points, window_start, window_end),
                 )
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 counts["records"] += 1

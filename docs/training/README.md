@@ -93,10 +93,16 @@ python scripts/prepare-training-records.py --source-id shuttleset22 `
   --output validation/training-sources/shuttleset22/records.normalized.jsonl
 ```
 
+When a ShuttleSet/ShuttleSet22 row explicitly contains `backhand=1`, the
+streaming reader promotes that row to the canonical `backhand` class and keeps
+`dataset_backhand_flag_v1` in record provenance. Empty backhand fields remain
+unknown; they are not silently relabelled as forehand.
+
 To add the four labels that are absent from ShuttleSet/ShuttleSet22, prepare
-only BFMD records with caption-derived label evidence. The preparer also attaches
-bounded player-box and shuttle tracks from the same match window; it does not
-load video or commit the annotations:
+only BFMD records with caption-derived label evidence. The preparer uses a
+per-shot window of up to 48 frames before and after contact (clipped to the
+rally) and attaches bounded player-box and shuttle tracks; it does not load
+video or commit the annotations:
 
 ```powershell
 python scripts/prepare-training-records.py --source-id bfmd `
