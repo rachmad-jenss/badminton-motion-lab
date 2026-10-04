@@ -55,10 +55,31 @@ test("home explains what remains available while agent is offline", async ({ pag
 
   await page.goto("/");
 
-  await expect(page.getByRole("status")).toContainText("Setup is not running yet");
-  await expect(page.getByRole("link", { name: "Start setup on this PC" }).first()).toHaveAttribute("href", "/agent");
+  await expect(page.getByRole("status")).toContainText("local helper is not installed or running");
+  await expect(page.getByRole("link", { name: "Install the helper" }).first()).toHaveAttribute("href", "/agent#install");
   await expect(page.getByRole("link", { name: "Try experimental analysis" }).first()).toHaveAttribute("href", "/analyze");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
+});
+
+test("offline setup gives beginners a starter bundle and concrete Windows steps", async ({ page }) => {
+  await page.route(`${AGENT_URL}/health`, async (route) => {
+    await route.fulfill({ status: 503, body: "offline" });
+  });
+
+  await page.goto("/agent");
+
+  await expect(page.getByRole("heading", { name: "Install the helper on Windows" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download Windows starter bundle" })).toHaveAttribute(
+    "href",
+    "https://github.com/rachmad-jenss/badminton-motion-lab/archive/refs/heads/main.zip",
+  );
+  await expect(page.getByText("Extract All", { exact: true })).toBeVisible();
+  await expect(page.getByText("install-agent.cmd", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
+  await expect(page.getByLabel("Agent URL")).toBeHidden();
+
+  await page.getByText("Advanced: use a different Local Agent address", { exact: true }).click();
+  await expect(page.getByLabel("Agent URL")).toBeVisible();
 });
 
 test("ready but unpaired home sends the user to pairing before experimental analysis", async ({ page }) => {
@@ -300,6 +321,7 @@ test("changing the Agent URL clears stale pairing readiness", async ({ page }) =
   await gotoWithAgentReady(page, "/agent", "Setup needs attention");
   await expect(page.getByLabel("Pairing code")).toHaveValue("test-pairing-code");
 
+  await page.getByText("Advanced: use a different Local Agent address", { exact: true }).click();
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
 
   await expect(page.getByLabel("Pairing code")).toHaveValue("");
@@ -311,6 +333,7 @@ test("changing the Agent URL removes the old URL-scoped token", async ({ page })
   await mockHealth(page);
 
   await gotoWithAgentReady(page, "/agent", "Ready to analyze");
+  await page.getByText("Advanced: use a different Local Agent address", { exact: true }).click();
   await page.getByLabel("Agent URL").fill("http://127.0.0.1:9999");
 
   await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();

@@ -25,6 +25,7 @@ Get-ChildItem -LiteralPath $source -Force |
   Where-Object { $_.Name -notin @(".venv", "data", "__pycache__", ".pytest_cache", ".pytest-temp", "test-tmp") } |
   Copy-Item -Destination (Join-Path $stage "apps\agent") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $repo "infra\windows\install-agent.ps1") -Destination (Join-Path $stage "infra\windows") -Force
+Copy-Item -LiteralPath (Join-Path $repo "infra\windows\install-agent.cmd") -Destination (Join-Path $stage "infra\windows") -Force
 Copy-Item -LiteralPath (Join-Path $repo "packages\contracts\src\schemas\analysis-manifest.schema.json") -Destination (Join-Path $stage "apps\agent\pipeline") -Force
 Copy-Item -LiteralPath (Join-Path $repo "README.md") -Destination $stage -Force
 

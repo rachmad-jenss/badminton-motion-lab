@@ -489,6 +489,10 @@ main {
   padding: 2.75rem 0 5rem;
 }
 
+.page-tool [id] {
+  scroll-margin-top: calc(var(--header-height) + 1rem);
+}
+
 .page-tool .hero {
   padding: 2rem 1.1rem 1.8rem;
   border: 1px solid var(--token-border);

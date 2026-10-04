@@ -9,10 +9,13 @@ const webPackage = JSON.parse(await readFile(join(root, "apps", "web", "package.
 const lockfile = JSON.parse(await readFile(join(root, "package-lock.json"), "utf8"));
 const workflow = await readFile(join(root, ".github", "workflows", "ci.yml"), "utf8");
 const installer = await readFile(join(root, "infra", "windows", "install-agent.ps1"), "utf8");
+const agent = await readFile(join(root, "apps", "agent", "main.py"), "utf8");
 
 assert.equal(rootPackage.engines.node, lockfile.packages[""].engines.node);
 assert.equal(webPackage.scripts.start, "node ../../scripts/serve-export.mjs");
 assert.match(workflow, /pip install -r requirements\.lock\.txt/);
 assert.match(installer, /pip install -r requirements\.lock\.txt/);
 assert.match(installer, /ffmpeg/);
+assert.match(installer, /https:\/\/bml\.jenss\.me\/agent/);
+assert.match(agent, /https:\/\/bml\.jenss\.me/);
 console.log("runtime contract test passed");

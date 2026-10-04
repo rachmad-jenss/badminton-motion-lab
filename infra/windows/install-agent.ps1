@@ -1,10 +1,12 @@
 # Install / start Badminton Motion Lab Local Agent (Windows)
 
 param(
-  [switch]$LaunchBrowser
+  [switch]$LaunchBrowser,
+  [string]$WebUrl = $env:BML_WEB_URL
 )
 
 $ErrorActionPreference = "Stop"
+$WebUrl = if ([string]::IsNullOrWhiteSpace($WebUrl)) { "https://bml.jenss.me/agent" } else { $WebUrl.Trim() }
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..\apps\agent")
 Set-Location $Root
 
@@ -135,11 +137,11 @@ if ($LaunchBrowser) {
     }
     if (-not $healthy) { throw "The Local Agent did not become healthy within 30 seconds." }
     try {
-      Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3001/agent" -TimeoutSec 3 | Out-Null
-      Start-Process "http://127.0.0.1:3001/agent"
+      Invoke-WebRequest -UseBasicParsing -Uri $WebUrl -TimeoutSec 5 | Out-Null
+      Start-Process $WebUrl
       Write-Host "The setup page is open. Pair this browser, then choose a video."
     } catch {
-      Write-Host "The Local Agent is ready at http://127.0.0.1:8787. Start the web app, then open /agent."
+      Write-Host "The Local Agent is ready at http://127.0.0.1:8787. Open $WebUrl to pair this browser."
     }
     Write-Host "Keep the Local Agent console open while analyzing. Close it when you are done."
     exit 0

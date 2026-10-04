@@ -13,6 +13,7 @@ import {
   agentToken,
   setAgentToken,
   AgentRequestError,
+  WINDOWS_STARTER_BUNDLE_URL,
   type AgentHealthResult,
 } from "@/lib/agent";
 
@@ -37,7 +38,9 @@ export default function AgentPage() {
     const pairingCode = h.payload?.pairingCode;
     setCode(typeof pairingCode === "string" ? pairingCode : "");
     setCopyStatus("");
-    if (!h.online) setError(h.error || "Local Agent is offline.");
+    if (!h.online) {
+      setError("The local helper is not running yet. Install or start it above, then refresh this page.");
+    }
   }
 
   useEffect(() => {
@@ -160,6 +163,7 @@ export default function AgentPage() {
   const pairingAvailable = pairingCodeReady && !pairingExpired;
   const readyToAnalyze = readiness === "ready" && paired;
   const nextAction = agentNextAction(readiness, paired);
+  const refreshPairingLabel = readiness === "offline" ? "Refresh after starting helper" : "Get a new pairing code";
   const checks = [
     { label: "Helper app", ok: health?.online === true },
     { label: "Video model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
@@ -171,12 +175,18 @@ export default function AgentPage() {
       <header className="hero">
         <h1 className="brand">Setup on this PC</h1>
         <p className="tag">
-          Start the small helper app on this PC, pair this browser, then choose a video. Your
-          original video stays on this PC.
+          Install the local helper on this PC, pair this browser, then choose a video. Your original
+          video stays on this PC.
         </p>
         <div className="row hero-actions">
           <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "experimental"}`}>
-            {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Experimental — Setup needs attention"}
+            {checking
+              ? "Checking setup…"
+              : readyToAnalyze
+                ? "Ready to analyze"
+                : readiness === "offline"
+                  ? "Install local helper"
+                  : "Experimental — Setup needs attention"}
           </span>
           <Link className="d-btn d-btn-primary" href={nextAction.href}>
             {nextAction.label}
@@ -201,7 +211,7 @@ export default function AgentPage() {
         </ul>
         <p className="muted">
           {readiness === "offline"
-            ? "Start the helper app, then refresh this setup check."
+            ? "Install the helper below, start it, then refresh this setup check."
             : !poseReady
               ? "Install the missing video model before analyzing."
               : !pairingCodeReady
@@ -212,60 +222,80 @@ export default function AgentPage() {
         </p>
       </section>
 
-      <section className="panel">
-        <h2>Start on Windows</h2>
+      <section className="panel" id="install" aria-labelledby="install-heading">
+        <h2 id="install-heading">Install the helper on Windows</h2>
         <p>
-          If you are new to this app, open the project folder in Windows Explorer and double-click
-          <code>infra/windows/install-agent.cmd</code>. It installs the helper app, checks its
-          video tools, and opens this setup page when the agent is healthy.
+          New to this app? You do not need to find a project folder. Download the starter bundle,
+          extract it, and run one setup file.
+        </p>
+        <p>
+          <a
+            className="d-btn d-btn-primary"
+            href={WINDOWS_STARTER_BUNDLE_URL}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Download Windows starter bundle
+          </a>
         </p>
         <ol className="muted">
+          <li>Download the ZIP to this Windows computer.</li>
+          <li>Open Downloads, right-click the ZIP, and choose <strong>Extract All</strong>.</li>
           <li>
-            Keep the helper-app console open while you analyze a video.
+            Open the extracted folder, then <code>infra</code> → <code>windows</code>, and double-click
+            <code>install-agent.cmd</code>.
           </li>
-          <li>
-            Click <strong>Pair browser ↔ agent</strong> below.
-          </li>
-          <li>Then open Analyze and choose a video from this PC.</li>
         </ol>
+        <p className="muted">
+          Setup may install Python and FFmpeg and download the video model. Keep the helper console
+          open. When it says the Local Agent is healthy, return here and refresh this page.
+        </p>
         <details className="install-details">
-          <summary>Advanced: show manual install commands</summary>
+          <summary>For developers: use a project checkout</summary>
+          <p className="muted">
+            Use this only if you already cloned the repository or received the project folder.
+          </p>
           <pre className="muted">{`cd apps/agent
 python -m venv .venv
 .\\.venv\\Scripts\\activate
 pip install -r requirements.txt
 python main.py`}</pre>
         </details>
-        <p className="muted">Default helper-app address: <code>http://127.0.0.1:8787</code></p>
       </section>
 
       <section className="panel" id="pair">
-        <h2>Pair</h2>
-        <label>
-          Agent URL
-          <input
-            className="d-input"
-            value={url}
-            onChange={(e) => {
-              const nextUrl = e.target.value;
-              const previousUrl = urlRef.current;
-              if (nextUrl.trim() !== previousUrl.trim()) {
-                clearAgentToken(previousUrl);
-                clearAgentToken(nextUrl);
-                setPaired(false);
-              }
-              urlRef.current = nextUrl;
-              healthRequestRef.current += 1;
-              setUrl(nextUrl);
-              setHealth(null);
-              setCode("");
-              setChecking(false);
-              setError(null);
-              setStatus("");
-              localStorage.setItem("bml.agentUrl", nextUrl);
-            }}
-          />
-        </label>
+        <h2>Connect this browser</h2>
+        <p className="muted">After the helper is healthy, refresh this page to receive a one-time pairing code.</p>
+        <details className="install-details">
+          <summary>Advanced: use a different Local Agent address</summary>
+          <label>
+            Agent URL
+            <input
+              className="d-input"
+              value={url}
+              onChange={(e) => {
+                const nextUrl = e.target.value;
+                const previousUrl = urlRef.current;
+                if (nextUrl.trim() !== previousUrl.trim()) {
+                  clearAgentToken(previousUrl);
+                  clearAgentToken(nextUrl);
+                  setPaired(false);
+                }
+                urlRef.current = nextUrl;
+                healthRequestRef.current += 1;
+                setUrl(nextUrl);
+                setHealth(null);
+                setCode("");
+                setChecking(false);
+                setError(null);
+                setStatus("");
+                localStorage.setItem("bml.agentUrl", nextUrl);
+              }}
+            />
+          </label>
+          <p className="muted">Most people can leave this unchanged. Default: <code>http://127.0.0.1:8787</code></p>
+          <p className="muted">Current helper address: {agentBaseUrl()}</p>
+        </details>
         <label>
           Pairing code
           <div className="row">
@@ -274,7 +304,7 @@ python main.py`}</pre>
               value={code}
               readOnly
               aria-describedby="pairing-help"
-              placeholder="Get a new pairing code"
+              placeholder="Waiting for the helper app"
             />
             <button className="d-btn d-btn-ghost" type="button" onClick={() => void copyPairingCode()} disabled={!pairingAvailable}>
               Copy pairing code
@@ -284,7 +314,9 @@ python main.py`}</pre>
             {pairingExpired
               ? "Pairing code expired or unavailable. Get a new pairing code."
               : pairingSecondsRemaining == null || !pairingCodeReady
-                ? "Get a new one-time pairing code from the Local Agent."
+                ? readiness === "offline"
+                  ? "Start the helper above, then refresh this page."
+                  : "Get a new one-time pairing code from the Local Agent."
                 : `Pairing code expires in ${pairingSecondsRemaining >= 60 ? `${Math.ceil(pairingSecondsRemaining / 60)} min` : `${pairingSecondsRemaining} sec`}.`}
           </span>
           {copyStatus ? <span className="status" role="status">{copyStatus}</span> : null}
@@ -298,7 +330,7 @@ python main.py`}</pre>
             onClick={() => void refreshHealth()}
             disabled={checking}
           >
-            Get a new pairing code
+            {refreshPairingLabel}
           </button>
           {paired ? (
             <button className="d-btn d-btn-ghost" onClick={() => void forgetPairing()} disabled={forgetting}>
@@ -306,7 +338,6 @@ python main.py`}</pre>
             </button>
           ) : null}
         </div>
-        <p className="muted">Current base: {agentBaseUrl()}</p>
         {error ? <p className="status error" role="alert">{error}</p> : null}
         {status ? (
           <p className="status success" role="status">

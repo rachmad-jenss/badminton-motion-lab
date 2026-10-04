@@ -28,11 +28,13 @@ function stepsFor({ readiness, paired, completed }: OnboardingStepsProps) {
 
   if (!setupDone) {
     const nextAction = agentNextAction(readiness, paired);
+    const setupLabel = readiness === "offline" ? "Install helper" : readiness === "not_ready" ? "Finish setup" : "Start setup";
+    const setupHref = readiness === "offline" ? "/agent#install" : "/agent";
     return {
       nextLabel: nextAction.label,
       nextHref: nextAction.href,
       steps: [
-        [readiness === "not_ready" ? "Finish setup" : "Start setup", "/agent", "current"],
+        [setupLabel, setupHref, "current"],
         ["Pair browser", "/agent#pair", "next"],
         ["Choose a video", "/analyze", "next"],
         ["Review results", "/compare", "next"],
