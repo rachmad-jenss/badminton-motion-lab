@@ -260,7 +260,7 @@ test("Compare does not call protected series endpoints before pairing", async ({
 
   await gotoWithAgentReady(page, "/compare", "Pair this browser first");
 
-  await expect(page.getByRole("alert")).toContainText("Pair this browser");
+  await expect(page.getByRole("alert").filter({ hasText: "Pair this browser" })).toBeVisible();
   expect(protectedRequests).toHaveLength(0);
 });
 

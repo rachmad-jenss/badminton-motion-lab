@@ -155,6 +155,6 @@ test("labeling refuses to export a preview under a different capture ID", async 
 
   await page.getByLabel("Capture ID").fill("cap-b");
   await page.getByRole("button", { name: "Download truth JSON" }).click();
-  await expect(page.getByRole("status").last()).toContainText("Load a preview for the current capture");
+  await expect(page.getByRole("alert").filter({ hasText: "Load a preview for the current capture" })).toBeVisible();
 });
 
