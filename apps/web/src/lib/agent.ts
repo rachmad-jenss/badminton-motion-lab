@@ -66,6 +66,7 @@ export type AgentErrorInfo = {
   message: string;
   action?: string;
   failedQualityChecks?: AgentQualityCheck[];
+  recovery?: "setup" | "capture-guide" | "retry";
 };
 
 export class AgentRequestError extends Error {
@@ -183,20 +184,23 @@ async function responseDetail(res: Response): Promise<{ message: string; payload
 
 export function agentErrorInfo(error: unknown, fallback: string): AgentErrorInfo {
   if (error instanceof AgentRequestError) {
-    if (error.status === 401) return { message: "Pair the browser first, or refresh the pairing code." };
-    if (error.status === 410) return { message: "The local media is no longer available. Re-link the file and try again." };
+    if (error.status === 401) return { message: "Pair the browser first, or refresh the pairing code.", recovery: "setup" };
+    if (error.status === 410) return { message: "The local media is no longer available. Re-link the file and try again.", recovery: "retry" };
     if (error.payload) {
       return {
         message: error.payload.message ?? error.detail ?? fallback,
         action: error.payload.action,
         failedQualityChecks: error.payload.quality?.checks?.filter((check) => !check.passed),
+        recovery: error.payload.code === "quality_rejected" || error.payload.quality?.passed === false
+          ? "capture-guide"
+          : "retry",
       };
     }
-    if (error.status === 422) return { message: "The capture did not pass the quality gate. Open Capture guide and update the video." };
-    return { message: error.detail || fallback };
+    if (error.status === 422) return { message: error.detail || fallback, recovery: "retry" };
+    return { message: error.detail || fallback, recovery: "retry" };
   }
-  if (error instanceof Error && error.message) return { message: error.message };
-  return { message: fallback };
+  if (error instanceof Error && error.message) return { message: error.message, recovery: "retry" };
+  return { message: fallback, recovery: "retry" };
 }
 
 export function agentErrorMessage(error: unknown, fallback: string): string {

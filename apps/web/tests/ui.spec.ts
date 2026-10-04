@@ -461,7 +461,79 @@ test("analysis quality failure remains actionable", async ({ page }) => {
   await expect(captureError).toContainText("Record from the side");
   await expect(captureError).toContainText("full-body landmarks");
   await expect(captureError).toContainText("measured 0.42, needs 0.8");
+  await expect(page.getByRole("link", { name: "Open capture guide" })).toHaveAttribute("href", "/capture-guide");
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
+});
+
+test("generic analysis 422 stays generic and offers retry", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Capture request could not be completed" }),
+    });
+  });
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "generic-error.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await page.getByRole("button", { name: "Analyze this video" }).click();
+
+  const captureError = page.locator("div.status.error[role='alert']");
+  await expect(captureError).toContainText("Capture request could not be completed");
+  await expect(captureError).not.toContainText("quality gate");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("pairing analysis failure links to setup", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Authorization required" }),
+    });
+  });
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "pairing-error.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await page.getByRole("button", { name: "Analyze this video" }).click();
+
+  await expect(page.getByRole("link", { name: "Open setup" }).last()).toHaveAttribute("href", "/agent");
+});
+
+test("expired capture failure keeps the selected input retryable", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 410,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Local media missing" }),
+    });
+  });
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "expired-capture.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await page.getByRole("button", { name: "Analyze this video" }).click();
+
+  await expect(page.getByText(/local media is no longer available/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  await expect(page.getByText("Selected: expired-capture.mp4", { exact: true })).toBeVisible();
 });
 
 test("advanced path mode clears a previously selected file", async ({ page }) => {

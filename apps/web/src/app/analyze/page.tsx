@@ -361,6 +361,17 @@ export default function AnalyzePage() {
                 ))}
               </ul>
             ) : null}
+            <div className="row">
+              {errorInfo?.recovery === "setup" ? (
+                <Link className="d-btn d-btn-primary" href="/agent">Open setup</Link>
+              ) : null}
+              {errorInfo?.recovery === "capture-guide" ? (
+                <Link className="d-btn d-btn-primary" href="/capture-guide">Open capture guide</Link>
+              ) : null}
+              {errorInfo?.recovery === "retry" ? (
+                <button className="d-btn d-btn-primary" type="button" onClick={() => void runAnalyze()}>Try again</button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </section>
