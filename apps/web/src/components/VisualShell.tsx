@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import {
@@ -14,6 +14,7 @@ import {
 type ShellStyle = CSSProperties & Record<`--${string}`, string>;
 type ThemeMode = "system" | "light" | "dark";
 type ThemeIcon = "system" | "light" | "dark";
+type MenuId = "color" | "background";
 
 const BACKGROUND_STORAGE_KEY = "bml.backgroundPreset";
 const THEME_STORAGE_KEY = "bml.themeMode";
@@ -25,30 +26,6 @@ function suppressTransitions() {
   void root.offsetWidth; // force reflow so the rule is active
   requestAnimationFrame(() => {
     requestAnimationFrame(() => delete root.dataset.themeSwitching);
-  });
-}
-
-function closeMenuWithAnimation(details: HTMLDetailsElement) {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    details.removeAttribute("open");
-    return;
-  }
-
-  const panel = details.querySelector(".icon-menu-panel");
-  if (!panel) {
-    details.removeAttribute("open");
-    return;
-  }
-  // Wait for theme-switch transition suppression to clear (two rAF frames)
-  // so the closing class can animate instead of being overridden.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      panel.classList.add("closing");
-      window.setTimeout(() => {
-        panel.classList.remove("closing");
-        details.removeAttribute("open");
-      }, 120);
-    });
   });
 }
 
@@ -91,16 +68,82 @@ function BackgroundGlyph() {
 export function VisualShell({ children }: { children: ReactNode }) {
   const [backgroundId, setBackgroundId] = useState(DEFAULT_BACKGROUND_ID);
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const [prevPresetId, setPrevPresetId] = useState<string | null>(null);
+  const [openMenu, setOpenMenu] = useState<MenuId | null>(null);
+  const [closingMenu, setClosingMenu] = useState<MenuId | null>(null);
+  const [menuFocusIndex, setMenuFocusIndex] = useState<Record<MenuId, number>>({ color: 0, background: 0 });
   const preset = getBackgroundPreset(backgroundId);
   const crossfadeTimer = useRef<number | null>(null);
+  const menuCloseTimer = useRef<number | null>(null);
+
+  function clearMenuClose() {
+    if (menuCloseTimer.current != null) {
+      window.clearTimeout(menuCloseTimer.current);
+      menuCloseTimer.current = null;
+    }
+    setClosingMenu(null);
+  }
+
+  function closeMenu(menuId: MenuId) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      clearMenuClose();
+      setOpenMenu((current) => (current === menuId ? null : current));
+      return;
+    }
+
+    if (menuCloseTimer.current != null) window.clearTimeout(menuCloseTimer.current);
+    setClosingMenu(menuId);
+    menuCloseTimer.current = window.setTimeout(() => {
+      setOpenMenu((current) => (current === menuId ? null : current));
+      setClosingMenu((current) => (current === menuId ? null : current));
+      menuCloseTimer.current = null;
+    }, 160);
+  }
+
+  function toggleMenu(menuId: MenuId) {
+    if (openMenu === menuId && closingMenu == null) {
+      closeMenu(menuId);
+      return;
+    }
+    if (menuCloseTimer.current != null) window.clearTimeout(menuCloseTimer.current);
+    menuCloseTimer.current = null;
+    setClosingMenu(null);
+    setOpenMenu(menuId);
+    setMenuFocusIndex((current) => ({ ...current, [menuId]: 0 }));
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>, menuId: MenuId) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.currentTarget.parentElement?.querySelector<HTMLElement>("summary")?.focus();
+      closeMenu(menuId);
+      return;
+    }
+
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+    const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']"));
+    if (!options.length) return;
+    event.preventDefault();
+    const currentIndex = options.findIndex((option) => option === document.activeElement);
+    const fallbackIndex = menuFocusIndex[menuId] ?? 0;
+    const index = currentIndex >= 0 ? currentIndex : fallbackIndex;
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? options.length - 1
+        : (index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+    setMenuFocusIndex((current) => ({ ...current, [menuId]: nextIndex }));
+    options[nextIndex]?.focus();
+  }
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
       const target = event.target as Element | null;
       document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
         if (target && menu.contains(target)) return;
-        closeMenuWithAnimation(menu);
+        const menuId = menu.dataset.menuId;
+        if (menuId === "color" || menuId === "background") closeMenu(menuId);
       });
     }
 
@@ -109,7 +152,8 @@ export function VisualShell({ children }: { children: ReactNode }) {
       document.querySelectorAll<HTMLDetailsElement>("details.icon-menu[open]").forEach((menu) => {
         event.preventDefault();
         menu.querySelector<HTMLElement>(".icon-button")?.focus();
-        closeMenuWithAnimation(menu);
+        const menuId = menu.dataset.menuId;
+        if (menuId === "color" || menuId === "background") closeMenu(menuId);
       });
     }
 
@@ -118,6 +162,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
+      if (menuCloseTimer.current != null) window.clearTimeout(menuCloseTimer.current);
     };
   }, []);
 
@@ -129,6 +174,7 @@ export function VisualShell({ children }: { children: ReactNode }) {
     if (savedTheme === "system" || savedTheme === "light" || savedTheme === "dark") {
       setThemeMode(savedTheme);
     }
+    setPreferencesReady(true);
   }, []);
 
   useEffect(() => {
@@ -183,7 +229,15 @@ export function VisualShell({ children }: { children: ReactNode }) {
   const shellStyle = shellVars(preset);
 
   return (
-    <div className="visual-shell" data-content-side={preset.contentSide} style={shellStyle}>
+    <div
+      className="visual-shell"
+      data-content-side={preset.contentSide}
+      data-preferences-ready={preferencesReady ? "true" : "false"}
+      style={shellStyle}
+    >
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       {prevPresetId ? (
         <div
           className="shell-backdrop shell-backdrop-static"
@@ -205,23 +259,45 @@ export function VisualShell({ children }: { children: ReactNode }) {
           <AppNav />
 
           <div className="header-controls">
-            <details className="icon-menu">
-              <summary className="icon-button" aria-label="Color theme" title="Color theme">
+            <details
+              className="icon-menu"
+              data-menu-id="color"
+              open={openMenu === "color" || closingMenu === "color"}
+            >
+              <summary
+                className="icon-button"
+                aria-label="Color theme"
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "color" && closingMenu !== "color"}
+                aria-controls="color-theme-menu"
+                title="Color theme"
+                onClick={(event) => {
+                  event.preventDefault();
+                  toggleMenu("color");
+                }}
+              >
                 <ThemeGlyph mode={themeMode} />
               </summary>
-              <div className="icon-menu-panel" role="menu">
-                <p className="menu-heading">Color theme</p>
-                {(["system", "light", "dark"] as ThemeMode[]).map((option) => (
+              <div
+                className={`icon-menu-panel${closingMenu === "color" ? " closing" : ""}`}
+                id="color-theme-menu"
+                role="menu"
+                aria-labelledby="color-theme-menu-heading"
+                onKeyDown={(event) => handleMenuKeyDown(event, "color")}
+              >
+                <p className="menu-heading" id="color-theme-menu-heading">Color theme</p>
+                {(["system", "light", "dark"] as ThemeMode[]).map((option, index) => (
                   <button
                     key={option}
                     type="button"
                     role="menuitemradio"
                     aria-checked={themeMode === option}
+                    tabIndex={menuFocusIndex.color === index ? 0 : -1}
                     className={`menu-option${themeMode === option ? " selected" : ""}`}
-                    onClick={(event) => {
+                    onFocus={() => setMenuFocusIndex((current) => ({ ...current, color: index }))}
+                    onClick={() => {
                       changeTheme(option);
-                      const menu = event.currentTarget.closest("details");
-                      if (menu) closeMenuWithAnimation(menu);
+                      closeMenu("color");
                     }}
                   >
                     <ThemeGlyph mode={option} />
@@ -231,26 +307,50 @@ export function VisualShell({ children }: { children: ReactNode }) {
               </div>
             </details>
 
-            <details className="icon-menu">
-              <summary className="icon-button" aria-label="Background theme" title="Background theme">
+            <details
+              className="icon-menu"
+              data-menu-id="background"
+              open={openMenu === "background" || closingMenu === "background"}
+            >
+              <summary
+                className="icon-button"
+                aria-label="Background theme"
+                aria-haspopup="menu"
+                aria-expanded={openMenu === "background" && closingMenu !== "background"}
+                aria-controls="background-theme-menu"
+                title="Background theme"
+                onClick={(event) => {
+                  event.preventDefault();
+                  toggleMenu("background");
+                }}
+              >
                 <BackgroundGlyph />
               </summary>
-              <div className="icon-menu-panel background-menu" role="menu">
-                <p className="menu-heading">Background theme</p>
-                {BACKGROUND_PRESETS.map((option) => (
+              <div
+                className={`icon-menu-panel background-menu${closingMenu === "background" ? " closing" : ""}`}
+                id="background-theme-menu"
+                role="menu"
+                aria-labelledby="background-theme-menu-heading"
+                onKeyDown={(event) => handleMenuKeyDown(event, "background")}
+              >
+                <p className="menu-heading" id="background-theme-menu-heading">Background theme</p>
+                {BACKGROUND_PRESETS.map((option, index) => (
                   <button
                     key={option.id}
                     type="button"
                     role="menuitemradio"
                     aria-checked={preset.id === option.id}
+                    tabIndex={menuFocusIndex.background === index ? 0 : -1}
                     className={`menu-option${preset.id === option.id ? " selected" : ""}`}
-                    onClick={(event) => {
+                    onFocus={() => setMenuFocusIndex((current) => ({ ...current, background: index }))}
+                    onClick={() => {
                       changeBackground(option.id);
-                      const menu = event.currentTarget.closest("details");
-                      if (menu) closeMenuWithAnimation(menu);
+                      closeMenu("background");
                     }}
                   >
-                    <span className="background-swatch" style={{ backgroundImage: `url("${option.image}")` }} aria-hidden="true" />
+                    <span className="background-swatch" aria-hidden="true">
+                      <img src={option.image} alt="" loading="lazy" decoding="async" />
+                    </span>
                     <span>{option.label}</span>
                   </button>
                 ))}
@@ -260,7 +360,9 @@ export function VisualShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="shell-content">{children}</div>
+      <div className="shell-content" id="main-content" tabIndex={-1}>
+        {children}
+      </div>
     </div>
   );
 }

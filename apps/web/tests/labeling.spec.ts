@@ -26,6 +26,7 @@ test("labeling requires pairing before exposing the tool", async ({ page }) => {
   await mockHealth(page);
   await page.goto("/label");
 
+  await expect(page.locator("main.page-tool.page-label > header.hero")).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Pair this browser first");
   await expect(page.getByRole("link", { name: "Open setup" })).toBeVisible();
 });
@@ -154,6 +155,6 @@ test("labeling refuses to export a preview under a different capture ID", async 
 
   await page.getByLabel("Capture ID").fill("cap-b");
   await page.getByRole("button", { name: "Download truth JSON" }).click();
-  await expect(page.getByRole("status").last()).toContainText("Load a preview for the current capture");
+  await expect(page.getByRole("alert").filter({ hasText: "Load a preview for the current capture" })).toBeVisible();
 });
 

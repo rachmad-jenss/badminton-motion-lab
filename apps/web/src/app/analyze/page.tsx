@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { METRIC_CATALOGUE, STROKE_LABELS, TECHNIQUE_STROKES } from "@bml/contracts";
 import { OnboardingSteps } from "@/components/OnboardingSteps";
 import {
@@ -43,6 +43,7 @@ type AnalyzeResult = {
   analysisRunId: string;
   agentMediaUrl: string;
   summary: {
+    fps?: number;
     metrics: AnalyzeMetric[];
     findings: AnalyzeFinding[];
     events: {
@@ -89,6 +90,7 @@ export default function AnalyzePage() {
   const [byokKey, setByokKey] = useState("");
   const [byokProvider, setByokProvider] = useState("openai");
   const [checking, setChecking] = useState(true);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const refreshHealth = useCallback(async () => {
     setChecking(true);
@@ -206,6 +208,17 @@ export default function AnalyzePage() {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function selectEvidenceFrame(frame: number) {
+    setSelectedFrame(frame);
+    const video = videoRef.current;
+    if (!video) return;
+    const fps = Math.max(result?.summary.fps ?? 30, 1);
+    const targetTime = Math.max(0, frame / fps);
+    video.currentTime = Number.isFinite(video.duration) && video.duration > 0
+      ? Math.min(targetTime, video.duration)
+      : targetTime;
   }
   const phaseLabel = {
     idle: "Ready to analyze",
@@ -389,7 +402,9 @@ export default function AnalyzePage() {
             <p className="muted">The helper app serves this video locally. The original remains on this PC.</p>
             <video
               key={result.agentMediaUrl}
+              ref={videoRef}
               controls
+              preload="metadata"
               aria-label="Analyzed local video"
               src={mediaUrlWithToken(result.agentMediaUrl)}
               onError={() => setMediaError("The local media ticket expired or the file is unavailable. Run the analysis again.")}
@@ -397,7 +412,9 @@ export default function AnalyzePage() {
             />
             {mediaError ? <p className="status error" role="alert">{mediaError}</p> : null}
             {selectedFrame != null ? (
-              <p className="status" role="status">Selected evidence frame f{selectedFrame}. Use the video controls to locate it.</p>
+              <p className="status" role="status">
+                Selected evidence frame f{selectedFrame} ({(selectedFrame / Math.max(result.summary.fps ?? 30, 1)).toFixed(2)}s). The video is positioned at this evidence.
+              </p>
             ) : null}
           </section>
 
@@ -435,7 +452,7 @@ export default function AnalyzePage() {
                     <span className="muted">{confidenceLabel(finding.confidence)}</span>
                     {finding.limitation ? <p className="muted">Limitation: {finding.limitation}</p> : null}
                     {(finding.evidenceFrameIndices ?? []).map((frame) => (
-                      <button key={frame} className="d-btn d-btn-ghost" type="button" onClick={() => setSelectedFrame(frame)}>
+                      <button key={frame} className="d-btn d-btn-ghost" type="button" onClick={() => selectEvidenceFrame(frame)}>
                         Review evidence frame f{frame}
                       </button>
                     ))}
@@ -456,39 +473,40 @@ export default function AnalyzePage() {
                 Download report (JSON)
               </button>
             </div>
-            <div className="table-wrap">
+            <div className="table-wrap responsive-table">
               <table>
+                <caption className="sr-only">Measurements from this analysis run</caption>
                 <thead>
                   <tr>
-                    <th>Metric</th>
-                    <th>Value</th>
-                    <th>Confidence</th>
-                    <th>Evidence</th>
+                    <th scope="col">Metric</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Confidence</th>
+                    <th scope="col">Evidence</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.summary.metrics.map((metric) => (
                     <tr key={metric.metricId}>
-                      <td className="metric-name">
+                      <td className="metric-name" data-label="Metric">
                         <span>{metricLabel(metric.metricId)}</span>
-                        <details>
+                        <details className="advanced-details">
                           <summary>Technical name</summary>
                           <small>{metric.metricId}</small>
                         </details>
                       </td>
-                      <td>
+                      <td data-label="Value">
                         {metric.withheld
                           ? `Withheld${metric.limitation ? ` - ${metric.limitation}` : ""}`
                           : metric.value == null
                             ? "-"
                             : `${metric.value} ${metric.unit}`}
                       </td>
-                      <td>{confidenceLabel(metric.confidence)}</td>
-                      <td>
+                      <td data-label="Confidence">{confidenceLabel(metric.confidence)}</td>
+                      <td data-label="Evidence">
                         {metric.evidenceFrameIndex == null ? (
                           "-"
                         ) : (
-                          <button className="d-btn d-btn-ghost" type="button" onClick={() => setSelectedFrame(metric.evidenceFrameIndex ?? null)}>
+                          <button className="d-btn d-btn-ghost" type="button" onClick={() => selectEvidenceFrame(metric.evidenceFrameIndex ?? 0)}>
                             f{metric.evidenceFrameIndex}
                           </button>
                         )}
@@ -511,7 +529,7 @@ export default function AnalyzePage() {
                   <li key={`${event.type}-${event.frameIndex}-${index}`} className="evidence-item">
                     <strong>{event.type.replaceAll("_", " ")}</strong>
                     <p className="muted">Frame f{event.frameIndex} · {confidenceLabel(event.confidence)}{event.source ? ` · ${event.source}` : ""}</p>
-                    <button className="d-btn d-btn-ghost" type="button" onClick={() => setSelectedFrame(event.frameIndex)}>
+                    <button className="d-btn d-btn-ghost" type="button" onClick={() => selectEvidenceFrame(event.frameIndex)}>
                       Review event frame
                     </button>
                   </li>

@@ -30,6 +30,7 @@ const EMPTY_CORNERS: CourtCorner[] = [
 
 export default function LabelPage() {
   const [health, setHealth] = useState<AgentHealthResult | null>(null);
+  const [hydrated, setHydrated] = useState(false);
   const [paired, setPaired] = useState(false);
   const [captureId, setCaptureId] = useState("");
   const [fps, setFps] = useState(30);
@@ -41,12 +42,26 @@ export default function LabelPage() {
   const [ticketUrl, setTicketUrl] = useState<string | null>(null);
   const [loadedCaptureId, setLoadedCaptureId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<"status" | "error">("status");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [cornerError, setCornerError] = useState<string | null>(null);
 
+  function setFeedback(message: string | null, tone: "status" | "error" = "status") {
+    setStatus(message);
+    setStatusTone(tone);
+  }
+
   useEffect(() => {
+    let active = true;
     setPaired(Boolean(agentToken()));
-    void agentHealth().then(setHealth);
+    void agentHealth().then((nextHealth) => {
+      if (!active) return;
+      setHealth(nextHealth);
+      setHydrated(true);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const techniques = getModules().filter((m) => m.kind === "technique_stroke");
@@ -68,11 +83,11 @@ export default function LabelPage() {
   }
 
   async function loadPreview() {
-    setStatus(null);
+    setFeedback(null);
     const requestedCaptureId = captureId.trim();
     clearPreview();
     if (!requestedCaptureId) {
-      setStatus("Enter a capture ID first.");
+      setFeedback("Enter a capture ID first.", "error");
       return;
     }
     try {
@@ -85,15 +100,15 @@ export default function LabelPage() {
       }
       setLoadedCaptureId(res.captureId);
       setTicketUrl(res.url);
-      setStatus("Preview loaded from the Local Agent.");
+      setFeedback("Preview loaded from the Local Agent.");
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Could not load the media preview.");
+      setFeedback(e instanceof Error ? e.message : "Could not load the media preview.", "error");
     }
   }
 
   function markContactFrame() {
     setContactFrame(frame);
-    setStatus("Contact frame: " + frame + " (from " + timeSeconds + "s at " + fps + " fps).");
+    setFeedback("Contact frame: " + frame + " (from " + timeSeconds + "s at " + fps + " fps).");
   }
 
   function handleTimeChange(value: string) {
@@ -108,7 +123,7 @@ export default function LabelPage() {
   function exportTruth() {
     const requestedCaptureId = captureId.trim();
     if (!ticketUrl || loadedCaptureId !== requestedCaptureId) {
-      setStatus("Load a preview for the current capture before exporting.");
+      setFeedback("Load a preview for the current capture before exporting.", "error");
       return;
     }
     const video = videoRef.current;
@@ -139,13 +154,13 @@ export default function LabelPage() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setStatus("Truth JSON downloaded. Save it under validation/domain-media/ and add the clip to the manifest.");
+    setFeedback("Truth JSON downloaded. Save it under validation/domain-media/ and add the clip to the manifest.");
   }
 
   async function copyTruth() {
     const requestedCaptureId = captureId.trim();
     if (!ticketUrl || loadedCaptureId !== requestedCaptureId) {
-      setStatus("Load a preview for the current capture before exporting.");
+      setFeedback("Load a preview for the current capture before exporting.", "error");
       return;
     }
     const video = videoRef.current;
@@ -168,16 +183,30 @@ export default function LabelPage() {
     });
     try {
       await navigator.clipboard.writeText(labelingTruthJson(truth));
-      setStatus("Truth JSON copied to the clipboard.");
+      setFeedback("Truth JSON copied to the clipboard.");
     } catch {
-      setStatus("Could not copy; use the download button instead.");
+      setFeedback("Could not copy; use the download button instead.", "error");
     }
+  }
+
+  if (!hydrated) {
+    return (
+      <main className="page-tool page-label">
+        <header className="hero">
+          <h1 className="brand">Label a capture</h1>
+          <p className="tag" role="status">Checking local setup…</p>
+        </header>
+      </main>
+    );
   }
 
   if (!paired) {
     return (
-      <main className="page-label">
-        <h1>Label a capture</h1>
+      <main className="page-tool page-label">
+        <header className="hero">
+          <h1 className="brand">Label a capture</h1>
+          <p className="tag">Pair this browser with the Local Agent before labeling a capture.</p>
+        </header>
         <div className="notice" role="status">
           Pair this browser first. <Link href={readiness === "offline" ? "/agent#install" : "/agent"}>{readiness === "offline" ? "Install local helper" : "Open setup"} →</Link>
         </div>
@@ -186,12 +215,14 @@ export default function LabelPage() {
   }
 
   return (
-    <main className="page-label">
-      <h1>Label a capture</h1>
-      <p className="muted">
+    <main className="page-tool page-label">
+      <header className="hero">
+        <h1 className="brand">Label a capture</h1>
+        <p className="tag">
         Maintainer tool: mark the contact frame and the four court corners so a clip becomes
         domain-valid ground truth (fixtureKind badminton_stroke). The video never leaves this PC.
-      </p>
+        </p>
+      </header>
 
       <section className="panel">
         <h2>Capture</h2>
@@ -229,10 +260,10 @@ export default function LabelPage() {
             ref={videoRef}
             controls
             src={ticketUrl}
-            className="label-video"
+            className="label-video result-reveal"
             onError={() => {
               clearPreview();
-              setStatus("The media preview expired or is unavailable. Load it again.");
+              setFeedback("The media preview expired or is unavailable. Load it again.", "error");
             }}
           />
         ) : null}
@@ -330,7 +361,7 @@ export default function LabelPage() {
             Copy truth JSON
           </button>
         </div>
-        {status ? <p className="status" role="status">{status}</p> : null}
+        {status ? <p className={`status${statusTone === "error" ? " error" : ""}`} role={statusTone === "error" ? "alert" : "status"}>{status}</p> : null}
         <p className="muted">
           The downloaded file is your ground truth. Save it next to the clip in
           validation/domain-media/ and reference it from validation/domain-manifest.json.
