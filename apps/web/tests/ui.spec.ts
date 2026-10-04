@@ -111,6 +111,68 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
   await expect(pairButton).toBeEnabled();
 });
 
+test("pairing code is read-only, copyable, and shows remaining validity", async ({ page }) => {
+  await clearAgentStorage(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          (window as Window & { copiedPairingCode?: string }).copiedPairingCode = value;
+        },
+      },
+    });
+  });
+  await mockHealth(page, { pairingExpiresAt: Math.floor(Date.now() / 1000) + 60 });
+
+  await gotoWithAgentReady(page, "/agent", "Setup needs attention");
+
+  const code = page.getByLabel("Pairing code");
+  await expect(code).toHaveAttribute("readonly", "");
+  await expect(page.getByText(/Pairing code expires in/)).toBeVisible();
+  await page.getByRole("button", { name: "Copy pairing code" }).click();
+  await expect(page.getByRole("status")).toContainText("Pairing code copied");
+  await expect(page.evaluate(() => (window as Window & { copiedPairingCode?: string }).copiedPairingCode)).resolves.toBeTruthy();
+});
+
+test("expired pairing code is blocked until a fresh code is requested", async ({ page }) => {
+  await clearAgentStorage(page);
+  let healthCalls = 0;
+  await page.route(HEALTH_URL, async (route) => {
+    healthCalls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        ok: true,
+        agentVersion: "test",
+        pipelineVersion: "test",
+        pairingCode: healthCalls === 1 ? null : "fresh-pairing-code",
+        pairingExpiresAt: healthCalls === 1 ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 60,
+        poseModelPresent: true,
+      }),
+    });
+  });
+
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto("/agent");
+  await healthOk;
+
+  await expect(page.getByText(/Pairing code expired or unavailable/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
+
+  const refreshedHealth = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.getByRole("button", { name: "Get a new pairing code" }).click();
+  await refreshedHealth;
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeEnabled();
+  await expect(page.getByText(/Pairing code expires in/)).toBeVisible();
+});
+
 test("paired setup sends the user to video selection from the hero", async ({ page }) => {
   await seedPairedBrowser(page);
   await mockHealth(page);
