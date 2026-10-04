@@ -56,9 +56,23 @@ test("home explains what remains available while agent is offline", async ({ pag
   await page.goto("/");
 
   await expect(page.getByRole("status")).toContainText("Setup is not running yet");
-  await expect(page.getByRole("link", { name: "Open setup" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Try experimental analysis" })).toHaveAttribute("href", "/analyze");
+  await expect(page.getByRole("link", { name: "Start setup on this PC" }).first()).toHaveAttribute("href", "/agent");
+  await expect(page.getByRole("link", { name: "Try experimental analysis" }).first()).toHaveAttribute("href", "/analyze");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
+});
+
+test("ready but unpaired home sends the user to pairing before experimental analysis", async ({ page }) => {
+  await clearAgentStorage(page);
+  await mockHealth(page);
+
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto("/");
+  await healthOk;
+
+  await expect(page.getByRole("link", { name: "Pair this browser" }).first()).toHaveAttribute("href", "/agent#pair");
+  await expect(page.getByRole("link", { name: "Try experimental analysis" }).first()).toHaveAttribute("href", "/analyze");
 });
 
 test("paired home points to choosing a video", async ({ page }) => {
@@ -97,6 +111,77 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
   await expect(pairButton).toBeEnabled();
 });
 
+test("pairing code is read-only, copyable, and shows remaining validity", async ({ page }) => {
+  await clearAgentStorage(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => {
+          (window as Window & { copiedPairingCode?: string }).copiedPairingCode = value;
+        },
+      },
+    });
+  });
+  await mockHealth(page, { pairingExpiresAt: Math.floor(Date.now() / 1000) + 60 });
+
+  await gotoWithAgentReady(page, "/agent", "Setup needs attention");
+
+  const code = page.getByLabel("Pairing code");
+  await expect(code).toHaveAttribute("readonly", "");
+  await expect(page.getByText(/Pairing code expires in/)).toBeVisible();
+  await page.getByRole("button", { name: "Copy pairing code" }).click();
+  await expect(page.getByRole("status")).toContainText("Pairing code copied");
+  await expect(page.evaluate(() => (window as Window & { copiedPairingCode?: string }).copiedPairingCode)).resolves.toBeTruthy();
+});
+
+test("expired pairing code is blocked until a fresh code is requested", async ({ page }) => {
+  await clearAgentStorage(page);
+  let healthCalls = 0;
+  await page.route(HEALTH_URL, async (route) => {
+    healthCalls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        ok: true,
+        agentVersion: "test",
+        pipelineVersion: "test",
+        pairingCode: healthCalls === 1 ? null : "fresh-pairing-code",
+        pairingExpiresAt: healthCalls === 1 ? Math.floor(Date.now() / 1000) - 1 : Math.floor(Date.now() / 1000) + 60,
+        poseModelPresent: true,
+      }),
+    });
+  });
+
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto("/agent");
+  await healthOk;
+
+  await expect(page.getByText(/Pairing code expired or unavailable/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeDisabled();
+
+  const refreshedHealth = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.getByRole("button", { name: "Get a new pairing code" }).click();
+  await refreshedHealth;
+  await expect(page.getByRole("button", { name: "Pair browser ↔ agent" })).toBeEnabled();
+  await expect(page.getByText(/Pairing code expires in/)).toBeVisible();
+});
+
+test("paired setup sends the user to video selection from the hero", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  await gotoWithAgentReady(page, "/agent", "Ready to analyze");
+
+  await expect(page.getByRole("link", { name: "Choose a video" }).first()).toHaveAttribute("href", "/analyze");
+});
+
 test("Experimental analysis can be opened before pairing", async ({ page }) => {
   await clearAgentStorage(page);
   await mockHealth(page);
@@ -110,7 +195,9 @@ test("Experimental analysis can be opened before pairing", async ({ page }) => {
     buffer: Buffer.from("fixture"),
   });
   await expect(page.getByRole("button", { name: "Analyze this video" })).toBeEnabled();
-  await expect(page.locator("div.notice[role='alert']")).toContainText("Pair this browser");
+  await expect(page.getByRole("link", { name: "Open setup" }).first()).toHaveAttribute("href", "/agent");
+  await expect(page.getByRole("link", { name: "Continue with experimental analysis" })).toHaveAttribute("href", "#video");
+  await expect(page.locator("div.notice[role='alert']")).toHaveCount(0);
 });
 
 test("Compare does not call protected series endpoints before pairing", async ({ page }) => {
@@ -374,7 +461,79 @@ test("analysis quality failure remains actionable", async ({ page }) => {
   await expect(captureError).toContainText("Record from the side");
   await expect(captureError).toContainText("full-body landmarks");
   await expect(captureError).toContainText("measured 0.42, needs 0.8");
+  await expect(page.getByRole("link", { name: "Open capture guide" })).toHaveAttribute("href", "/capture-guide");
   await expect(page.getByText("Analysis needs attention", { exact: true })).toBeVisible();
+});
+
+test("generic analysis 422 stays generic and offers retry", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Capture request could not be completed" }),
+    });
+  });
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "generic-error.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await page.getByRole("button", { name: "Analyze this video" }).click();
+
+  const captureError = page.locator("div.status.error[role='alert']");
+  await expect(captureError).toContainText("Capture request could not be completed");
+  await expect(captureError).not.toContainText("quality gate");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("pairing analysis failure links to setup", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Authorization required" }),
+    });
+  });
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "pairing-error.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await page.getByRole("button", { name: "Analyze this video" }).click();
+
+  await expect(page.getByRole("link", { name: "Open setup" }).last()).toHaveAttribute("href", "/agent");
+});
+
+test("expired capture failure keeps the selected input retryable", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+  await page.route(`${AGENT_URL}/captures/import`, async (route) => {
+    await route.fulfill({
+      status: 410,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Local media missing" }),
+    });
+  });
+
+  await gotoWithAgentReady(page, "/analyze");
+  await page.getByLabel("Choose a video from this PC").setInputFiles({
+    name: "expired-capture.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("local-video"),
+  });
+  await page.getByRole("button", { name: "Analyze this video" }).click();
+
+  await expect(page.getByText(/local media is no longer available/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  await expect(page.getByText("Selected: expired-capture.mp4", { exact: true })).toBeVisible();
 });
 
 test("advanced path mode clears a previously selected file", async ({ page }) => {

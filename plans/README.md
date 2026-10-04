@@ -235,3 +235,29 @@ npm run verify
 # typecheck + web build + agent pytest/smoke + no-synthetic reports
 npm run benchmark:fixtures   # requires live agent (pipeline smoke only since Plan 030)
 ```
+
+## Improve UI/UX round (2026-10-04, plans 062-064)
+
+This round is a follow-up to the completed onboarding plans 023-027 and the
+intentional experimental-analysis change in commit `bd0de95`. It keeps the
+experimental path, but makes the supported local connection path primary and
+actionable. Plans 063 and 064 depend on the shared state-directed funnel in
+062; execute them serially with bounded browser verification.
+
+| Order | Plan | Priority | Status | Depends on |
+|------:|------|----------|--------|------------|
+| 1 | [062-guided-local-connection-funnel](062-guided-local-connection-funnel.md) | P1 | TODO | none |
+| 2 | [063-pairing-code-transfer-and-expiry](063-pairing-code-transfer-and-expiry.md) | P1 | TODO | 062 |
+| 3 | [064-actionable-analysis-recovery](064-actionable-analysis-recovery.md) | P1 | TODO | 062 |
+
+### Findings considered and rejected
+
+- Removing experimental analysis before pairing was rejected: commit `bd0de95`
+  and `apps/web/tests/ui.spec.ts:100-114` record it as an intentional product
+  behavior; Plan 062 demotes it from the primary connection action instead.
+- Adding a remote/cloud agent connector was rejected: ADR-001 and
+  ADR-013 require heavy processing and original video to remain on the local
+  Windows machine.
+- A visual-shell redesign was rejected: the current request is a connection
+  and analysis funnel problem, and existing token/motion work already covers
+  the shared visual system.

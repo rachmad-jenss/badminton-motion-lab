@@ -7,6 +7,7 @@ import {
   clearAgentToken,
   agentErrorMessage,
   agentHealth,
+  agentNextAction,
   agentPost,
   agentReadiness,
   agentToken,
@@ -25,6 +26,8 @@ export default function AgentPage() {
   const [pairing, setPairing] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [paired, setPaired] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
+  const [nowEpoch, setNowEpoch] = useState(() => Math.floor(Date.now() / 1000));
   const [urlReady, setUrlReady] = useState(false);
   const urlRef = useRef(url);
   const healthRequestRef = useRef(0);
@@ -33,6 +36,7 @@ export default function AgentPage() {
     setHealth(h);
     const pairingCode = h.payload?.pairingCode;
     setCode(typeof pairingCode === "string" ? pairingCode : "");
+    setCopyStatus("");
     if (!h.online) setError(h.error || "Local Agent is offline.");
   }
 
@@ -56,6 +60,7 @@ export default function AgentPage() {
     setChecking(true);
     setError(null);
     setStatus("");
+    setCopyStatus("");
     if (!requestedUrl) {
       setHealth(null);
       setCode("");
@@ -76,9 +81,17 @@ export default function AgentPage() {
     if (urlReady) void refreshHealth();
   }, [refreshHealth, urlReady]);
 
+  useEffect(() => {
+    if (health?.payload?.pairingExpiresAt == null) return;
+    const updateNow = () => setNowEpoch(Math.floor(Date.now() / 1000));
+    updateNow();
+    const timer = window.setInterval(updateNow, 1000);
+    return () => window.clearInterval(timer);
+  }, [health?.payload?.pairingExpiresAt]);
+
   async function pair() {
-    if (!code) {
-      setError("Refresh health to obtain a live, one-time pairing code.");
+    if (!pairingAvailable) {
+      setError("Get a new pairing code before pairing this browser.");
       return;
     }
     setPairing(true);
@@ -104,6 +117,20 @@ export default function AgentPage() {
     }
   }
 
+  async function copyPairingCode() {
+    if (!pairingAvailable) {
+      setCopyStatus("Get a new pairing code before copying it.");
+      return;
+    }
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(code);
+      setCopyStatus("Pairing code copied. Paste it into this setup page.");
+    } catch {
+      setCopyStatus("Copy is unavailable. Select the code and copy it manually.");
+    }
+  }
+
   async function forgetPairing() {
     setForgetting(true);
     setError(null);
@@ -125,7 +152,14 @@ export default function AgentPage() {
   const readiness = agentReadiness(health);
   const poseReady = health?.payload?.poseModelPresent !== false;
   const pairingCodeReady = typeof health?.payload?.pairingCode === "string";
+  const pairingExpiresAt = health?.payload?.pairingExpiresAt;
+  const pairingSecondsRemaining = typeof pairingExpiresAt === "number"
+    ? Math.max(0, pairingExpiresAt - nowEpoch)
+    : null;
+  const pairingExpired = typeof pairingExpiresAt === "number" && pairingExpiresAt <= nowEpoch;
+  const pairingAvailable = pairingCodeReady && !pairingExpired;
   const readyToAnalyze = readiness === "ready" && paired;
+  const nextAction = agentNextAction(readiness, paired);
   const checks = [
     { label: "Helper app", ok: health?.online === true },
     { label: "Video model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
@@ -144,9 +178,9 @@ export default function AgentPage() {
           <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "experimental"}`}>
             {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Experimental — Setup needs attention"}
           </span>
-          <a className="d-btn d-btn-primary" href="#pair">
-            Go to pairing
-          </a>
+          <Link className="d-btn d-btn-primary" href={nextAction.href}>
+            {nextAction.label}
+          </Link>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             Refresh health
           </button>
@@ -234,10 +268,29 @@ python main.py`}</pre>
         </label>
         <label>
           Pairing code
-          <input className="d-input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="refresh health" />
+          <div className="row">
+            <input
+              className="d-input"
+              value={code}
+              readOnly
+              aria-describedby="pairing-help"
+              placeholder="Get a new pairing code"
+            />
+            <button className="d-btn d-btn-ghost" type="button" onClick={() => void copyPairingCode()} disabled={!pairingAvailable}>
+              Copy pairing code
+            </button>
+          </div>
+          <span id="pairing-help" className="muted">
+            {pairingExpired
+              ? "Pairing code expired or unavailable. Get a new pairing code."
+              : pairingSecondsRemaining == null || !pairingCodeReady
+                ? "Get a new one-time pairing code from the Local Agent."
+                : `Pairing code expires in ${pairingSecondsRemaining >= 60 ? `${Math.ceil(pairingSecondsRemaining / 60)} min` : `${pairingSecondsRemaining} sec`}.`}
+          </span>
+          {copyStatus ? <span className="status" role="status">{copyStatus}</span> : null}
         </label>
         <div className="row">
-          <button className="d-btn d-btn-primary" onClick={() => void pair()} disabled={readiness !== "ready" || !code || pairing}>
+          <button className="d-btn d-btn-primary" onClick={() => void pair()} disabled={readiness !== "ready" || !pairingAvailable || pairing}>
             {pairing ? "Pairing…" : "Pair browser ↔ agent"}
           </button>
           <button
@@ -245,7 +298,7 @@ python main.py`}</pre>
             onClick={() => void refreshHealth()}
             disabled={checking}
           >
-            Refresh health
+            Get a new pairing code
           </button>
           {paired ? (
             <button className="d-btn d-btn-ghost" onClick={() => void forgetPairing()} disabled={forgetting}>

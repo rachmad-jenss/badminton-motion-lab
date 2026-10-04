@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getModules, publicCompletenessFromSeed } from "@/lib/modules";
 import {
   agentHealth,
+  agentNextAction,
   agentReadiness,
   agentToken,
   type AgentHealthResult,
@@ -31,11 +32,8 @@ export default function HomePage() {
   const technique = modules.filter((m) => m.kind === "technique_stroke");
   const footwork = modules.filter((m) => m.kind !== "technique_stroke");
   const readiness = agentReadiness(health);
-  const primaryHref = "/analyze";
-  const primaryLabel =
-    readiness === "ready" && paired
-      ? "Choose a video"
-      : "Try experimental analysis";
+  const readyToAnalyze = readiness === "ready" && paired;
+  const nextAction = agentNextAction(readiness, paired);
 
   return (
     <main className="page-home">
@@ -46,7 +44,10 @@ export default function HomePage() {
           PC.
         </p>
         <div className="row hero-actions">
-          <Link className="d-btn d-btn-primary" href={primaryHref}>{primaryLabel}</Link>
+          <Link className="d-btn d-btn-primary" href={nextAction.href}>{nextAction.label}</Link>
+          {!readyToAnalyze ? (
+            <Link className="d-btn d-btn-ghost" href="/analyze">Try experimental analysis</Link>
+          ) : null}
           <Link className="d-btn d-btn-ghost" href="/capture-guide">How to record a good video</Link>
         </div>
       </header>
