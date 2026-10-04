@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { AgentReadiness } from "@/lib/agent";
+import { agentNextAction, type AgentReadiness } from "@/lib/agent";
 
 type StepState = "done" | "current" | "next";
 
@@ -27,14 +27,10 @@ function stepsFor({ readiness, paired, completed }: OnboardingStepsProps) {
   }
 
   if (!setupDone) {
+    const nextAction = agentNextAction(readiness, paired);
     return {
-      nextLabel:
-        readiness === "checking"
-          ? "Check setup"
-          : readiness === "not_ready"
-            ? "Finish setup"
-            : "Start setup on this PC",
-      nextHref: "/agent",
+      nextLabel: nextAction.label,
+      nextHref: nextAction.href,
       steps: [
         [readiness === "not_ready" ? "Finish setup" : "Start setup", "/agent", "current"],
         ["Pair browser", "/agent#pair", "next"],
@@ -45,9 +41,10 @@ function stepsFor({ readiness, paired, completed }: OnboardingStepsProps) {
   }
 
   if (!pairDone) {
+    const nextAction = agentNextAction(readiness, paired);
     return {
-      nextLabel: "Pair this browser",
-      nextHref: "/agent#pair",
+      nextLabel: nextAction.label,
+      nextHref: nextAction.href,
       steps: [
         ["Start setup", "/agent", "done"],
         ["Pair browser", "/agent#pair", "current"],

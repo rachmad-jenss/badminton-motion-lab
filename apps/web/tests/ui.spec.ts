@@ -56,9 +56,23 @@ test("home explains what remains available while agent is offline", async ({ pag
   await page.goto("/");
 
   await expect(page.getByRole("status")).toContainText("Setup is not running yet");
-  await expect(page.getByRole("link", { name: "Open setup" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Try experimental analysis" })).toHaveAttribute("href", "/analyze");
+  await expect(page.getByRole("link", { name: "Start setup on this PC" }).first()).toHaveAttribute("href", "/agent");
+  await expect(page.getByRole("link", { name: "Try experimental analysis" }).first()).toHaveAttribute("href", "/analyze");
   await expect(page.getByRole("navigation", { name: "Primary navigation" })).toContainText("Progress");
+});
+
+test("ready but unpaired home sends the user to pairing before experimental analysis", async ({ page }) => {
+  await clearAgentStorage(page);
+  await mockHealth(page);
+
+  const healthOk = page.waitForResponse(
+    (response) => response.url().startsWith(`${AGENT_URL}/health`) && response.ok(),
+  );
+  await page.goto("/");
+  await healthOk;
+
+  await expect(page.getByRole("link", { name: "Pair this browser" }).first()).toHaveAttribute("href", "/agent#pair");
+  await expect(page.getByRole("link", { name: "Try experimental analysis" }).first()).toHaveAttribute("href", "/analyze");
 });
 
 test("paired home points to choosing a video", async ({ page }) => {
@@ -97,6 +111,15 @@ test("pairing failure is announced inline and remains retryable", async ({ page 
   await expect(pairButton).toBeEnabled();
 });
 
+test("paired setup sends the user to video selection from the hero", async ({ page }) => {
+  await seedPairedBrowser(page);
+  await mockHealth(page);
+
+  await gotoWithAgentReady(page, "/agent", "Ready to analyze");
+
+  await expect(page.getByRole("link", { name: "Choose a video" }).first()).toHaveAttribute("href", "/analyze");
+});
+
 test("Experimental analysis can be opened before pairing", async ({ page }) => {
   await clearAgentStorage(page);
   await mockHealth(page);
@@ -110,7 +133,9 @@ test("Experimental analysis can be opened before pairing", async ({ page }) => {
     buffer: Buffer.from("fixture"),
   });
   await expect(page.getByRole("button", { name: "Analyze this video" })).toBeEnabled();
-  await expect(page.locator("div.notice[role='alert']")).toContainText("Pair this browser");
+  await expect(page.getByRole("link", { name: "Open setup" }).first()).toHaveAttribute("href", "/agent");
+  await expect(page.getByRole("link", { name: "Continue with experimental analysis" })).toHaveAttribute("href", "#video");
+  await expect(page.locator("div.notice[role='alert']")).toHaveCount(0);
 });
 
 test("Compare does not call protected series endpoints before pairing", async ({ page }) => {

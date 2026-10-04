@@ -238,22 +238,28 @@ export default function AnalyzePage() {
       </header>
 
       {!readyToAnalyze ? (
-        <div className={`notice${readiness === "checking" ? "" : " error-notice"}`} role={readiness === "checking" ? "status" : "alert"}>
-          {readiness === "checking"
-            ? "Checking setup before analysis..."
-            : !poseReady
-              ? "The helper app is missing its video model."
-              : !pairingChallengeReady
-                ? "Refresh setup to get a live pairing code."
-                : !paired
-                  ? "Pair this browser before analyzing."
-                  : "Start and pair the helper app before analyzing."}{" "}
-          Experimental mode is open; choose a video now and the local agent will report any setup requirement.{" "}
-          <Link href="/agent">Open setup →</Link>
+        <div className="notice" role={readiness === "checking" ? "status" : undefined}>
+          <p><strong>Connect this PC for the supported analysis path.</strong></p>
+          <p className="muted">
+            {readiness === "checking"
+              ? "Checking setup before analysis..."
+              : !poseReady
+                ? "The helper app is missing its video model."
+                : !pairingChallengeReady
+                  ? "Refresh setup to get a live pairing code."
+                  : !paired
+                    ? "Pair this browser before analyzing."
+                    : "Start and pair the helper app before analyzing."}{" "}
+            You can continue with experimental analysis, but setup errors may stop the run.
+          </p>
+          <div className="row">
+            <Link className="d-btn d-btn-primary" href="/agent">Open setup</Link>
+            <a className="d-btn d-btn-ghost" href="#video">Continue with experimental analysis</a>
+          </div>
         </div>
       ) : null}
 
-      <section className="panel">
+      <section className="panel" id="video">
         <h2>Choose your video</h2>
         <label>
           Choose a video from this PC

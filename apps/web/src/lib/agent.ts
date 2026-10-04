@@ -151,6 +151,19 @@ export function agentReadinessLabel(readiness: AgentReadiness): string {
   }
 }
 
+export type AgentNextAction = {
+  label: string;
+  href: string;
+};
+
+export function agentNextAction(readiness: AgentReadiness, paired: boolean): AgentNextAction {
+  if (readiness === "ready" && paired) return { label: "Choose a video", href: "/analyze" };
+  if (readiness === "ready") return { label: "Pair this browser", href: "/agent#pair" };
+  if (readiness === "not_ready") return { label: "Finish setup", href: "/agent" };
+  if (readiness === "offline") return { label: "Start setup on this PC", href: "/agent" };
+  return { label: "Check setup", href: "/agent" };
+}
+
 async function responseDetail(res: Response): Promise<{ message: string; payload?: AgentErrorPayload }> {
   const text = await res.text();
   if (!text) return { message: `HTTP ${res.status}` };

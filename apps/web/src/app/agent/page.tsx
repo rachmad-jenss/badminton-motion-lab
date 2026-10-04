@@ -7,6 +7,7 @@ import {
   clearAgentToken,
   agentErrorMessage,
   agentHealth,
+  agentNextAction,
   agentPost,
   agentReadiness,
   agentToken,
@@ -126,6 +127,7 @@ export default function AgentPage() {
   const poseReady = health?.payload?.poseModelPresent !== false;
   const pairingCodeReady = typeof health?.payload?.pairingCode === "string";
   const readyToAnalyze = readiness === "ready" && paired;
+  const nextAction = agentNextAction(readiness, paired);
   const checks = [
     { label: "Helper app", ok: health?.online === true },
     { label: "Video model", ok: health?.payload?.poseModelPresent !== false && health?.online === true },
@@ -144,9 +146,9 @@ export default function AgentPage() {
           <span className={`d-badge status-badge ${readyToAnalyze ? "on" : "experimental"}`}>
             {checking ? "Checking setup…" : readyToAnalyze ? "Ready to analyze" : "Experimental — Setup needs attention"}
           </span>
-          <a className="d-btn d-btn-primary" href="#pair">
-            Go to pairing
-          </a>
+          <Link className="d-btn d-btn-primary" href={nextAction.href}>
+            {nextAction.label}
+          </Link>
           <button className="d-btn d-btn-ghost" onClick={() => void refreshHealth()} disabled={checking}>
             Refresh health
           </button>
