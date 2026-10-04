@@ -116,6 +116,9 @@ export default function AnalyzePage() {
   const canAnalyze = !busy;
   const poseReady = health?.payload?.poseModelPresent !== false;
   const pairingChallengeReady = typeof health?.payload?.pairingCode === "string";
+  const setupAction = readiness === "offline"
+    ? { label: "Install local helper", href: "/agent#install" }
+    : { label: "Open setup", href: "/agent" };
 
   async function runAnalyze() {
     const localPath = path.trim();
@@ -230,8 +233,8 @@ export default function AnalyzePage() {
             {checking ? "Refreshing…" : "Refresh"}
           </button>
           {readiness !== "ready" || !paired ? (
-            <Link className="d-btn d-btn-ghost" href="/agent">
-              Open setup
+            <Link className="d-btn d-btn-ghost" href={setupAction.href}>
+              {setupAction.label}
             </Link>
           ) : null}
         </div>
@@ -239,7 +242,7 @@ export default function AnalyzePage() {
 
       {!readyToAnalyze ? (
         <div className="notice" role={readiness === "checking" ? "status" : undefined}>
-          <p><strong>Connect this PC for the supported analysis path.</strong></p>
+          <p><strong>Install the local helper for the supported analysis path.</strong></p>
           <p className="muted">
             {readiness === "checking"
               ? "Checking setup before analysis..."
@@ -253,7 +256,7 @@ export default function AnalyzePage() {
             You can continue with experimental analysis, but setup errors may stop the run.
           </p>
           <div className="row">
-            <Link className="d-btn d-btn-primary" href="/agent">Open setup</Link>
+            <Link className="d-btn d-btn-primary" href={setupAction.href}>{setupAction.label}</Link>
             <a className="d-btn d-btn-ghost" href="#video">Continue with experimental analysis</a>
           </div>
         </div>
@@ -363,7 +366,7 @@ export default function AnalyzePage() {
             ) : null}
             <div className="row">
               {errorInfo?.recovery === "setup" ? (
-                <Link className="d-btn d-btn-primary" href="/agent">Open setup</Link>
+                <Link className="d-btn d-btn-primary" href={setupAction.href}>{setupAction.label}</Link>
               ) : null}
               {errorInfo?.recovery === "capture-guide" ? (
                 <Link className="d-btn d-btn-primary" href="/capture-guide">Open capture guide</Link>

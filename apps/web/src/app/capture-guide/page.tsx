@@ -10,8 +10,8 @@ export default function CaptureGuidePage() {
           before measuring anything.
         </p>
         <div className="row hero-actions">
-          <Link className="d-btn d-btn-primary" href="/agent">
-            Open setup
+          <Link className="d-btn d-btn-primary" href="/agent#install">
+            Install local helper
           </Link>
           <Link className="d-btn d-btn-ghost" href="/analyze">
             Choose a video
@@ -36,8 +36,8 @@ export default function CaptureGuidePage() {
       <section className="panel">
         <h2>What happens next</h2>
         <p className="muted">
-          Start the helper app, pair this browser, then choose the video from this PC. The original
-          video is not uploaded.
+          Install the local helper, pair this browser, then choose the video from this PC. The
+          original video is not uploaded.
         </p>
         <p className="muted">
           This first version supports Windows. Your video is read locally by the helper app.

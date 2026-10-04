@@ -54,8 +54,8 @@ export default function HomePage() {
 
       {readiness === "offline" ? (
         <div className="notice" role="status">
-          Setup is not running yet. Experimental analysis is open; start it to analyze and review a
-          video on this PC. <Link href="/agent">Open setup →</Link>
+          The local helper is not installed or running yet. Download it for Windows, then return
+          here to connect this browser. <Link href="/agent#install">Install the helper →</Link>
         </div>
       ) : null}
       {!completeness.complete ? (

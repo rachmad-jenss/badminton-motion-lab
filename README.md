@@ -77,14 +77,17 @@ Requires **FFmpeg/ffprobe** on PATH and MediaPipe pose model at
 
 ### Windows beginner path
 
-1. Start the web app with `npm run dev:web` and open http://localhost:3001.
-2. In Windows Explorer, double-click `infra/windows/install-agent.cmd`.
-3. Keep the Local Agent console open. The script opens `/agent` after the health check;
-   pair the browser, then choose a video from this PC.
+1. Open the public Setup page at https://bml.jenss.me/agent.
+2. Download the Windows starter bundle, extract the ZIP, and open `infra/windows` in the
+   extracted folder.
+3. Double-click `install-agent.cmd`. It installs the helper prerequisites, starts the Local
+   Agent, and opens the Setup page when the health check passes.
+4. Keep the Local Agent console open, pair the browser, then choose a video from this PC.
 
 The launcher installs Python and FFmpeg through `winget` when needed, creates the
 Local Agent environment, verifies the pose-model checksum, and keeps the original
-video on this PC. It is a development bootstrap, not a signed installer.
+video on this PC. It is a starter bundle, not a signed installer. Developers running the web
+app locally can set `BML_WEB_URL=http://127.0.0.1:3001/agent` before launching the script.
 
 ### Advanced developer setup
 

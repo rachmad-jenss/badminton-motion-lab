@@ -1,3 +1,6 @@
+export const WINDOWS_STARTER_BUNDLE_URL =
+  "https://github.com/rachmad-jenss/badminton-motion-lab/archive/refs/heads/main.zip";
+
 export function agentBaseUrl(): string {
   if (typeof window !== "undefined") {
     return localStorage.getItem("bml.agentUrl") || "http://127.0.0.1:8787";
@@ -144,7 +147,7 @@ export function agentReadinessLabel(readiness: AgentReadiness): string {
     case "checking":
       return "Checking setup...";
     case "offline":
-      return "Setup needed - start the helper app";
+      return "Local helper not running";
     case "not_ready":
       return "Setup incomplete";
     case "ready":
@@ -161,7 +164,7 @@ export function agentNextAction(readiness: AgentReadiness, paired: boolean): Age
   if (readiness === "ready" && paired) return { label: "Choose a video", href: "/analyze" };
   if (readiness === "ready") return { label: "Pair this browser", href: "/agent#pair" };
   if (readiness === "not_ready") return { label: "Finish setup", href: "/agent" };
-  if (readiness === "offline") return { label: "Start setup on this PC", href: "/agent" };
+  if (readiness === "offline") return { label: "Install the helper", href: "/agent#install" };
   return { label: "Check setup", href: "/agent" };
 }
 

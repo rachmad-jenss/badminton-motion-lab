@@ -90,6 +90,9 @@ export default function ComparePage() {
   const readiness = agentReadiness(health);
   const readyToAnalyze = readiness === "ready" && paired;
   const hasAnyData = METRICS.some((id) => (series[id] || []).length > 0);
+  const setupAction = readiness === "offline"
+    ? { label: "Install local helper", href: "/agent#install" }
+    : { label: "Open setup", href: "/agent" };
 
   return (
     <main className="page-tool">
@@ -116,7 +119,7 @@ export default function ComparePage() {
         </div>
       </header>
 
-      {error ? <div className="notice" role="status">{error} <Link href="/agent">Open setup →</Link></div> : null}
+      {error ? <div className="notice" role="status">{error} <Link href={setupAction.href}>{setupAction.label} →</Link></div> : null}
       {loading ? <p className="muted" role="status">Loading session series…</p> : null}
       {Object.keys(seriesErrors).length > 0 ? (
         <div className="notice error-notice" role="alert">

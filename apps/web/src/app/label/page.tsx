@@ -6,6 +6,7 @@ import {
   agentBaseUrl,
   agentHealth,
   agentPost,
+  agentReadiness,
   agentToken,
   type AgentHealthResult,
 } from "@/lib/agent";
@@ -50,6 +51,7 @@ export default function LabelPage() {
 
   const techniques = getModules().filter((m) => m.kind === "technique_stroke");
   const frame = frameFromTime(timeSeconds, fps);
+  const readiness = agentReadiness(health);
 
   function clearPreview() {
     setTicketUrl(null);
@@ -177,7 +179,7 @@ export default function LabelPage() {
       <main className="page-label">
         <h1>Label a capture</h1>
         <div className="notice" role="status">
-          Pair this browser first. <Link href="/agent">Open setup →</Link>
+          Pair this browser first. <Link href={readiness === "offline" ? "/agent#install" : "/agent"}>{readiness === "offline" ? "Install local helper" : "Open setup"} →</Link>
         </div>
       </main>
     );
