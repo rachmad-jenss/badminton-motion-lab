@@ -135,6 +135,11 @@ def run_provisioned(args: argparse.Namespace) -> TrainingRunResult:
             "dataLicense": entries[source_id]["dataLicense"],
             "mediaPolicy": entries[source_id]["mediaPolicy"],
             "publicEvidence": entries[source_id]["publicEvidence"],
+            **(
+                {"labelDerivation": "bfmd_caption_keyword_v1"}
+                if source_id == "bfmd"
+                else {}
+            ),
         }
         for source_id in selected
     ]

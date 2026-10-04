@@ -16,6 +16,12 @@ non-commercial academic research, must not be redistributed, and does not
 redistribute the BWF TV source videos. It may be used only in a local run that
 honors those terms; it is not public-readiness evidence.
 
+For the local BML stroke baseline, four currently absent classes are derived
+only from BFMD caption text (`forehand`, `backhand`, `block`, and
+`jump_smash`, with `shot_type` as the fallback). This is a documented local
+label derivation, not a claim that the ShuttleSet taxonomy contains those
+classes; its records remain training-only and are not public-readiness evidence.
+
 ## BST (training code)
 
 [BST](https://github.com/Va6lue/BST-Badminton-Stroke-type-Transformer) is

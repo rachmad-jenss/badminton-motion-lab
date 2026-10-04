@@ -84,6 +84,30 @@ function textOrNull(value) {
   return String(value).trim().toLowerCase().replaceAll(" ", "_");
 }
 
+function bfmdCaptionLabel(raw) {
+  const captions = raw.captions && typeof raw.captions === "object" ? raw.captions : {};
+  const captionText = [captions.refined, captions.clean, captions.auto]
+    .filter((value) => value !== undefined && value !== null)
+    .join(" ")
+    .toLowerCase();
+  if (captionText.includes("jump smash") || captionText.includes("jump-smash")) return "jump_smash";
+  if (captionText.includes("backhand")) return "backhand";
+  if (captionText.includes("forehand")) return "forehand";
+  const shotType = textOrNull(defined(raw.shotType, raw.shot_type));
+  return {
+    serve: "serve",
+    flick_serve: "serve",
+    smash: "smash",
+    clear: "clear",
+    drop: "drop",
+    drive: "drive",
+    lift: "lift",
+    block: "block",
+    net_shot: "net_shot",
+    net_kill: "net_shot",
+  }[shotType] ?? shotType;
+}
+
 function seriesOrNull(value, key) {
   if (value === undefined || value === null) return null;
   if (Array.isArray(value)) return { [key]: value };
@@ -163,7 +187,7 @@ function normalizeSourceRecord(sourceId, raw, options, contract) {
   let racket = null;
 
   if (sourceId === "bfmd") {
-    strokeId = textOrNull(defined(raw.strokeId, raw.stroke_id, raw.shotType, raw.shot_type));
+    strokeId = textOrNull(defined(raw.strokeId, raw.stroke_id)) ?? bfmdCaptionLabel(raw);
     contactFrame = numberOrNull(defined(raw.contactFrame, raw.hitFrame, raw.hit_frame, raw.frameIndex, raw.frame_idx, raw.frame));
     pose = seriesOrNull(raw.pose, "frames");
     courtCorners = defined(raw.courtCorners, raw.court?.corners, raw.court) ?? null;

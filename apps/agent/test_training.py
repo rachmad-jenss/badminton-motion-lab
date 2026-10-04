@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import runpy
 from pathlib import Path
 
 import pytest
@@ -18,9 +19,14 @@ from training.records import (
 )
 from training.model import FEATURE_SCHEMA_VERSION, REQUIRED_OUTPUTS, load_checkpoint, predict_checkpoint
 from training.cli import run_smoke
-from training.runner import TrainingConfig, run_training
+from training.runner import TrainingConfig, _inverse_frequency_class_weights, run_training
 from main import _optional_stroke_prediction, _stroke_prediction_for_analysis
 from adapters.media import MediaError
+
+
+_PREPARE_RECORDS = runpy.run_path(
+    str(Path(__file__).resolve().parents[2] / "scripts" / "prepare-training-records.py")
+)
 
 
 def _source(path: Path, source_id: str = "shuttleset22") -> RecordSource:
@@ -229,6 +235,85 @@ def test_temporal_features_use_inference_tracks_without_contact_label() -> None:
     assert vector[FEATURE_NAMES.index("racket_acceleration_peak")] >= 0
 
 
+def test_bfmd_caption_labels_map_to_explicit_missing_taxonomy_classes() -> None:
+    label_for_shot = _PREPARE_RECORDS["_bfmd_label_for_shot"]
+
+    assert label_for_shot({"shot_type": "smash", "captions": {"refined": "jump smash"}}) == "jump_smash"
+    assert label_for_shot({"shot_type": "clear", "captions": {"refined": "forehand clear"}}) == "forehand"
+    assert label_for_shot({"shot_type": "serve", "captions": {"refined": "backhand serve"}}) == "backhand"
+    assert label_for_shot({"shot_type": "block", "captions": {"refined": "blocks to the net"}}) == "block"
+    assert label_for_shot({"shot_type": "smash", "captions": {"refined": "overhead shot"}}) == "smash"
+
+
+def test_bfmd_track_features_are_bounded_to_inference_window() -> None:
+    bounded_track_points = _PREPARE_RECORDS["_bounded_track_points"]
+    points = [(float(frame), frame / 100.0, frame / 200.0) for frame in range(100)]
+
+    bounded = bounded_track_points(points, 20.0, 80.0)
+
+    assert len(bounded) <= 64
+    assert bounded[0][0] >= 20
+    assert bounded[-1][0] <= 80
+
+
+def test_bfmd_caption_preparer_emits_bounded_canonical_records(tmp_path: Path) -> None:
+    root = tmp_path / "bfmd"
+    caption_dir = root / "data" / "BFMD_data" / "annotations" / "caption"
+    caption_dir.mkdir(parents=True)
+    caption_path = caption_dir / "match-1.json"
+    caption_path.write_text(
+        json.dumps(
+            {
+                "match_name": "match-1",
+                "shots": [
+                    {"frame": 100, "game": 1, "rally": 1, "shot_type": "smash", "captions": {"refined": "jump smash"}},
+                    {"frame": 110, "game": 1, "rally": 1, "shot_type": "clear", "captions": {"refined": "forehand clear"}},
+                    {"frame": 120, "game": 1, "rally": 1, "shot_type": "serve", "captions": {"refined": "backhand serve"}},
+                    {"frame": 130, "game": 1, "rally": 1, "shot_type": "block", "captions": {"refined": "blocks to the net"}},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = root / "records.normalized.jsonl"
+
+    summary = _PREPARE_RECORDS["prepare"]("bfmd", root, output, seed=17, max_records=None)
+    records = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+
+    assert summary["records"] == 4
+    assert {record["type"] for record in records} == {"forehand", "backhand", "block", "jump_smash"}
+    assert all(record["window_start_frame"] == 100 for record in records)
+    assert all(record["window_end_frame"] == 130 for record in records)
+
+    filtered_output = root / "records.forehand.jsonl"
+    filtered_summary = _PREPARE_RECORDS["prepare"](
+        "bfmd",
+        root,
+        filtered_output,
+        seed=17,
+        max_records=None,
+        include_labels={"forehand"},
+    )
+    filtered_records = [
+        json.loads(line) for line in filtered_output.read_text(encoding="utf-8").splitlines()
+    ]
+    assert filtered_summary["records"] == 1
+    assert {record["type"] for record in filtered_records} == {"forehand"}
+
+
+def test_record_normalization_preserves_label_derivation_provenance() -> None:
+    from training.records import normalize_training_record
+
+    record = normalize_training_record(
+        "bfmd",
+        {"id": "bfmd-1", "strokeId": "forehand", "frame": 12, "label_source": "bfmd_caption_keyword"},
+        seed=17,
+        provenance={"sourceId": "bfmd", "publicEvidence": False},
+    )
+
+    assert record["provenance"]["labelSource"] == "bfmd_caption_keyword"
+
+
 def _training_rows() -> list[dict]:
     rows = []
     positions = {"smash": 0.2, "drop": 0.5, "clear": 0.8}
@@ -377,6 +462,28 @@ def test_training_records_class_coverage_and_inverse_frequency_weights(tmp_path:
     assert training["classWeights"]["clear"] > training["classWeights"]["drop"] > training["classWeights"]["smash"]
     assert result.evaluation["classCoverage"]["train"]["unsupportedClasses"]
     assert "serve" in result.evaluation["classCoverage"]["train"]["unsupportedClasses"]
+
+
+def test_inverse_frequency_weights_are_bounded_for_rare_classes() -> None:
+    weights = _inverse_frequency_class_weights(
+        {
+            "serve": 1,
+            "forehand": 1,
+            "backhand": 1,
+            "smash": 1000,
+            "clear": 1,
+            "drop": 1,
+            "drive": 1,
+            "net_shot": 1,
+            "lift": 1,
+            "block": 1,
+            "defensive_return": 1,
+            "jump_smash": 1,
+        }
+    )
+
+    assert max(weights) <= 5.0
+    assert weights[2] > weights[3]
 
 
 def test_checkpoint_reload_produces_required_contract_prediction(tmp_path: Path) -> None:

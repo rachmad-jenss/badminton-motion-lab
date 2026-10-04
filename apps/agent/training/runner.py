@@ -590,7 +590,10 @@ def _inverse_frequency_class_weights(class_counts: dict[str, int]) -> np.ndarray
     weights = np.zeros(len(BML_STROKE_LABELS), dtype=np.float64)
     if total <= 0.0 or supported_count == 0:
         raise TrainingDataError("no supported training classes")
-    weights[supported] = total / (supported_count * counts[supported])
+    weights[supported] = np.minimum(
+        total / (supported_count * counts[supported]),
+        5.0,
+    )
     return weights
 
 

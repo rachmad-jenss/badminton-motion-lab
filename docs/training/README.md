@@ -93,6 +93,27 @@ python scripts/prepare-training-records.py --source-id shuttleset22 `
   --output validation/training-sources/shuttleset22/records.normalized.jsonl
 ```
 
+To add the four labels that are absent from ShuttleSet/ShuttleSet22, prepare
+only BFMD records with caption-derived label evidence. The preparer also attaches
+bounded player-box and shuttle tracks from the same match window; it does not
+load video or commit the annotations:
+
+```powershell
+python scripts/prepare-training-records.py --source-id bfmd `
+  --root validation/training-sources/bfmd `
+  --output validation/training-sources/bfmd/records.missing-labels.tracked.normalized.jsonl `
+  --include-label forehand `
+  --include-label backhand `
+  --include-label block `
+  --include-label jump_smash
+```
+
+BFMD caption-derived labels use the ordered `refined`, `clean`, and `auto`
+caption fields: `jump smash`, `backhand`, and `forehand` are selected before
+the tactical `shot_type`. The derivation is recorded as local training
+provenance and is not public-readiness evidence. The four rare labels remain
+quality-limited until more explicitly labelled records are provisioned.
+
 A minimal real-source run is:
 
 ```powershell

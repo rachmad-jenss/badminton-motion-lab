@@ -82,6 +82,26 @@ test("normalizes BFMD dense annotations without loading media", () => {
   assert.equal(result.shuttle.points[0].x, 10);
 });
 
+test("derives explicit BFMD orientation captions into canonical stroke labels", () => {
+  const forehand = normalizeTrainingRecord("bfmd", {
+    matchId: "bfmd-caption-1",
+    rallyId: "rally-1",
+    shot_type: "clear",
+    captions: { refined: "[PLAYER] executes an overhead forehand clear." },
+    frame: 18,
+  });
+  const jumpSmash = normalizeTrainingRecord("bfmd", {
+    matchId: "bfmd-caption-2",
+    rallyId: "rally-2",
+    shot_type: "smash",
+    captions: { refined: "[PLAYER] executes a jump smash." },
+    frame: 24,
+  });
+
+  assert.equal(forehand.strokeId, "forehand");
+  assert.equal(jumpSmash.strokeId, "jump_smash");
+});
+
 test("normalizes BST and RacketVision model inputs", () => {
   const bst = normalizeTrainingRecord("bst", {
     id: "bst-1",

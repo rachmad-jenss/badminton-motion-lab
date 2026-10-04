@@ -1,4 +1,4 @@
-"""Create bounded, deterministic BML records from ShuttleSet CSV annotations."""
+"""Create bounded, deterministic BML records from local source annotations."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 import csv
 import hashlib
 import json
+from bisect import bisect_left, bisect_right
 from pathlib import Path
 
 
@@ -34,6 +35,23 @@ LABEL_MAP = {
     "lob": "lift",
     "push/rush": "drive",
 }
+
+BFMD_LABELS = {
+    "serve": "serve",
+    "flick_serve": "serve",
+    "smash": "smash",
+    "clear": "clear",
+    "drop": "drop",
+    "drive": "drive",
+    "lift": "lift",
+    "block": "block",
+    "net_shot": "net_shot",
+    "net shot": "net_shot",
+    "net_kill": "net_shot",
+    "net kill": "net_shot",
+}
+BFMD_ORIENTATION_LABELS = {"forehand", "backhand", "jump_smash"}
+BFMD_CANONICAL_LABELS = set(BFMD_LABELS.values()) | BFMD_ORIENTATION_LABELS
 
 def split_for(source_id: str, match: str, seed: int) -> str:
     digest = hashlib.sha256(f"{seed}:{source_id}:{match}".encode("utf-8")).digest()
@@ -123,6 +141,246 @@ def _temporal_features(
     return features
 
 
+def _bfmd_label_for_shot(shot: dict) -> str | None:
+    captions = shot.get("captions") if isinstance(shot.get("captions"), dict) else {}
+    caption_text = " ".join(
+        str(captions.get(key, "")) for key in ("refined", "clean", "auto")
+    ).casefold()
+    if "jump smash" in caption_text or "jump-smash" in caption_text:
+        return "jump_smash"
+    if "backhand" in caption_text:
+        return "backhand"
+    if "forehand" in caption_text:
+        return "forehand"
+    shot_type = str(shot.get("shot_type", "")).strip().casefold().replace("-", "_")
+    return BFMD_LABELS.get(shot_type)
+
+
+def _bfmd_json(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as handle:
+        value = json.load(handle)
+    if not isinstance(value, dict) or not isinstance(value.get("shots"), list):
+        raise ValueError(f"BFMD caption file has no shots list: {path}")
+    return value
+
+
+def _bounded_track_points(
+    points: list[tuple[float, float, float]], window_start: float, window_end: float
+) -> list[tuple[float, float, float]]:
+    if not points:
+        return []
+    frames = [point[0] for point in points]
+    start = bisect_left(frames, window_start)
+    end = bisect_right(frames, window_end)
+    selected = points[start:end]
+    if len(selected) <= 64:
+        return selected
+    indices = [round(index * (len(selected) - 1) / 63) for index in range(64)]
+    return [selected[index] for index in indices]
+
+
+def _bfmd_track_points(path: Path, *, bounding_boxes: bool) -> list[tuple[float, float, float]]:
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    points: list[tuple[float, float, float]] = []
+    for section_name in ("annotations", "predictions"):
+        for annotation in data.get(section_name, []):
+            for result in annotation.get("result", []):
+                value = result.get("value", {})
+                sequence = value.get("sequence") if isinstance(value, dict) else None
+                if not isinstance(sequence, list):
+                    continue
+                for item in sequence:
+                    if not isinstance(item, dict):
+                        continue
+                    frame = _number(item.get("frame"))
+                    x = _number(item.get("x"))
+                    y = _number(item.get("y"))
+                    width = _number(item.get("width")) or 0.0
+                    height = _number(item.get("height")) or 0.0
+                    if frame is None or x is None or y is None:
+                        continue
+                    if bounding_boxes:
+                        x += width / 2.0
+                        y += height / 2.0
+                    points.append((frame, x / 100.0, y / 100.0))
+    return sorted(points, key=lambda point: point[0])
+
+
+def _bfmd_labels(path: Path) -> set[str]:
+    try:
+        data = _bfmd_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return set()
+    return {
+        label
+        for shot in data["shots"]
+        if isinstance(shot, dict)
+        for label in [_bfmd_label_for_shot(shot)]
+        if label in BFMD_LABELS.values() or label in BFMD_ORIENTATION_LABELS
+    }
+
+
+def _bfmd_file_splits(
+    files: list[Path], labels_by_file: dict[Path, set[str]], seed: int
+) -> dict[Path, str]:
+    """Assign whole matches to deterministic splits and protect rare labels."""
+
+    assignments: dict[Path, str] = {}
+    remaining = list(files)
+    rare_labels = set(BFMD_ORIENTATION_LABELS) | {"block"}
+    for split in ("test", "validation"):
+        if not remaining:
+            break
+        candidates = sorted(
+            remaining,
+            key=lambda path: (-len(labels_by_file.get(path, set()) & rare_labels), str(path)),
+        )
+        selected = candidates[0]
+        assignments[selected] = split
+        remaining.remove(selected)
+    for path in remaining:
+        assignments[path] = split_for("bfmd", path.stem, seed)
+    return assignments
+
+
+def _bfmd_record(
+    root: Path,
+    path: Path,
+    shot: dict,
+    row_number: int,
+    label: str,
+    split: str,
+    window_start: float,
+    window_end: float,
+    pose_points: list[tuple[float, float, float]],
+    shuttle_points: list[tuple[float, float, float]],
+) -> dict:
+    frame = _number(shot.get("frame"))
+    game = shot.get("game", "")
+    rally = shot.get("rally", "")
+    return {
+        "id": f"bfmd:{path.stem}:{game}:{rally}:{frame}:{row_number}",
+        "match": path.stem,
+        "game": game,
+        "rally": rally,
+        "shot_type": shot.get("shot_type", ""),
+        "strokeId": label,
+        "type": label,
+        "frame": frame,
+        "fps": 30,
+        "window_start_frame": int(window_start) if window_start.is_integer() else window_start,
+        "window_end_frame": int(window_end) if window_end.is_integer() else window_end,
+        "pose": {
+            "frames": [
+                {
+                    "frameIndex": frame,
+                    "landmarks": [{"x": x, "y": y}],
+                }
+                for frame, x, y in pose_points
+            ]
+        }
+        if pose_points
+        else None,
+        "shuttle": {
+            "points": [
+                {"frameIndex": frame, "x": x, "y": y}
+                for frame, x, y in shuttle_points
+            ]
+        }
+        if shuttle_points
+        else None,
+        "split": split,
+        "label_source": "bfmd_caption_keyword"
+        if label in BFMD_ORIENTATION_LABELS
+        else "bfmd_shot_type",
+        "source_file": str(path.relative_to(root)).replace("\\", "/"),
+    }
+
+
+def _prepare_bfmd(
+    root: Path,
+    output: Path,
+    seed: int,
+    max_records: int | None,
+    include_labels: set[str] | None = None,
+) -> dict[str, int | str]:
+    caption_root = root / "data" / "BFMD_data" / "annotations" / "caption"
+    files = sorted(path for path in caption_root.glob("*.json") if path.is_file())
+    labels_by_file = {path: _bfmd_labels(path) for path in files}
+    file_splits = _bfmd_file_splits(files, labels_by_file, seed)
+    counts = {
+        "files": len(files),
+        "records": 0,
+        "skippedUnsupported": 0,
+        "skippedMissingFrame": 0,
+        "skippedFiltered": 0,
+    }
+    split_counts = {"train": 0, "validation": 0, "test": 0}
+    with output.open("w", encoding="utf-8", newline="") as handle:
+        for path in files:
+            try:
+                shots = _bfmd_json(path)["shots"]
+            except (OSError, ValueError, json.JSONDecodeError):
+                counts["skippedUnsupported"] += 1
+                continue
+            player_points = _bfmd_track_points(
+                root / "data" / "BFMD_data" / "annotations" / "player_bbox" / path.name,
+                bounding_boxes=True,
+            )
+            shuttle_points = _bfmd_track_points(
+                root / "data" / "BFMD_data" / "annotations" / "shuttle" / path.name,
+                bounding_boxes=False,
+            )
+            rally_frames: dict[tuple[str, str], list[float]] = {}
+            for shot in shots:
+                if not isinstance(shot, dict):
+                    continue
+                frame = _number(shot.get("frame"))
+                if frame is not None:
+                    key = (str(shot.get("game", "")), str(shot.get("rally", "")))
+                    rally_frames.setdefault(key, []).append(frame)
+            for row_number, shot in enumerate(shots, start=1):
+                if not isinstance(shot, dict):
+                    counts["skippedUnsupported"] += 1
+                    continue
+                label = _bfmd_label_for_shot(shot)
+                frame = _number(shot.get("frame"))
+                if label is None or label not in BFMD_CANONICAL_LABELS:
+                    counts["skippedUnsupported"] += 1
+                    continue
+                if include_labels is not None and label not in include_labels:
+                    counts["skippedFiltered"] += 1
+                    continue
+                if frame is None or frame < 0:
+                    counts["skippedMissingFrame"] += 1
+                    continue
+                key = (str(shot.get("game", "")), str(shot.get("rally", "")))
+                frames = rally_frames.get(key, [frame])
+                record = _bfmd_record(
+                    root,
+                    path,
+                    shot,
+                    row_number,
+                    label,
+                    file_splits[path],
+                    min(frames),
+                    max(frames),
+                    _bounded_track_points(player_points, min(frames), max(frames)),
+                    _bounded_track_points(shuttle_points, min(frames), max(frames)),
+                )
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                counts["records"] += 1
+                split_counts[file_splits[path]] += 1
+                if max_records is not None and counts["records"] >= max_records:
+                    return {**counts, **{f"split_{key}": value for key, value in split_counts.items()}, "output": str(output)}
+    return {**counts, **{f"split_{key}": value for key, value in split_counts.items()}, "output": str(output)}
+
+
 def build_record(
     source_id: str,
     root: Path,
@@ -161,7 +419,14 @@ def build_record(
     }
 
 
-def prepare(source_id: str, root: Path, output: Path, seed: int, max_records: int | None) -> dict[str, int | str]:
+def prepare(
+    source_id: str,
+    root: Path,
+    output: Path,
+    seed: int,
+    max_records: int | None,
+    include_labels: set[str] | None = None,
+) -> dict[str, int | str]:
     root = root.expanduser().resolve()
     output = output.expanduser().resolve()
     if not root.is_dir():
@@ -170,6 +435,12 @@ def prepare(source_id: str, root: Path, output: Path, seed: int, max_records: in
         output.relative_to(root)
     except ValueError as exc:
         raise SystemExit("output must stay inside the source root") from exc
+
+    if source_id == "bfmd":
+        output.parent.mkdir(parents=True, exist_ok=True)
+        return _prepare_bfmd(root, output, seed, max_records, include_labels)
+    if include_labels is not None:
+        raise SystemExit("--include-label is only supported with --source-id bfmd")
 
     files = sorted(
         path
@@ -233,15 +504,28 @@ def prepare(source_id: str, root: Path, output: Path, seed: int, max_records: in
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-id", required=True, choices=("shuttleset", "shuttleset22"))
+    parser.add_argument("--source-id", required=True, choices=("bfmd", "shuttleset", "shuttleset22"))
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--max-records", type=int)
+    parser.add_argument("--include-label", action="append", choices=sorted(BFMD_CANONICAL_LABELS))
     args = parser.parse_args()
     if args.max_records is not None and args.max_records < 1:
         parser.error("--max-records must be positive")
-    print(json.dumps(prepare(args.source_id, args.root, args.output, args.seed, args.max_records), indent=2))
+    print(
+        json.dumps(
+            prepare(
+                args.source_id,
+                args.root,
+                args.output,
+                args.seed,
+                args.max_records,
+                set(args.include_label) if args.include_label else None,
+            ),
+            indent=2,
+        )
+    )
     return 0
 
 

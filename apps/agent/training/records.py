@@ -256,6 +256,14 @@ def normalize_training_record(
     if isinstance(raw.get("temporalFeatures"), dict):
         features["temporalFeatures"] = raw["temporalFeatures"]
 
+    record_provenance = {
+        **provenance,
+        "sourceId": source_id,
+        "publicEvidence": False,
+    }
+    if raw.get("label_source") not in (None, ""):
+        record_provenance["labelSource"] = str(raw["label_source"])
+
     return {
         "schemaVersion": TRAINING_RECORD_SCHEMA_VERSION,
         "sampleId": sample_id,
@@ -274,11 +282,7 @@ def normalize_training_record(
         "temporal": raw.get("temporal") if isinstance(raw.get("temporal"), dict) else None,
         "features": features,
         "confidence": _number_or_none(_first(raw, "confidence")),
-        "provenance": {
-            **provenance,
-            "sourceId": source_id,
-            "publicEvidence": False,
-        },
+        "provenance": record_provenance,
     }
 
 
