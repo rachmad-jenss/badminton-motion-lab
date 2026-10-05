@@ -45,7 +45,7 @@ export default function CaptureGuidePage() {
         <details className="install-details">
           <summary>Technical requirements</summary>
           <ul className="muted">
-            <li>At least 1280 × 720 resolution and 30 frames per second.</li>
+            <li>At least 720 × 480 effective resolution; 1280 × 720 and nominal 30 fps are recommended.</li>
             <li>Side angle: aim for roughly a true side view (recommended, not automatically checked).</li>
             <li>Lighting between the automatic brightness limits.</li>
           </ul>

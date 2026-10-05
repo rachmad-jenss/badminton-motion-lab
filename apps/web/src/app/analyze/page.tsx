@@ -39,6 +39,13 @@ type AnalyzeFinding = {
   evidenceFrameIndices?: number[];
 };
 
+type QualityNotice = {
+  id: string;
+  measured?: number | string | boolean | null;
+  threshold?: number | string | boolean | null;
+  message?: string;
+};
+
 type AnalyzeResult = {
   analysisRunId: string;
   agentMediaUrl: string;
@@ -51,7 +58,7 @@ type AnalyzeResult = {
       events: Array<{ type: string; frameIndex: number; confidence: number; source?: string }>;
     };
     court: { valid: boolean; method: string };
-    quality: { passed: boolean };
+    quality: { passed: boolean; warnings?: QualityNotice[] };
     pose?: { adapter: string; detectedFrames?: number; totalFrames?: number };
     racketCoverage?: number;
     shuttleCoverage?: number;
@@ -425,6 +432,21 @@ export default function AnalyzePage() {
                 ? "The video passed the automatic check, so the measurements below can be reviewed."
                 : "Some measurements were withheld because the video did not pass the automatic check."}
             </p>
+            {result.summary.quality.warnings?.length ? (
+              <div className="notice" role="status">
+                <p>Quality note: analysis continued, but the capture is below the recommended recording profile.</p>
+                <ul>
+                  {result.summary.quality.warnings.map((warning) => (
+                    <li key={warning.id}>
+                      {warning.message ?? warning.id}
+                      {warning.measured != null && warning.threshold != null
+                        ? ` (measured ${warning.measured}, recommended ${warning.threshold})`
+                        : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <details className="install-details">
               <summary>Technical details</summary>
               <p className="muted">

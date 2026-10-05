@@ -43,6 +43,7 @@ export interface PipelineStepRecord {
 export interface QualityGateResult {
   passed: boolean;
   checks: QualityCheck[];
+  warnings?: QualityCheck[];
   captureProfile: string;
 }
 

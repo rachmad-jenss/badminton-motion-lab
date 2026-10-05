@@ -6,9 +6,12 @@ from typing import Any
 
 
 THRESHOLDS = {
-    "minWidth": 1280,
-    "minHeight": 720,
+    "minWidth": 720,
+    "minHeight": 480,
+    "recommendedWidth": 1280,
+    "recommendedHeight": 720,
     "minFps": 30,
+    "fpsTolerance": 0.5,
     "minBrightness": 40.0,
     "maxBrightness": 220.0,
     "minBodyVisibilityRatio": 0.5,
@@ -27,27 +30,30 @@ def run_quality_gate(
     body_visibility_ratio: float,
     mean_edge_ratio: float,
 ) -> dict[str, Any]:
+    effective_width = max(width, height)
+    effective_height = min(width, height)
+    minimum_fps = THRESHOLDS["minFps"] - THRESHOLDS["fpsTolerance"]
     checks = [
         {
             "id": "min_width",
-            "passed": width >= THRESHOLDS["minWidth"],
-            "measured": width,
+            "passed": effective_width >= THRESHOLDS["minWidth"],
+            "measured": effective_width,
             "threshold": THRESHOLDS["minWidth"],
-            "message": "Minimum width 1280",
+            "message": "Minimum effective video width 720",
         },
         {
             "id": "min_height",
-            "passed": height >= THRESHOLDS["minHeight"],
-            "measured": height,
+            "passed": effective_height >= THRESHOLDS["minHeight"],
+            "measured": effective_height,
             "threshold": THRESHOLDS["minHeight"],
-            "message": "Minimum height 720",
+            "message": "Minimum effective video height 480",
         },
         {
             "id": "min_fps",
-            "passed": fps >= THRESHOLDS["minFps"],
+            "passed": fps >= minimum_fps,
             "measured": fps,
             "threshold": THRESHOLDS["minFps"],
-            "message": "Minimum 30 fps",
+            "message": "Target 30 fps (0.5 fps tolerance)",
         },
         {
             "id": "brightness",
@@ -78,8 +84,23 @@ def run_quality_gate(
             "message": "Video must contain frames",
         },
     ]
+    warnings = []
+    if (
+        effective_width < THRESHOLDS["recommendedWidth"]
+        or effective_height < THRESHOLDS["recommendedHeight"]
+    ):
+        warnings.append(
+            {
+                "id": "recommended_resolution",
+                "passed": False,
+                "measured": f"{effective_width}x{effective_height}",
+                "threshold": f"{THRESHOLDS['recommendedWidth']}x{THRESHOLDS['recommendedHeight']}",
+                "message": "Recommended capture resolution is 1280x720; analysis can continue with lower resolution.",
+            }
+        )
     return {
         "passed": all(c["passed"] for c in checks),
         "checks": checks,
+        "warnings": warnings,
         "captureProfile": THRESHOLDS["profileId"],
     }
