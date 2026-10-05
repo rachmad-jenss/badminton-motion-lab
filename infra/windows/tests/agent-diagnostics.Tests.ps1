@@ -55,6 +55,14 @@ Describe "Local Agent diagnostics" {
     $health.Payload.agentVersion | Should Be "0.2.2"
   }
 
+  It "recognizes a listener owned by the started agent process tree" {
+    $processTable = @(
+      [pscustomobject]@{ ProcessId = 61012; ParentProcessId = 60964 }
+    )
+
+    Test-ProcessTreeContains -ProcessId 61012 -RootProcessId 60964 -ProcessTable $processTable | Should Be $true
+  }
+
   It "rejects an older agent without the current pairing health contract" {
     Mock Invoke-RestMethod {
       [pscustomobject]@{
