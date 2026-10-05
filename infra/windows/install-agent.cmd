@@ -5,7 +5,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-agent.ps1"
 set "exitCode=%errorlevel%"
 if not "%exitCode%"=="0" (
   echo.
-  echo Local Agent setup did not finish. Read the message above, fix the prerequisite, and run this file again.
+  echo Local Agent setup did not finish. Read the diagnostic message above, resolve the reported issue, and run this file again.
   pause
 )
 exit /b %exitCode%

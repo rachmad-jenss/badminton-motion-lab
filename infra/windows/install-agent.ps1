@@ -9,6 +9,10 @@ $ErrorActionPreference = "Stop"
 $WebUrl = if ([string]::IsNullOrWhiteSpace($WebUrl)) { "https://bml.jenss.me/agent" } else { $WebUrl.Trim() }
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..\..\apps\agent")
 Set-Location $Root
+. (Join-Path $PSScriptRoot "agent-diagnostics.ps1")
+$agentConfiguration = Get-AgentConfiguration
+$AgentHost = $agentConfiguration.Host
+$AgentPort = $agentConfiguration.Port
 
 function Refresh-Path {
   $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
@@ -23,13 +27,6 @@ function Test-PythonCommand([string]$commandPath) {
   } catch {
     return $false
   }
-}
-
-function Get-ListeningProcessId([int]$port) {
-  $connection = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-  if ($connection) { return [int]$connection.OwningProcess }
-  return $null
 }
 
 function Resolve-Python {
@@ -110,38 +107,61 @@ if ($installedModelSha256 -ne $expectedModelSha256) {
 Write-Host "[5/5] Local Agent is installed and ready."
 if ($LaunchBrowser) {
   $agentProcess = $null
+  $healthy = $false
   try {
-    $existingProcessId = Get-ListeningProcessId 8787
-    if ($existingProcessId) {
-      throw "Port 8787 is already in use by process $existingProcessId. Close the existing Local Agent, then run install-agent.cmd again."
-    }
-    $agentProcess = Start-Process -FilePath (Join-Path $Root ".venv\Scripts\python.exe") `
-      -ArgumentList "main.py" -WorkingDirectory $Root -WindowStyle Normal -PassThru
-    $healthy = $false
-    for ($attempt = 0; $attempt -lt 30; $attempt++) {
-      Start-Sleep -Seconds 1
-      if ($agentProcess.HasExited) {
-        throw "The Local Agent exited before becoming healthy (exit code $($agentProcess.ExitCode))."
-      }
-      $listeningProcessId = Get-ListeningProcessId 8787
-      if ($listeningProcessId -and $listeningProcessId -ne $agentProcess.Id) {
-        throw "Port 8787 is owned by another process ($listeningProcessId); the Local Agent could not claim it."
-      }
-      if ($listeningProcessId -ne $agentProcess.Id) { continue }
-      try {
-        $health = Invoke-RestMethod -Uri "http://127.0.0.1:8787/health" -TimeoutSec 2
-        if ($health.ok -eq $true) { $healthy = $true; break }
-      } catch {
-        Write-Verbose "Health probe failed while the Local Agent was starting: $($_.Exception.Message)"
+    $existingConnections = @(Get-ListeningConnections -Port $AgentPort)
+    if ($existingConnections.Count -gt 0) {
+      $existingHealth = Get-AgentHealth -AgentHost $AgentHost -Port $AgentPort
+      if ($existingHealth.IsCompatibleAgent) {
+        $healthy = $true
+        Write-Host "A compatible Local Agent is already healthy on port $AgentPort. Reusing it."
+      } else {
+        $existingOwners = @(Get-ListeningProcessDetails -Connections $existingConnections)
+        throw (Format-PortConflictMessage -Port $AgentPort -Connections $existingConnections -Owners $existingOwners -AgentHost $AgentHost)
       }
     }
-    if (-not $healthy) { throw "The Local Agent did not become healthy within 30 seconds." }
+
+    if (-not $healthy) {
+      $agentProcess = Start-Process -FilePath (Join-Path $Root ".venv\Scripts\python.exe") `
+        -ArgumentList "main.py" -WorkingDirectory $Root -WindowStyle Normal -PassThru
+      for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if ($agentProcess.HasExited) {
+          $exitedConnections = @(Get-ListeningConnections -Port $AgentPort)
+          $exitedConflicts = @($exitedConnections | Where-Object { $_.OwningProcess -ne $agentProcess.Id })
+          if ($exitedConflicts.Count -gt 0) {
+            $exitedOwners = @(Get-ListeningProcessDetails -Connections $exitedConflicts)
+            throw (Format-PortConflictMessage -Port $AgentPort -Connections $exitedConflicts -Owners $exitedOwners -AgentHost $AgentHost)
+          }
+          throw "The Local Agent exited before becoming healthy (exit code $($agentProcess.ExitCode))."
+        }
+
+        $connections = @(Get-ListeningConnections -Port $AgentPort)
+        $health = Get-AgentHealth -AgentHost $AgentHost -Port $AgentPort
+        if ($health.IsCompatibleAgent) {
+          $agentOwnsPort = @($connections | Where-Object { $_.OwningProcess -eq $agentProcess.Id }).Count -gt 0
+          if (-not $agentOwnsPort -and $connections.Count -gt 0) {
+            Write-Host "Another compatible Local Agent became healthy on port $AgentPort. Reusing it."
+            Stop-Process -Id $agentProcess.Id -Force
+            $agentProcess = $null
+          }
+          $healthy = $true
+          break
+        }
+
+        if ($connections.Count -gt 0 -and @($connections | Where-Object { $_.OwningProcess -ne $agentProcess.Id }).Count -gt 0) {
+          $owners = @(Get-ListeningProcessDetails -Connections $connections)
+          throw (Format-PortConflictMessage -Port $AgentPort -Connections $connections -Owners $owners -AgentHost $AgentHost)
+        }
+      }
+    }
+    if (-not $healthy) { throw "The Local Agent did not become healthy within 30 seconds at $((Get-AgentHealthUri -AgentHost $AgentHost -Port $AgentPort))." }
     try {
       Invoke-WebRequest -UseBasicParsing -Uri $WebUrl -TimeoutSec 5 | Out-Null
       Start-Process $WebUrl
       Write-Host "The setup page is open. Pair this browser, then choose a video."
     } catch {
-      Write-Host "The Local Agent is ready at http://127.0.0.1:8787. Open $WebUrl to pair this browser."
+      Write-Host "The Local Agent is ready at $((Get-AgentHealthUri -AgentHost $AgentHost -Port $AgentPort) -replace '/health$',''). Open $WebUrl to pair this browser."
     }
     Write-Host "Keep the Local Agent console open while analyzing. Close it when you are done."
     exit 0
@@ -151,6 +171,6 @@ if ($LaunchBrowser) {
   }
 }
 
-Write-Host "Starting Local Agent on http://127.0.0.1:8787 ..."
+Write-Host "Starting Local Agent on $((Get-AgentHealthUri -AgentHost $AgentHost -Port $AgentPort) -replace '/health$','') ..."
 & .\.venv\Scripts\python.exe main.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
