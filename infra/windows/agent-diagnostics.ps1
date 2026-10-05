@@ -29,8 +29,10 @@ function Get-AgentHealthUri {
   )
 
   $probeHost = $AgentHost.Trim()
-  if ($probeHost -eq "0.0.0.0" -or $probeHost -eq "::") {
+  if ($probeHost -eq "0.0.0.0") {
     $probeHost = "127.0.0.1"
+  } elseif ($probeHost -eq "::") {
+    $probeHost = "::1"
   }
   if ($probeHost.Contains(":") -and -not $probeHost.StartsWith("[")) {
     $probeHost = "[$probeHost]"
@@ -120,10 +122,14 @@ function Get-AgentHealth {
       $reportedPort = 0
       $portMatches = [int]::TryParse(([string]$payload.port), [ref]$reportedPort) -and $reportedPort -eq $Port
     }
+    $hasPairingCode = $payload.pairingCode -is [string] -and
+      -not [string]::IsNullOrWhiteSpace($payload.pairingCode)
     $isCompatibleAgent = $payload.ok -eq $true -and
       $payload.agentVersion -is [string] -and
       -not [string]::IsNullOrWhiteSpace($payload.agentVersion) -and
-      $portMatches
+      $portMatches -and
+      $hasPairingCode -and
+      $payload.poseModelPresent -ne $false
 
     [pscustomobject]@{
       Uri = $uri

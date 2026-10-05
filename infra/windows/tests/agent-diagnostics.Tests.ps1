@@ -35,6 +35,7 @@ Describe "Local Agent diagnostics" {
 
   It "formats an IPv6 health URL safely" {
     Get-AgentHealthUri -Host "::1" -Port 8787 | Should Be "http://[::1]:8787/health"
+    Get-AgentHealthUri -Host "::" -Port 8787 | Should Be "http://[::1]:8787/health"
   }
 
   It "recognizes an existing compatible Local Agent as reusable" {
@@ -43,6 +44,8 @@ Describe "Local Agent diagnostics" {
         ok = $true
         agentVersion = "0.2.2"
         port = 8787
+        pairingCode = "ABC123"
+        poseModelPresent = $true
       }
     }
 
@@ -50,6 +53,22 @@ Describe "Local Agent diagnostics" {
 
     $health.IsCompatibleAgent | Should Be $true
     $health.Payload.agentVersion | Should Be "0.2.2"
+  }
+
+  It "rejects an older agent without the current pairing health contract" {
+    Mock Invoke-RestMethod {
+      [pscustomobject]@{
+        ok = $true
+        agentVersion = "0.2.1"
+        port = 8787
+        pairingCode = $null
+        poseModelPresent = $true
+      }
+    }
+
+    $health = Get-AgentHealth -Host "127.0.0.1" -Port 8787
+
+    $health.IsCompatibleAgent | Should Be $false
   }
 
   It "does not treat an unrelated healthy HTTP service as the Local Agent" {
