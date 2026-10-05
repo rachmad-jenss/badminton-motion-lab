@@ -129,6 +129,22 @@ def test_analyze_requires_bearer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         assert renewed["pairingCode"] != health["pairingCode"]
 
 
+def test_health_allows_private_network_preflight_from_public_app():
+    with TestClient(agent_main.app) as client:
+        response = client.options(
+            "/health",
+            headers={
+                "Origin": "https://bml.jenss.me",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Private-Network": "true",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://bml.jenss.me"
+    assert response.headers["access-control-allow-private-network"] == "true"
+
+
 def test_default_analysis_window_covers_full_video():
     assert agent_main.resolve_frame_window(1800, None, None) == (300, 6, False)
     assert agent_main.resolve_frame_window(1800, 300, 1) == (300, 1, True)
