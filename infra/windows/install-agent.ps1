@@ -139,7 +139,14 @@ if ($LaunchBrowser) {
         $connections = @(Get-ListeningConnections -Port $AgentPort)
         $health = Get-AgentHealth -AgentHost $AgentHost -Port $AgentPort
         if ($health.IsCompatibleAgent) {
-          $agentOwnsPort = @($connections | Where-Object { $_.OwningProcess -eq $agentProcess.Id }).Count -gt 0
+          $processTable = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+          $agentOwnsPort = @(
+            $connections |
+              Where-Object {
+                $_.OwningProcess -eq $agentProcess.Id -or
+                (Test-ProcessTreeContains -ProcessId $_.OwningProcess -RootProcessId $agentProcess.Id -ProcessTable $processTable)
+              }
+          ).Count -gt 0
           if (-not $agentOwnsPort -and $connections.Count -gt 0) {
             Write-Host "Another compatible Local Agent became healthy on port $AgentPort. Reusing it."
             Stop-Process -Id $agentProcess.Id -Force

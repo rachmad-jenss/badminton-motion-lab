@@ -106,6 +106,30 @@ function Get-ListeningProcessDetails {
   }
 }
 
+function Test-ProcessTreeContains {
+  param(
+    [int]$ProcessId,
+    [int]$RootProcessId,
+    [object[]]$ProcessTable = @()
+  )
+
+  $currentProcessId = $ProcessId
+  $visited = [System.Collections.Generic.HashSet[int]]::new()
+  while ($currentProcessId -gt 0 -and $visited.Add($currentProcessId)) {
+    if ($currentProcessId -eq $RootProcessId) { return $true }
+
+    $current = @(
+      $ProcessTable |
+        Where-Object { [int]$_.ProcessId -eq $currentProcessId } |
+        Select-Object -First 1
+    )
+    if ($current.Count -eq 0) { return $false }
+    $currentProcessId = [int]$current[0].ParentProcessId
+  }
+
+  return $false
+}
+
 function Get-AgentHealth {
   param(
     [Alias("Host")]
