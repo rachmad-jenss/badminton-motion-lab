@@ -150,19 +150,31 @@ async def lifespan(_app: FastAPI):
     yield
 
 app = FastAPI(title="BML Local Agent", version=AGENT_VERSION, lifespan=lifespan)
+ALLOWED_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "https://bml.jenss.me",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "https://bml.jenss.me",
-    ],
+    allow_origins=ALLOWED_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def allow_private_network_preflight(request: Request, call_next):
+    response = await call_next(request)
+    if (
+        request.headers.get("access-control-request-private-network") == "true"
+        and request.headers.get("origin") in ALLOWED_CORS_ORIGINS
+    ):
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
 
 byok = ByokStore(DATA_DIR / "secrets")
 PAIRING_CODE = ""
