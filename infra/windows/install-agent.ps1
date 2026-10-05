@@ -156,11 +156,12 @@ if ($LaunchBrowser) {
       }
     }
     if (-not $healthy) { throw "The Local Agent did not become healthy within 30 seconds at $((Get-AgentHealthUri -AgentHost $AgentHost -Port $AgentPort))." }
-    try {
-      Invoke-WebRequest -UseBasicParsing -Uri $WebUrl -TimeoutSec 5 | Out-Null
-      Start-Process $WebUrl
+    $setupPage = Open-AgentSetupPage -WebUrl $WebUrl
+    if ($setupPage.BrowserLaunchSucceeded -and $setupPage.PreflightSucceeded) {
       Write-Host "The setup page is open. Pair this browser, then choose a video."
-    } catch {
+    } elseif ($setupPage.BrowserLaunchSucceeded) {
+      Write-Host "The browser was opened, but the setup URL could not be preflighted. If it does not load, open $WebUrl manually."
+    } else {
       Write-Host "The Local Agent is ready at $((Get-AgentHealthUri -AgentHost $AgentHost -Port $AgentPort) -replace '/health$',''). Open $WebUrl to pair this browser."
     }
     Write-Host "Keep the Local Agent console open while analyzing. Close it when you are done."

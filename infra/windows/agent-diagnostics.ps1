@@ -149,6 +149,36 @@ function Get-AgentHealth {
   }
 }
 
+function Open-AgentSetupPage {
+  param([string]$WebUrl)
+
+  $preflightSucceeded = $false
+  $preflightError = $null
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $WebUrl -TimeoutSec 5 -ErrorAction Stop | Out-Null
+    $preflightSucceeded = $true
+  } catch {
+    $preflightError = $_.Exception.Message
+  }
+
+  try {
+    Start-Process -FilePath $WebUrl -ErrorAction Stop | Out-Null
+    [pscustomobject]@{
+      PreflightSucceeded = $preflightSucceeded
+      BrowserLaunchSucceeded = $true
+      PreflightError = $preflightError
+      BrowserLaunchError = $null
+    }
+  } catch {
+    [pscustomobject]@{
+      PreflightSucceeded = $preflightSucceeded
+      BrowserLaunchSucceeded = $false
+      PreflightError = $preflightError
+      BrowserLaunchError = $_.Exception.Message
+    }
+  }
+}
+
 function Format-PortConflictMessage {
   param(
     [int]$Port,

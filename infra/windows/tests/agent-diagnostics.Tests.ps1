@@ -111,4 +111,15 @@ Describe "Local Agent diagnostics" {
 
     $packageScript | Should Match "agent-diagnostics.ps1"
   }
+
+  It "attempts to open the browser even when the website preflight fails" {
+    Mock Invoke-WebRequest { throw "website offline" }
+    Mock Start-Process { }
+
+    $launch = Open-AgentSetupPage -WebUrl "https://bml.jenss.me/agent"
+
+    $launch.PreflightSucceeded | Should Be $false
+    $launch.BrowserLaunchSucceeded | Should Be $true
+    Assert-MockCalled Start-Process -Times 1 -Scope It
+  }
 }
