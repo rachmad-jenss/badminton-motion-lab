@@ -20,11 +20,12 @@
 ## Why this matters
 
 Code, CI, and deployment are green (27/27 plans done, PR #10 merged,
-bml.jenss.me routes verified), but all 24 modules remain `locked` because no
-domain-valid (`badminton_stroke`) evidence exists. The only committed fixture is
-`non_domain_smoke`, `validation/gold-datasets/` is empty, and `readiness.seed.json`
-correctly reports `complete=false`. Public-ready (zero locked modules) is
-blocked by data and evidence infrastructure - not by product code.
+bml.jenss.me routes verified), but all 25 modules remain experimental because no
+domain-valid (`badminton_stroke`) clips or module evidence exist in
+`validation/domain-manifest.json`. The committed `readiness.seed.json` snapshot is
+dated 2026-07-26, has `source=agent-fixture-benchmark`, and correctly reports
+`complete=false`. Public-ready (zero locked modules) is blocked by data and
+evidence infrastructure - not by product code.
 
 ## Decisions locked by grilling (2026-08-16)
 
@@ -44,7 +45,7 @@ blocked by data and evidence infrastructure - not by product code.
 | Q15 | ShuttleSet = only public dataset for gate evidence; Fine-Badminton = R&D only (non-commercial license) |
 | Q16 | Evidence volume: 3 clips/module (beta), 5+ clips/module (public-ready) |
 | Q17 | Forehand/backhand derived from ShuttleSet backhand flag + validated with own capture |
-| Q18 | Public-ready v1 = zero locked (24 modules), no deadline |
+| Q18 | Public-ready v1 = zero locked (25 modules), no deadline |
 | Q19 | Beta v1 = current verified state + BYOK label + opt-in + beta disclosure |
 | Q21 | Ground truth via minimal web labeling mode (scrub -> contact frame + 4 corners -> truth) |
 | Q22 | Beta evidence target = 11 priority modules (5 strokes x technique+layer + footwork:pure) @ 3 clips |
@@ -151,7 +152,7 @@ blocked by data and evidence infrastructure - not by product code.
 | 4 | Domain benchmark: 11 priority modules @ 3 clips | Reports written; seed honest; `readiness:integrity` green |
 | 5 | Beta v1 ship (BYOK label, opt-in, disclosure) | `npm run verify` + browser smoke |
 | 6 | Beta run: >=5 users x >=1 analysis + >=1 report | Counters + opt-in reports received |
-| 7 | Public-ready v1: zero locked (24 modules) @ 5+ clips | `npm run readiness:check` passes; no deadline |
+| 7 | Public-ready v1: zero locked (25 modules) @ 5+ clips | `npm run readiness:check` passes; no deadline |
 
 ## Verification gates (all phases)
 
@@ -198,7 +199,7 @@ Updated 2026-08-16 after explicit user approval to implement all plans.
 | 4 Domain benchmark: 11 priority modules @ 3 clips | NOT_RUN | Requires Phase 0 clips + Phase 3 captures |
 | 5 Beta v1 ship (BYOK label, opt-in, disclosure) | DONE (code) | /contribute page, home beta notice, Experimental badge on BYOK, beta.spec.ts |
 | 6 Beta run: >=5 users x >=1 analysis + >=1 report | NOT_RUN | Requires real beta users (Q23) |
-| 7 Public-ready v1: zero locked (24 modules) @ 5+ clips | NOT_RUN | Requires Phases 0, 3, 4, 6 |
+| 7 Public-ready v1: zero locked (25 modules) @ 5+ clips | NOT_RUN | Requires Phases 0, 3, 4, 6 |
 
 Gate verification for the completed code phases: full repository verify suite,
 browser tests, readiness integrity, and the empty-manifest domain smoke step -
