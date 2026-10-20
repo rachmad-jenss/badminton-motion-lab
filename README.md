@@ -26,7 +26,7 @@ Public stranger-ready build requires **zero locked modules**:
   PC), and honest locked badges. Evidence target: 11 priority modules — clear,
   smash, serve, forehand, backhand (technique + footwork layer each) plus
   footwork pure — at 3 clips each.
-- **Public-ready v1**: zero locked modules (24/24) at 5+ clips each. No fixed
+- **Public-ready v1**: zero locked modules (25/25) at 5+ clips each. No fixed
   date; module order is the 5 priority strokes first, then the remaining 7.
 - **Evidence rule (Plan 028)**: a module unlocks only when BOTH kinds pass —
   event/contact evidence from ShuttleSet broadcast clips AND pose-metric
@@ -35,6 +35,11 @@ Public stranger-ready build requires **zero locked modules**:
   `validation/DATASET_ATTRIBUTION.md` for dataset attribution and license notes.
   Media stays out of git (`validation/domain-media/`); only manifests, hashes,
   and reports are committed.
+
+- **Current readiness snapshot:** the committed seed is dated 2026-07-26 and has
+  `source=agent-fixture-benchmark`, `complete=false`, and 25 experimental modules.
+  The domain manifest has no clips or module evidence. This fixture smoke snapshot
+  does not satisfy the evidence rule or establish public readiness.
 
 ## Monorepo
 
